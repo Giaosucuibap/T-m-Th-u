@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 420" width="900" height="420">
+  <!-- Logo chìm mặc định: vẽ bằng nét, KHÔNG có nền.
+       Nền trong suốt là bắt buộc — app.css đặt nó ở opacity 5%, nếu có nền
+       thì mọi trang sẽ hiện một ô chữ nhật xám thay vì logo chìm.
+       Màu xám trung tính để đọc được cả trên nền sáng lẫn nền tối. -->
+  <g fill="none" stroke="#5b6b7a" stroke-linecap="round">
+    <circle cx="150" cy="176" r="112" stroke-width="14"/>
+    <circle cx="150" cy="176" r="74"  stroke-width="9"  stroke-opacity=".6"/>
+    <circle cx="150" cy="176" r="38"  stroke-width="7"  stroke-opacity=".38"/>
+    <path d="M150 176 L246 118" stroke-width="14"/>
+  </g>
+  <circle cx="150" cy="176" r="13" fill="#5b6b7a"/>
+  <circle cx="228" cy="128" r="22" fill="#5b6b7a" fill-opacity=".55"/>
+
+  <text x="300" y="150" font-family="Segoe UI, Roboto, system-ui, sans-serif"
+        font-size="82" font-weight="800" fill="#5b6b7a" letter-spacing="1">GIÁO SƯ</text>
+  <text x="300" y="238" font-family="Segoe UI, Roboto, system-ui, sans-serif"
+        font-size="82" font-weight="800" fill="#5b6b7a" letter-spacing="1">CÙI BẮP</text>
+  <text x="303" y="292" font-family="Segoe UI, Roboto, system-ui, sans-serif"
+        font-size="30" font-weight="600" fill="#5b6b7a" fill-opacity=".8" letter-spacing="3">RADAR GÓI THẦU</text>
+</svg>

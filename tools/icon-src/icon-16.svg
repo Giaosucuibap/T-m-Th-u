@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <!-- Cỡ 16px trên thanh Chrome: chỉ giữ được ba nét. Bỏ hết vòng phụ,
+       nét dày hẳn lên, chấm vàng to để mắt bắt được ngay. -->
+  <rect width="128" height="128" rx="24" fill="#0d2233"/>
+  <circle cx="60" cy="66" r="42" fill="none" stroke="#2dd4bf" stroke-width="14"/>
+  <path d="M60 66 L100 42" stroke="#5eead4" stroke-width="14" stroke-linecap="round" fill="none"/>
+  <circle cx="60" cy="66" r="9" fill="#5eead4"/>
+  <circle cx="97" cy="40" r="19" fill="#0d2233"/>
+  <circle cx="97" cy="40" r="14" fill="#fbbf24"/>
+</svg>

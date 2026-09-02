@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <defs>
+    <linearGradient id="plate" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%"  stop-color="#12314a"/>
+      <stop offset="100%" stop-color="#071722"/>
+    </linearGradient>
+    <linearGradient id="sweep" x1="1" y1="0" x2="0" y2="1">
+      <stop offset="0%"   stop-color="#5eead4" stop-opacity=".85"/>
+      <stop offset="50%"  stop-color="#2dd4bf" stop-opacity=".28"/>
+      <stop offset="100%" stop-color="#14b8a6" stop-opacity="0"/>
+    </linearGradient>
+    <clipPath id="dial"><circle cx="64" cy="64" r="44"/></clipPath>
+  </defs>
+
+  <rect width="128" height="128" rx="28" fill="url(#plate)"/>
+  <circle cx="64" cy="64" r="44" fill="#0a1a27"/>
+  <g clip-path="url(#dial)">
+    <path d="M64 64 L64 16 A48 48 0 0 1 106 42 Z" fill="url(#sweep)"/>
+  </g>
+
+  <!-- Chỉ hai vòng ở cỡ này: ba vòng sẽ dính vào nhau khi thu nhỏ -->
+  <g fill="none" stroke="#2dd4bf" stroke-linecap="round">
+    <circle cx="64" cy="64" r="44" stroke-opacity="1" stroke-width="7"/>
+    <circle cx="64" cy="64" r="26" stroke-opacity=".42" stroke-width="4.5"/>
+  </g>
+
+  <path d="M64 64 L102 41" stroke="#5eead4" stroke-width="7" stroke-linecap="round" fill="none"/>
+  <circle cx="86" cy="50" r="12" fill="#f59e0b" fill-opacity=".35"/>
+  <circle cx="86" cy="50" r="8"  fill="#fbbf24"/>
+</svg>

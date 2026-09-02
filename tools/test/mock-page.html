@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<title>Tra cứu Lựa chọn nhà thầu — e-GP (giả lập)</title>
+<style>
+ body{font:14px system-ui;margin:0;padding:20px;background:#f5f7fb}
+ .box{background:#fff;border:1px solid #ddd;border-radius:10px;padding:14px;margin-bottom:12px}
+ .ant-select{display:inline-block;border:1px solid #ccc;padding:6px 10px;border-radius:6px;min-width:220px;cursor:pointer;background:#fff}
+ .ant-select-dropdown{display:none;position:absolute;background:#fff;border:1px solid #ccc;z-index:99;max-height:200px;overflow:auto}
+ .ant-select-dropdown-menu-item{padding:6px 12px;cursor:pointer}
+ input{padding:7px;border:1px solid #ccc;border-radius:6px;margin:3px}
+ button{padding:8px 16px;border-radius:6px;border:1px solid #0f766e;background:#0f766e;color:#fff;cursor:pointer}
+ .el-pagination{margin-top:12px;display:none}
+ .el-pagination.on{display:block}
+ table{border-collapse:collapse;width:100%;font-size:13px}
+ td,th{border:1px solid #eee;padding:6px;text-align:left}
+</style>
+</head>
+<body>
+<h2>Hệ thống mạng đấu thầu quốc gia — Tra cứu Lựa chọn nhà thầu <small>(bản giả lập để kiểm thử)</small></h2>
+
+<div class="box" id="form">
+  <div class="ant-select" id="noticeType"><div class="ant-select-selection">Thông báo mời thầu</div></div>
+  <div class="ant-select" id="prov"><div class="ant-select-selection">Tỉnh/ Thành phố</div></div>
+  <div class="ant-select" id="ward"><div class="ant-select-selection">Xã/ Phường</div></div>
+  <br>
+  <input placeholder="Áp dụng cho tất cả các trường" id="kw">
+  <input placeholder="Nhập số TBMT" id="tbmt">
+  <input placeholder="Từ" id="from"><input placeholder="Đến" id="to">
+  <br><br>
+  <button id="btnSearch">Tìm kiếm</button>
+</div>
+
+<div class="box" id="results" style="display:none">
+  <label>Số bản ghi/trang
+    <select id="pageSize"><option value="10">10</option><option value="20">20</option><option value="50">50</option></select>
+  </label>
+  <div id="tbl"></div>
+  <div class="el-pagination" id="pg">
+    <button class="btn-prev">Trước</button>
+    <span id="pgLabel"></span>
+    <button class="btn-next">Sau</button>
+  </div>
+</div>
+
+<div class="ant-select-dropdown" id="dd"></div>
+
+<script>
+const SEARCH = '/o/egp-portal-contractor-selection-v2/services/smart/search';
+let page = 0, size = 10, total = 0, totalPages = 1;
+
+function call(){
+  const body = JSON.stringify([{ pageNumber: page, pageSize: String(size), query: [{ index:'es-contractor-selection', filters: [] }] }]);
+  const xhr = new XMLHttpRequest();
+  xhr.open('POST', SEARCH);
+  xhr.setRequestHeader('content-type','application/json');
+  xhr.onload = () => {
+    let d = {}; try { d = JSON.parse(xhr.responseText); } catch {}
+    const rows = (d.page && d.page.content) || [];
+    total = (d.page && d.page.totalElements) || 0;
+    totalPages = (d.page && d.page.totalPages) || 1;
+    document.getElementById('tbl').innerHTML =
+      '<table><tr><th>Mã TBMT</th><th>Tên gói thầu</th><th>Giá</th></tr>' +
+      rows.map(r => '<tr><td><a href="/vi/web/guest/contractor-selection?notifyNo=' + r.notifyNo + '">' + r.notifyNo + '</a></td><td>' + r.bidName + '</td><td>' + r.bidPrice + '</td></tr>').join('') +
+      '</table>';
+    document.getElementById('pgLabel').textContent = 'Trang ' + (page+1) + '/' + totalPages + ' — ' + total + ' kết quả';
+    document.getElementById('results').style.display = 'block';
+    document.getElementById('pg').classList.add('on');
+    document.querySelector('.btn-next').disabled = page + 1 >= totalPages;
+  };
+  xhr.send(body);
+}
+
+document.getElementById('btnSearch').onclick = () => { page = 0; call(); };
+document.getElementById('pageSize').onchange = (e) => { size = Number(e.target.value); page = 0; call(); };
+document.querySelector('.btn-next').onclick = () => { if (page + 1 < totalPages) { page++; call(); } };
+document.querySelector('.btn-prev').onclick = () => { if (page > 0) { page--; call(); } };
+
+// ant-select giả lập
+const OPTIONS = {
+  noticeType: ['Thông báo mời thầu','Kết quả lựa chọn nhà thầu','Kế hoạch lựa chọn nhà thầu','Biên bản mở thầu'],
+  prov: ['Lâm Đồng','Đồng Nai','Khánh Hòa','Đắk Lắk'],
+  ward: ['Xã Đơn Dương','Xã Hàm Đức','Phường 2']
+};
+const dd = document.getElementById('dd');
+for (const id of Object.keys(OPTIONS)) {
+  const box = document.getElementById(id);
+  box.querySelector('.ant-select-selection').addEventListener('mousedown', () => {
+    if (dd.style.display === 'block' && dd.dataset.for === id) { dd.style.display = 'none'; return; }
+    dd.dataset.for = id;
+    dd.innerHTML = OPTIONS[id].map(o => '<div class="ant-select-dropdown-menu-item">' + o + '</div>').join('');
+    const r = box.getBoundingClientRect();
+    dd.style.left = r.left + 'px'; dd.style.top = (r.bottom + window.scrollY) + 'px';
+    dd.style.display = 'block';
+    dd.querySelectorAll('.ant-select-dropdown-menu-item').forEach(it => {
+      it.addEventListener('mousedown', () => {
+        box.querySelector('.ant-select-selection').textContent = it.textContent;
+        dd.style.display = 'none';
+      });
+    });
+  });
+}
+</script>
+</body>
+</html>

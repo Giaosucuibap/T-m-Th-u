@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="vi"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Tìm thông báo mời thầu</title>
+<link rel="stylesheet" href="app.css">
+<style>
+ .num{font-variant-numeric:tabular-nums;white-space:nowrap}
+ .code{font-family:ui-monospace,Menlo,Consolas,monospace;font-weight:800}
+ a.link{color:var(--accent);font-weight:800;text-decoration:none}
+ a.link:hover{text-decoration:underline}
+ .scope{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+ @media(max-width:980px){.scope{grid-template-columns:1fr 1fr}}
+ .metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:14px 0}
+ @media(max-width:900px){.metrics{grid-template-columns:1fr 1fr}}
+ .metrics .card{padding:13px}
+ .insights{display:grid;grid-template-columns:1.15fr 1fr 1fr;gap:10px;margin:0 0 12px}
+ .insight{border:1px solid var(--line);border-left:4px solid #0f766e;border-radius:8px;background:#fff;padding:11px 12px;min-height:72px}
+ .insight.warn{border-left-color:#b45309}.insight.danger{border-left-color:#b91c1c}
+ .insight b{display:block;margin-bottom:4px}
+ .result-tools{display:grid;grid-template-columns:minmax(220px,1.7fr) minmax(145px,.8fr) minmax(130px,.7fr) minmax(180px,.9fr) auto;gap:10px;align-items:end;border:1px solid var(--line);border-radius:8px;background:#fff;padding:12px;margin:12px 0}
+ .result-tools label{margin:0 0 5px}
+ .checkline{display:flex!important;gap:7px;align-items:center;margin:0!important;font-weight:750;white-space:nowrap}
+ .checkline input{width:auto}
+ .result-head{margin-top:8px}
+ .result-count{font-weight:700}
+ @media(max-width:1050px){.result-tools{grid-template-columns:1fr 1fr}.insights{grid-template-columns:1fr}}
+ @media(max-width:620px){.scope,.metrics,.result-tools{grid-template-columns:1fr}.checkline{white-space:normal}}
+ .spin{display:inline-block;width:13px;height:13px;border:2px solid #cbd5e1;border-top-color:var(--accent);
+       border-radius:50%;animation:sp .8s linear infinite;vertical-align:-2px;margin-right:7px}
+ @keyframes sp{to{transform:rotate(360deg)}}
+ .bar{height:5px;border-radius:999px;background:#e2e8f0;overflow:hidden;margin-top:10px}
+ .bar i{display:block;height:100%;width:38%;background:var(--accent);animation:slide 1.15s infinite ease-in-out}
+ @keyframes slide{0%{margin-left:-38%}100%{margin-left:100%}}
+ .result-card{border:1px solid var(--line);border-left:5px solid #cbd5e1;border-radius:8px;background:#fff;margin-top:10px;overflow:hidden}
+ .result-card.priority{border-left-color:#15803d}.result-card.watch{border-left-color:#b45309}
+ .result-card.closed{opacity:.78}
+ .result-main{display:grid;grid-template-columns:72px minmax(0,1fr) 188px;gap:13px;padding:13px}
+ .scorebox{height:68px;border-radius:8px;display:flex;flex-direction:column;align-items:center;justify-content:center;font-weight:900;color:#fff;line-height:1}
+ .scorebox small{font-size:10px;opacity:.9;margin-top:3px}
+ .s-hi{background:#15803d}.s-mid{background:#0f766e}.s-lo{background:#64748b}
+ .result-body h3{margin:0 0 6px;font-size:16px;line-height:1.35}
+ .result-meta{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:5px 14px;margin-top:8px}
+ .result-meta div{min-width:0}
+ .reasons{display:flex;flex-wrap:wrap;gap:6px;margin-top:9px}
+ .tag{display:inline-flex;align-items:center;border-radius:8px;padding:4px 8px;font-size:11px;font-weight:800;background:#e2e8f0;color:#334155}
+ .tag.good{background:#dcfce7;color:#166534}.tag.warn{background:#fef3c7;color:#92400e}.tag.bad{background:#fee2e2;color:#991b1b}
+ .result-action{border-left:1px solid #eef2f7;padding-left:12px;display:flex;flex-direction:column;gap:8px;align-items:flex-start}
+ .action-pill{display:inline-flex;border-radius:8px;padding:6px 9px;font-size:12px;font-weight:900;background:#e2e8f0;color:#0f172a}
+ .action-pill.go{background:#dcfce7;color:#166534}.action-pill.watch{background:#fef3c7;color:#92400e}.action-pill.stop{background:#fee2e2;color:#991b1b}
+ .result-actions{display:flex;flex-wrap:wrap;gap:7px;margin-top:auto}
+ .result-actions .btn{width:auto;padding:6px 9px;font-size:12px}
+ @media(max-width:820px){
+   .result-main{grid-template-columns:62px minmax(0,1fr)}
+   .result-action{grid-column:1/-1;border-left:0;border-top:1px solid #eef2f7;padding:10px 0 0}
+   .scorebox{height:62px}
+ }
+ .grp{font-size:12px;font-weight:800;padding:7px 11px;border-radius:9px;margin:16px 0 4px;color:#fff}
+ .g-open{background:#15803d}.g-plan{background:#b45309}.g-unknown{background:#64748b}
+ .g-closed{background:#e2e8f0;color:#64748b}
+ .price{display:flex;gap:8px}.price input{flex:1}
+ .quick{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+ .quick button{background:#e2e8f0;color:#0f172a;border:0;border-radius:999px;padding:5px 11px;
+               font-size:12px;font-weight:700;cursor:pointer;width:auto}
+ .quick button:hover{background:#cbd5e1}
+</style></head>
+<body>
+  <header>
+    <b>🔍 Tìm thông báo mời thầu</b>
+    <a href="popup.html">Trang chính</a>
+    <a href="analytics.html">📊 Phân tích</a>
+    <a href="winners.html">🏆 Trúng thầu</a>
+    <a href="bidopen.html">⏳ Chờ kết quả</a>
+    <a href="plans.html">📋 Kế hoạch LCNT</a>
+    <a href="market.html">🗺️ Soi địa bàn</a>
+    <a href="options.html">Cấu hình</a>
+    <a href="profile.html">🧭 Hồ sơ 360°</a>
+    <a href="investor.html">🏛️ Hồ sơ CĐT</a>
+</header>
+
+  <main>
+    <div class="card">
+      <div class="scope">
+        <div>
+          <label for="investor">Chủ đầu tư <span class="muted small">(tên hoặc mã định danh)</span></label>
+          <input id="investor" placeholder="VD: Ban Quản lý dự án đầu tư xây dựng khu vực Hàm Tân">
+        </div>
+        <div>
+          <label for="province">Tỉnh / Thành phố</label>
+          <input id="province" placeholder="VD: Tỉnh Lâm Đồng" list="province-list">
+          <datalist id="province-list"></datalist>
+        </div>
+        <div>
+          <label for="ward">Xã / Phường</label>
+          <input id="ward" placeholder="Chọn tỉnh trước để có danh sách" list="ward-list" autocomplete="off">
+          <datalist id="ward-list"></datalist>
+          <small id="ward-hint" class="muted"></small>
+        </div>
+        <div>
+          <label for="keyword">Từ khoá <span class="muted small">(tuỳ chọn)</span></label>
+          <input id="keyword" placeholder="VD: kênh mương, cầu cống">
+        </div>
+      </div>
+
+      <div class="scope" style="margin-top:4px">
+        <div style="grid-column:span 2">
+          <label>Giá gói thầu (đồng)</label>
+          <div class="price">
+            <input id="minPrice" inputmode="numeric" placeholder="Từ">
+            <input id="maxPrice" inputmode="numeric" placeholder="Đến">
+          </div>
+          <div class="quick">
+            <button data-min="1000000000" data-max="">≥ 1 tỷ</button>
+            <button data-min="3000000000" data-max="">≥ 3 tỷ</button>
+            <button data-min="3000000000" data-max="20000000000">3 – 20 tỷ</button>
+            <button data-min="20000000000" data-max="100000000000">20 – 100 tỷ</button>
+            <button data-min="" data-max="">Xoá giá</button>
+          </div>
+        </div>
+        <div style="display:flex;align-items:flex-end">
+          <button id="go" class="btn" style="width:100%">🔎 Tra cứu trên e-GP</button>
+        </div>
+        <div style="display:flex;align-items:flex-end;gap:8px">
+          <button id="useSettings" class="btn light" style="width:100%">Lấy từ Cấu hình</button>
+          <button id="reset" class="btn light" style="width:auto">Xoá</button>
+        </div>
+      </div>
+
+      <div class="muted small" style="margin-top:10px;line-height:1.6">
+        Để trống ô nào thì không lọc theo ô đó. <b>Chỉ chọn Tỉnh cũng tra được</b> — không bắt buộc nhập chủ đầu tư hay xã/phường.
+        Tỉnh, giá gói thầu, chủ đầu tư và từ khoá đều do <b>e-GP lọc sẵn trước khi gửi về</b> nên nhanh; riêng <b>Xã/Phường</b> lọc trên kết quả đã tải, vì e-GP không lọc được theo mã xã.
+        Tên tỉnh phải <b>đúng như e-GP ghi</b> (có chữ "Tỉnh", "Thành phố") — chọn từ danh sách gợi ý cho chắc.
+        Kết quả được chấm điểm theo Cấu hình của bạn và lưu chung vào kho gói thầu.
+      </div>
+    </div>
+
+    <div id="progress" class="notice hidden" style="margin-top:14px">
+      <div class="row space">
+        <div><span class="spin"></span><span id="progress-text">Đang tra cứu…</span></div>
+        <button id="stop" class="btn warn" style="width:auto">⏹ Dừng</button>
+      </div>
+      <div class="bar"><i></i></div>
+      <div class="muted small" style="margin-top:8px">Giáo Sư Cùi Bắp đang thao tác trên tab e-GP. Đừng đóng tab đó.</div>
+    </div>
+
+    <div id="alert" class="notice hidden" style="margin-top:14px"></div>
+
+    <div id="summary" class="hidden">
+      <div class="metrics">
+        <div class="card"><div class="muted small">Gói tìm được</div><div id="m-total" class="metric num">0</div>
+          <div id="m-total-sub" class="muted small">—</div></div>
+        <div class="card"><div class="muted small">Đạt ngưỡng điểm</div><div id="m-match" class="metric num" style="color:#166534">0</div>
+          <div id="m-match-sub" class="muted small">—</div></div>
+        <div class="card"><div class="muted small">Còn nộp được</div><div id="m-open" class="metric num">0</div>
+          <div class="muted small">đang mở thầu</div></div>
+        <div class="card"><div class="muted small">Tổng giá các gói</div><div id="m-val" class="num" style="font-weight:850;font-size:18px">—</div>
+          <button id="csv" class="btn light" style="width:auto;margin-top:8px">⬇ Xuất Excel</button></div>
+      </div>
+      <div id="result-insights" class="insights"></div>
+    </div>
+
+    <div id="result-tools" class="result-tools hidden">
+      <div>
+        <label for="result-q">Lọc nhanh trong kết quả</label>
+        <input id="result-q" placeholder="Tên gói, mã, chủ đầu tư, địa điểm, lý do chấm điểm">
+      </div>
+      <div>
+        <label for="statusFilter">Trạng thái</label>
+        <select id="statusFilter">
+          <option value="">Tất cả</option>
+          <option value="OPEN">Đang mở thầu</option>
+          <option value="PLAN">Chưa có TBMT</option>
+          <option value="UNKNOWN">Chưa rõ hạn</option>
+          <option value="CLOSED">Đã đóng thầu</option>
+        </select>
+      </div>
+      <div>
+        <label for="minScoreFilter">Điểm tối thiểu</label>
+        <select id="minScoreFilter">
+          <option value="0">Tất cả điểm</option>
+          <option value="55">≥ 55</option>
+          <option value="70">≥ 70</option>
+          <option value="85">≥ 85</option>
+        </select>
+      </div>
+      <div>
+        <label for="sortBy">Sắp xếp</label>
+        <select id="sortBy">
+          <option value="decision">Ưu tiên xử lý</option>
+          <option value="score">Điểm cao trước</option>
+          <option value="deadline">Sắp đóng thầu trước</option>
+          <option value="price">Giá lớn trước</option>
+        </select>
+      </div>
+      <label id="only-wrap" class="checkline hidden">
+        <input type="checkbox" id="only"> Chỉ gói đạt ngưỡng
+      </label>
+    </div>
+
+    <div class="row space result-head">
+      <b id="list-title" class="hidden">Kết quả</b>
+      <span id="list-count" class="muted small result-count hidden"></span>
+    </div>
+    <div id="list"></div>
+  </main>
+
+  <script type="module" src="search.js"></script>
+  <script src="logo.js"></script>
+</body></html>

@@ -1,0 +1,148 @@
+:root{
+  --nav:#0f172a;
+  --bg:#f5f7fb;
+  --card:#fff;
+  --line:#e2e8f0;
+  --text:#0f172a;
+  --muted:#64748b;
+  --accent:#0f766e;
+  --warn:#c2410c;
+  --danger:#b91c1c;
+
+  /* Độ đậm của logo chìm. Chỉnh đúng một số này là đổi cho toàn phần mềm.
+     0.05 đủ thấy mà không cạnh tranh với chữ; trên 0.10 là bắt đầu khó đọc. */
+  --watermark-opacity:.05;
+  --watermark-size:min(70vmin,620px);
+  /* Logo do logo.js đặt vào (đọc từ Cấu hình). Chưa nạp thì trỏ về tệp trong
+     thư mục — không có tệp thì im lặng, trang vẫn bình thường. */
+  --watermark-image:none;
+}
+*{box-sizing:border-box}
+body{
+  margin:0;
+  font-family:Inter,system-ui,-apple-system,Segoe UI,Arial,sans-serif;
+  background:var(--bg);
+  color:var(--text);
+}
+
+/* --------------------------------------------------------------------------
+ *  LOGO CHÌM
+ *
+ *  Vẽ bằng lớp giả ::before của <body> chứ không phải một thẻ <img>, vì:
+ *    • không phải sửa 10 trang HTML, chỉ một chỗ ở đây;
+ *    • `position:fixed` nên logo đứng yên khi cuộn, giống hình nền thật;
+ *    • `pointer-events:none` nên không bao giờ chắn chuột — bấm nút, bôi đen
+ *      chữ, cuộn trang đều xuyên qua bình thường;
+ *    • `z-index:0` + nội dung nằm ở lớp 1, nên logo luôn ở DƯỚI mọi thứ.
+ *
+ *  Thiếu tệp icons/logo.png thì trang vẫn bình thường — ảnh nền không tải
+ *  được sẽ im lặng, không hiện biểu tượng ảnh vỡ như thẻ <img>.
+ * ------------------------------------------------------------------------ */
+body::before{
+  content:"";
+  position:fixed;
+  inset:0;
+  z-index:0;
+  pointer-events:none;
+  background-image:var(--watermark-image);
+  background-repeat:no-repeat;
+  background-position:center 58%;
+  background-size:var(--watermark-size) auto;
+  opacity:var(--watermark-opacity);
+}
+
+/* Nội dung phải nằm TRÊN lớp logo. Không có hai dòng này thì logo tuy mờ
+   nhưng vẫn phủ lên chữ và thẻ. */
+header,main{position:relative;z-index:1}
+
+/* Màn hình hẹp: thu nhỏ và nhạt bớt, tránh chen vào vùng đọc. */
+@media(max-width:700px){
+  :root{--watermark-size:min(80vmin,320px);--watermark-opacity:.04}
+}
+
+/* In ra giấy thì bỏ hẳn — tốn mực và làm bảng biểu khó đọc. */
+@media print{ body::before{display:none} }
+header{
+  background:var(--nav);
+  color:#fff;
+  padding:14px 18px;
+  display:flex;
+  gap:12px;
+  align-items:center;
+  flex-wrap:wrap;
+  position:sticky;
+  top:0;
+  z-index:3;
+}
+header b{font-size:18px;margin-right:auto}
+header a{color:#cbd5e1;text-decoration:none;font-weight:700;font-size:13px}
+main{max-width:1200px;margin:20px auto;padding:0 16px 50px}
+.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+.card{
+  background:var(--card);
+  border:1px solid var(--line);
+  border-radius:8px;
+  padding:16px;
+  box-shadow:0 4px 18px rgba(15,23,42,.04);
+}
+.metric{font-size:30px;font-weight:900}
+.muted{color:var(--muted)}
+.small{font-size:12px}
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.space{justify-content:space-between}
+.btn{
+  border:0;
+  border-radius:8px;
+  background:var(--accent);
+  color:#fff;
+  padding:10px 13px;
+  font-weight:800;
+  cursor:pointer;
+  text-decoration:none;
+  display:inline-block;
+}
+.btn.secondary{background:#334155}
+.btn.light{background:#e2e8f0;color:#0f172a}
+.btn.warn{background:var(--warn)}
+.btn.danger{background:var(--danger)}
+input,textarea,select{
+  width:100%;
+  padding:10px 11px;
+  border:1px solid #cbd5e1;
+  border-radius:8px;
+  font:inherit;
+  background:#fff;
+}
+textarea{min-height:120px}
+label{display:block;font-weight:750;font-size:13px;margin:10px 0 5px}
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.full{grid-column:1/-1}
+.notice{border:1px solid #a5f3fc;background:#ecfeff;border-radius:8px;padding:12px}
+.error{border-color:#fecaca;background:#fef2f2}
+.ok{border-color:#bbf7d0;background:#f0fdf4}
+.pill{display:inline-block;padding:4px 8px;border-radius:8px;background:#e2e8f0;font-size:11px;font-weight:850}
+.score{font-size:23px;font-weight:900}
+.high{color:#b91c1c}
+.mid{color:#c2410c}
+.tender{margin:10px 0}
+.tender h3{margin:3px 0 8px;font-size:17px}
+table{width:100%;border-collapse:collapse;background:#fff}
+th,td{text-align:left;padding:10px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-size:11px;text-transform:uppercase;color:#64748b}
+.hidden{display:none!important}
+.status-dot{width:10px;height:10px;border-radius:50%;background:#94a3b8;display:inline-block}
+.status-dot.ok{background:#16a34a}
+.status-dot.running{background:#eab308}
+.status-dot.error{background:#dc2626}
+@media(max-width:850px){
+  .grid{grid-template-columns:1fr 1fr}
+  .form-grid{grid-template-columns:1fr}
+  .full{grid-column:auto}
+}
+@media(max-width:520px){
+  .grid{grid-template-columns:1fr}
+  header a{display:none}
+  main{padding:0 10px}
+  .row.mobile-stack{align-items:stretch;flex-direction:column}
+  .btn{width:100%;text-align:center}
+}

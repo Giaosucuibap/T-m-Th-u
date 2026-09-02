@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="vi"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Phân tích dữ liệu đấu thầu</title>
+<link rel="stylesheet" href="app.css">
+<style>
+ .num{font-variant-numeric:tabular-nums;white-space:nowrap}
+ .code{font-family:ui-monospace,Menlo,Consolas,monospace;font-weight:800}
+ a.link{color:var(--accent);font-weight:800;text-decoration:none}
+ a.link:hover{text-decoration:underline}
+ .tabs{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap}
+ .tab{padding:11px 16px;border-radius:10px;background:#e2e8f0;font-weight:800;font-size:13.5px;
+      border:0;cursor:pointer;color:#0f172a}
+ .tab.on{background:var(--accent);color:#fff}
+ .metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:14px 0}
+ @media(max-width:900px){.metrics{grid-template-columns:1fr 1fr}}
+ .metrics .card{padding:13px}
+ .sample{font-size:11px;color:var(--muted);font-weight:700}
+ .weak{opacity:.55}
+ .weak-tag{display:inline-block;background:#fef3c7;color:#92400e;border-radius:6px;
+           padding:1px 6px;font-size:10.5px;font-weight:800;margin-left:5px}
+ .disclaimer{border:1px solid #fdba74;background:#fff7ed;border-radius:10px;padding:13px;
+             font-size:13px;line-height:1.6;margin-bottom:14px}
+ .bar{height:9px;border-radius:999px;background:#e2e8f0;overflow:hidden;min-width:70px}
+ .bar i{display:block;height:100%;background:var(--accent)}
+ .box{display:flex;align-items:center;gap:2px;height:26px}
+ .box .whisk{flex:0 0 1px;background:#94a3b8;height:11px}
+ .box .rng{flex:1;height:2px;background:#cbd5e1}
+ .box .iqr{flex:0 0 auto;height:16px;background:#99f6e4;border:1px solid #0f766e;border-radius:3px;position:relative}
+ .box .med{position:absolute;top:-3px;bottom:-3px;width:2px;background:#0f766e}
+ .hh-low{color:#166534;font-weight:800}
+ .hh-mid{color:#b45309;font-weight:800}
+ .hh-high{color:#b91c1c;font-weight:800}
+ .pill-tax{font-family:ui-monospace,Menlo,monospace;font-size:11px;background:#e2e8f0;
+           border-radius:6px;padding:1px 6px}
+ details{border:1px solid var(--line);border-radius:10px;background:#fff;margin-top:10px}
+ details>summary{padding:12px 14px;cursor:pointer;font-weight:750;list-style:none}
+ details>summary::-webkit-details-marker{display:none}
+ details[open]>summary{border-bottom:1px solid var(--line)}
+ .fx{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+ @media(max-width:820px){.fx{grid-template-columns:1fr}}
+</style></head>
+<body>
+  <header>
+    <b>📊 Phân tích dữ liệu đấu thầu</b>
+    <a href="popup.html">Trang chính</a>
+    <a href="search.html">🔍 Tìm TBMT</a>
+    <a href="market.html">🗺️ Soi địa bàn</a>
+    <a href="winners.html">🏆 Trúng thầu</a>
+    <a href="bidopen.html">⏳ Chờ kết quả</a>
+    <a href="plans.html">📋 Kế hoạch LCNT</a>
+    <a href="profile.html">🧭 Hồ sơ 360°</a>
+    <a href="investor.html">🏛️ Hồ sơ CĐT</a>
+</header>
+
+  <main>
+    <div id="store" class="notice" style="margin-bottom:14px">Đang đọc kho dữ liệu…</div>
+
+    <div class="tabs">
+      <button class="tab on" data-t="profile">👤 Hồ sơ nhà thầu</button>
+      <button class="tab" data-t="discount">💸 Chân dung giảm giá</button>
+      <button class="tab" data-t="relations">🔗 Quan hệ CĐT – Nhà thầu</button>
+    </div>
+
+    <!-- ============ TAB 1 ============ -->
+    <section id="p-profile">
+      <div class="card">
+        <label for="mst">Mã số thuế nhà thầu</label>
+        <div class="row">
+          <input id="mst" placeholder="VD: 5400512273" style="flex:1;min-width:220px">
+          <button id="goProfile" class="btn" style="width:auto">Xem hồ sơ</button>
+        </div>
+        <div class="muted small" style="margin-top:8px">
+          Hồ sơ dựng từ dữ liệu đã tích luỹ. Càng chạy nhiều lượt tra cứu trúng thầu và soi
+          biên bản mở thầu thì càng đầy đủ.
+        </div>
+      </div>
+      <div id="profileOut"></div>
+    </section>
+
+    <!-- ============ TAB 2 ============ -->
+    <section id="p-discount" class="hidden">
+      <div class="card">
+        <div class="fx">
+          <div><label for="dField">Lĩnh vực</label><select id="dField"></select></div>
+          <div><label for="dTax">Chỉ một nhà thầu (tuỳ chọn)</label><input id="dTax" placeholder="Mã số thuế"></div>
+          <div style="display:flex;align-items:flex-end"><button id="goDiscount" class="btn" style="width:100%">Phân tích</button></div>
+        </div>
+      </div>
+      <div id="discountOut"></div>
+    </section>
+
+    <!-- ============ TAB 3 ============ -->
+    <section id="p-relations" class="hidden">
+      <div class="card">
+        <div class="fx">
+          <div><label for="rMin">Chỉ xét CĐT có từ</label>
+            <select id="rMin">
+              <option value="2">2 gói trở lên</option>
+              <option value="3" selected>3 gói trở lên</option>
+              <option value="5">5 gói trở lên</option>
+              <option value="10">10 gói trở lên</option>
+            </select></div>
+          <div><label for="rInv">Lọc theo tên CĐT (tuỳ chọn)</label><input id="rInv" placeholder="VD: Ban Quản lý dự án"></div>
+          <div style="display:flex;align-items:flex-end"><button id="goRel" class="btn" style="width:100%">Phân tích</button></div>
+        </div>
+      </div>
+      <div id="relOut"></div>
+    </section>
+  </main>
+
+  <script type="module" src="analytics.js"></script>
+  <script src="logo.js"></script>
+</body></html>
+

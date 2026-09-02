@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Hồ sơ 360° nhà thầu — Giáo Sư Cùi Bắp</title>
+<link rel="stylesheet" href="app.css">
+<style>
+  .num{font-variant-numeric:tabular-nums;white-space:nowrap}
+  .code{font-family:ui-monospace,Menlo,Consolas,monospace;font-weight:800}
+  a.link{color:var(--accent);font-weight:800;text-decoration:none}
+  a.link:hover{text-decoration:underline}
+  .metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:14px 0}
+  @media(max-width:900px){.metrics{grid-template-columns:1fr 1fr}}
+  .pills{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-top:10px}
+  @media(max-width:900px){.pills{grid-template-columns:1fr 1fr}}
+  .pill{border:1px solid var(--line);border-radius:10px;padding:11px;text-align:center}
+  .pill .v{font-weight:850;font-size:22px;font-variant-numeric:tabular-nums}
+  .pill .k{color:#64748b;font-size:12px;margin-top:2px}
+  .pill.won{background:#ecfdf5;border-color:#6ee7b7}
+  .pill.lost{background:#fef2f2;border-color:#fca5a5}
+  .pill.pend{background:#fffbeb;border-color:#fcd34d}
+  .pill.cancel{background:#f1f5f9}
+  .tabs{display:flex;gap:6px;margin:18px 0 0;flex-wrap:wrap}
+  .tabs button{padding:9px 15px;border:1px solid var(--line);background:#fff;border-radius:9px 9px 0 0;
+               font-weight:800;cursor:pointer;color:#475569}
+  .tabs button.on{background:var(--accent);color:#fff;border-color:var(--accent)}
+  .band{border-left:4px solid #16a34a;background:#f0fdf4;padding:11px 13px;border-radius:0 9px 9px 0;
+        margin:12px 0;font-size:13px;line-height:1.6}
+  .band.warn{border-left-color:#f59e0b;background:#fffbeb}
+  .band.info{border-left-color:#64748b;background:#f8fafc;color:#334155}
+  .chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+  .spin{display:inline-block;width:13px;height:13px;border:2px solid #cbd5e1;border-top-color:var(--accent);
+        border-radius:50%;animation:sp .8s linear infinite;vertical-align:-2px;margin-right:7px}
+  @keyframes sp{to{transform:rotate(360deg)}}
+  td .sub{display:block;color:#64748b;font-size:12px;margin-top:2px}
+  .tag{display:inline-block;padding:3px 9px;border-radius:999px;font-size:11px;font-weight:800;
+       background:#e2e8f0;color:#0f172a}
+  .tag-v{background:#fef3c7;color:#92400e}
+  td .sub{display:block;color:#64748b;font-size:12px;margin-top:2px}
+</style>
+</head>
+<body>
+  <header>
+    <b>🧭 Hồ sơ 360° nhà thầu</b>
+    <a href="popup.html">Trang chính</a>
+    <a href="winners.html">🏆 Trúng thầu</a>
+    <a href="bidopen.html">⏳ Chờ kết quả</a>
+    <a href="market.html">🗺️ Soi địa bàn</a>
+    <a href="analytics.html">📊 Phân tích</a>
+      <a href="investor.html">🏛️ Hồ sơ CĐT</a>
+</header>
+
+  <main>
+    <div class="card">
+      <div class="row" style="gap:10px;align-items:end">
+        <div style="flex:1">
+          <label for="mst">Mã số thuế nhà thầu (10 chữ số)</label>
+          <input id="mst" placeholder="VD: 3400726761" autocomplete="off">
+        </div>
+        <button id="go" class="btn" style="width:auto">🧭 Dựng hồ sơ</button>
+        <button id="xlsx" class="btn light hidden" style="width:auto">⬇ Xuất Excel</button>
+      </div>
+      <div id="build-progress" class="muted small hidden" style="margin-top:8px"></div>
+      <div class="muted small" style="margin-top:10px;line-height:1.6">
+        Mỗi lần bấm <b>Dựng hồ sơ</b> là một lượt hỏi e-GP mới theo mã số thuế — không dùng lại số liệu của lần tra trước. Cần mở sẵn một tab e-GP.<b>Tra chính xác theo MST</b> ở trang Trúng thầu trước.
+      </div>
+    </div>
+
+    <div id="alert" class="notice hidden" style="margin-top:14px"></div>
+
+    <div id="result" class="hidden">
+      <div class="card" style="margin-top:14px">
+        <div class="row space">
+          <div>
+            <div id="p-name" style="font-weight:900;font-size:20px">—</div>
+            <div class="muted small">Mã số thuế <span id="p-mst" class="code">—</span></div>
+          </div>
+          <div id="p-years" class="muted small"></div>
+        </div>
+      </div>
+
+      <div class="band">
+        <b>✅ Nhóm số liệu ĐẦY ĐỦ</b>
+        <div id="note-complete" style="margin-top:4px"></div>
+      </div>
+
+      <div class="metrics">
+        <div class="card"><div class="muted small">Số gói đã trúng</div>
+          <div id="m-won" class="metric num">0</div>
+          <div id="m-won-sub" class="muted small">—</div></div>
+        <div class="card"><div class="muted small">Giá trị trúng độc lập</div>
+          <div id="m-solo" class="num" style="font-weight:850;font-size:19px">—</div>
+          <div id="m-venture" class="muted small">—</div></div>
+        <div class="card"><div class="muted small">Giảm giá trung vị</div>
+          <div id="m-disc" class="metric num">—</div>
+          <div id="m-disc-sub" class="muted small">—</div></div>
+        <div class="card"><div class="muted small">Địa bàn & bên mời thầu</div>
+          <div id="m-scope" class="num" style="font-weight:850;font-size:19px">—</div>
+          <div id="m-scope-sub" class="muted small">—</div></div>
+      </div>
+
+      <div class="band warn">
+        <b>⚠️ Nhóm số liệu CHỈ TRONG PHẠM VI ĐÃ QUÉT</b>
+        <div id="note-partial" style="margin-top:4px"></div>
+        <div class="pills">
+          <div class="pill"><div id="s-total" class="v">0</div><div class="k">Đã thấy dự thầu</div></div>
+          <div class="pill won"><div id="s-won" class="v">0</div><div class="k">Trúng</div></div>
+          <div class="pill lost"><div id="s-lost" class="v">0</div><div class="k">Trượt</div></div>
+          <div class="pill pend"><div id="s-pend" class="v">0</div><div class="k">Chưa xác định</div></div>
+          <div class="pill cancel"><div id="s-cancel" class="v">0</div><div class="k">Bị hủy</div></div>
+        </div>
+        <div id="s-rate" class="muted small" style="margin-top:10px"></div>
+
+        <div id="loss-box" style="margin-top:12px;padding-top:12px;border-top:1px dashed var(--line)">
+          <div id="loss-note" class="small" style="line-height:1.6"></div>
+          <label class="small" style="display:flex;gap:7px;align-items:center;margin-top:9px;font-weight:700">
+            <input type="checkbox" id="loss-all" style="width:auto">
+            Dò TOÀN QUỐC (chậm hơn nhiều, nhưng không bỏ sót tỉnh nhà thầu chưa từng trúng)
+          </label>
+          <div class="row" style="margin-top:9px">
+            <button id="loss-scan" class="btn" style="width:auto">🔍 Dò gói đã trượt</button>
+            <button id="loss-stop" class="btn warn hidden" style="width:auto">⏹ Dừng</button>
+          </div>
+          <div id="loss-scope" class="muted small" style="margin-top:7px"></div>
+          <div id="loss-progress" class="muted small hidden" style="margin-top:7px"></div>
+        </div>
+      </div>
+
+      <div class="tabs">
+        <button data-tab="years" class="on">📅 Theo năm</button>
+        <button data-tab="provinces">📍 Tỉnh / Thành phố</button>
+        <button data-tab="entities">🏛️ Bên mời thầu</button>
+        <button data-tab="packages">📦 Danh sách gói đã trúng</button>
+        <button data-tab="joined">🤝 Gói đã dự (trúng &amp; trượt)</button>
+      </div>
+      <div id="panel" class="card" style="border-radius:0 10px 10px 10px"></div>
+
+      <div class="band info">
+        <b>Dùng hồ sơ này vào việc gì</b>
+        <div id="note-use" style="margin-top:4px"></div>
+      </div>
+    </div>
+  </main>
+
+  <script type="module" src="profile.js"></script>
+  <script src="logo.js"></script>
+</body>
+</html>

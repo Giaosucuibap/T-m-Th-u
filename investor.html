@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Hồ sơ chủ đầu tư — Giáo Sư Cùi Bắp</title>
+<link rel="stylesheet" href="app.css">
+<style>
+  .num{font-variant-numeric:tabular-nums;white-space:nowrap}
+  .code{font-family:ui-monospace,Menlo,Consolas,monospace;font-weight:800}
+  a.link{color:var(--accent);font-weight:800;text-decoration:none}
+  a.link:hover{text-decoration:underline}
+  .metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:14px 0}
+  @media(max-width:900px){.metrics{grid-template-columns:1fr 1fr}}
+  .scope{display:grid;grid-template-columns:2fr 1.4fr auto;gap:12px;align-items:end}
+  @media(max-width:900px){.scope{grid-template-columns:1fr}}
+  .spin{display:inline-block;width:13px;height:13px;border:2px solid #cbd5e1;border-top-color:var(--accent);
+        border-radius:50%;animation:sp .8s linear infinite;vertical-align:-2px;margin-right:7px}
+  @keyframes sp{to{transform:rotate(360deg)}}
+  .bar{height:5px;border-radius:999px;background:#e2e8f0;overflow:hidden;margin-top:10px}
+  .bar i{display:block;height:100%;width:38%;background:var(--accent);animation:slide 1.15s infinite ease-in-out}
+  @keyframes slide{0%{margin-left:-38%}100%{margin-left:100%}}
+  .tabs{display:flex;gap:6px;margin:18px 0 0;flex-wrap:wrap}
+  .tabs button{padding:9px 15px;border:1px solid var(--line);background:#fff;border-radius:9px 9px 0 0;
+               font-weight:800;cursor:pointer;color:#475569}
+  .tabs button.on{background:var(--accent);color:#fff;border-color:var(--accent)}
+  .tag{display:inline-block;padding:3px 9px;border-radius:999px;font-size:11px;font-weight:800;
+       background:#e2e8f0;color:#0f172a}
+  .tag-v{background:#fef3c7;color:#92400e}
+  .tag-hot{background:#fef3c7;color:#92400e}
+  .tag-ok{background:#dcfce7;color:#166534}
+  .weak{opacity:.55}
+  .band{border-left:4px solid #16a34a;background:#f0fdf4;padding:11px 13px;border-radius:0 9px 9px 0;
+        margin:12px 0;font-size:13px;line-height:1.6}
+  .band.warn{border-left-color:#f59e0b;background:#fffbeb}
+  .band.info{border-left-color:#64748b;background:#f8fafc;color:#334155}
+  td .sub{display:block;color:#64748b;font-size:12px;margin-top:2px}
+  .pick{border:1px solid var(--line);border-radius:10px;padding:11px 13px;margin-top:8px;
+        display:flex;justify-content:space-between;gap:12px;align-items:center;background:#fff}
+  .pick:hover{border-color:var(--accent);background:#f8fafc}
+  .pick b{font-size:14px}
+</style>
+</head>
+<body>
+  <header>
+    <b>🏛️ Hồ sơ chủ đầu tư</b>
+    <a href="popup.html">Trang chính</a>
+    <a href="plans.html">📋 Kế hoạch LCNT</a>
+    <a href="market.html">🗺️ Soi địa bàn</a>
+    <a href="profile.html">🧭 Hồ sơ 360°</a>
+    <a href="winners.html">🏆 Trúng thầu</a>
+    <a href="analytics.html">📊 Phân tích</a>
+  </header>
+
+  <main>
+    <div class="card">
+      <div class="scope">
+        <div>
+          <label for="keyword">Chủ đầu tư — gõ vài chữ bạn nhớ</label>
+          <input id="keyword" placeholder='VD: Đức Linh · Hàm Tân · chi cục thủy lợi · phát triển nông thôn'
+                 autocomplete="off">
+        </div>
+        <div>
+          <label for="province">Tỉnh / Thành phố (nên chọn)</label>
+          <input id="province" placeholder="VD: Tỉnh Lâm Đồng" list="province-list" autocomplete="off">
+          <datalist id="province-list"></datalist>
+        </div>
+        <div>
+          <button id="go" class="btn">🔎 Dò chủ đầu tư</button>
+        </div>
+      </div>
+      <div class="muted small" style="margin-top:10px;line-height:1.6">
+        Không cần nhớ tên đầy đủ — gõ vài chữ, phần mềm liệt kê các đơn vị khớp rồi bạn chọn.
+        <b>Rất nhiều đơn vị trùng tên hoàn toàn nhưng khác mã</b> (riêng "Chi cục Thủy lợi" có ít nhất
+        5 mã khác nhau trên cả nước), nên phần mềm gom theo <b>mã định danh</b> và hiện đủ mọi tên
+        mà mã đó từng dùng. <b>Chọn Tỉnh</b> để lọc bớt đơn vị trùng tên ở tỉnh khác.
+      </div>
+    </div>
+
+    <div id="progress" class="notice hidden" style="margin-top:14px">
+      <div class="row space">
+        <div><span class="spin"></span><span id="progress-text">Đang tra cứu…</span></div>
+        <button id="stop" class="btn warn" style="width:auto">⏹ Dừng</button>
+      </div>
+      <div class="bar"><i></i></div>
+      <div class="muted small" style="margin-top:8px">Đang thao tác trên tab e-GP. Đừng đóng tab đó.</div>
+    </div>
+
+    <div id="alert" class="notice hidden" style="margin-top:14px"></div>
+
+    <!-- BƯỚC 1: chọn đúng đơn vị -->
+    <div id="picker" class="hidden">
+      <div class="card" style="margin-top:14px">
+        <b>Chọn đúng chủ đầu tư</b>
+        <div id="pick-note" class="muted small" style="margin-top:4px"></div>
+        <div id="pick-list" style="margin-top:10px"></div>
+      </div>
+    </div>
+
+    <!-- BƯỚC 2: hồ sơ đầy đủ -->
+    <div id="result" class="hidden">
+      <div class="card" style="margin-top:14px">
+        <div class="row space">
+          <div>
+            <div id="p-name" style="font-weight:900;font-size:19px">—</div>
+            <div class="muted small">Mã định danh <span id="p-code" class="code">—</span></div>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center">
+            <span id="p-years" class="muted small"></span>
+            <button id="xlsx" class="btn light" style="width:auto">⬇ Xuất Excel</button>
+            <button id="back" class="btn light" style="width:auto">← Chọn đơn vị khác</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="metrics">
+        <div class="card"><div class="muted small">Gói đã tổ chức</div>
+          <div id="m-pkg" class="metric num">0</div>
+          <div id="m-pkg-sub" class="muted small">—</div></div>
+        <div class="card"><div class="muted small">Nhà thầu đã trúng</div>
+          <div id="m-con" class="metric num">0</div>
+          <div id="m-con-sub" class="muted small">—</div></div>
+        <div class="card"><div class="muted small">Lượt nhà thầu tham dự</div>
+          <div id="m-join" class="metric num">0</div>
+          <div id="m-join-sub" class="muted small">—</div></div>
+        <div class="card"><div class="muted small">Mức tập trung</div>
+          <div id="m-hhi" class="num" style="font-weight:850;font-size:19px">—</div>
+          <div id="m-hhi-sub" class="muted small">—</div></div>
+      </div>
+
+      <div class="band">
+        <b>✅ Số liệu đầy đủ</b>
+        <div id="note-complete" style="margin-top:4px"></div>
+      </div>
+      <div class="band warn">
+        <b>⚠️ Đọc kỹ con số "lượt tham dự"</b>
+        <div id="note-join" style="margin-top:4px"></div>
+        <div id="note-partial" style="margin-top:8px"></div>
+      </div>
+
+      <div class="tabs">
+        <button data-tab="contractors" class="on">🏢 Nhà thầu đã trúng</button>
+        <button data-tab="years">📅 Theo năm</button>
+        <button data-tab="forms">⚖️ Theo hình thức</button>
+        <button data-tab="packages">📦 Danh sách gói</button>
+      </div>
+      <div id="panel" class="card" style="border-radius:0 10px 10px 10px"></div>
+
+      <div class="band info">
+        <div id="note-disclaimer"></div>
+      </div>
+    </div>
+  </main>
+
+  <script type="module" src="investor.js"></script>
+  <script src="logo.js"></script>
+</body>
+</html>
