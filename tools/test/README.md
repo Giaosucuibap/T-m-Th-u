@@ -18,7 +18,24 @@ node tools/test/load-test.mjs
 Nạp tiện ích vào Chromium, mở lần lượt 16 trang giao diện, gom mọi lỗi console
 và lỗi tải tài nguyên. Kết quả mong đợi: `LỖI (0)`.
 
-## 2. Chạy toàn trình với e-GP giả lập
+## 2. Kịch bản người dùng mới (chưa lưu bộ lọc)
+
+```bash
+# cửa sổ 1
+node tools/test/mock-egp.mjs
+# cửa sổ 2
+node tools/test/no-template.mjs
+```
+
+Mô phỏng đúng việc đầu tiên một người dùng mới làm: cài xong, bấm ngay
+**Quét e-GP ngay** khi chưa lưu bộ lọc nào. Kết quả mong đợi: `SUCCESS`, lấy
+được **137 gói**, và tab e-GP dừng ở trang `contractor-selection`.
+
+Đây là bài bắt được lỗi hồi quy của 4.0.0: tab mở `/web/guest/home`, nơi
+content script không còn chạy, nên lượt quét chết với thông báo tiếng Anh
+`Could not establish connection. Receiving end does not exist.`
+
+## 3. Chạy toàn trình với e-GP giả lập
 
 ```bash
 # cửa sổ 1
@@ -64,7 +81,7 @@ Chứng thư tự ký này chỉ dùng cho máy chủ giả lập trên `127.0.0
 duyệt kiểm thử được chạy riêng với `--ignore-certificate-errors`. **Không**
 commit thư mục `certs/`.
 
-## 3. Kiểm tra tệp Excel xuất ra
+## 4. Kiểm tra tệp Excel xuất ra
 
 ```bash
 node tools/test/xlsx-test.mjs      # ghi /tmp/t1.xlsx và /tmp/t2.xlsx

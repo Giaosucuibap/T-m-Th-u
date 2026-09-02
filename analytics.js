@@ -270,7 +270,8 @@ async function showRelations() {
     <div class="card" style="margin-top:14px">
       <b>Ma trận Chủ đầu tư × Nhà thầu</b>
       <div class="muted small">Bấm từng chủ đầu tư để xem các nhà thầu và tỷ lệ trúng.
-        <b>Mức tập trung</b> đo giá trị gói rơi vào tay bao nhiêu nhà thầu (chỉ số Herfindahl).</div>
+        <b>Mức tập trung</b> chỉ đo giá trị trúng độc lập rơi vào tay bao nhiêu nhà thầu
+        (chỉ số Herfindahl); gói liên danh bị loại vì không biết tỷ lệ góp của từng thành viên.</div>
       ${matrix.length ? matrix.map((m) => `
         <details>
           <summary>
@@ -278,7 +279,7 @@ async function showRelations() {
             <span class="muted small"> · ${m.packageCount} gói · ${m.contractorCount} nhà thầu</span>
             ${m.concentration.value !== null
               ? ` · <span class="${hhClass(m.concentration.level)}">${esc(m.concentration.level)}</span>
-                  <span class="sample">HHI ${m.concentration.value}</span>` : ''}
+                  <span class="sample">HHI ${m.concentration.value} · chỉ gói độc lập</span>` : ''}
             ${m.topWinner && m.topWinnerShare && m.topWinnerShare.value !== null
               ? `<div class="muted small" style="margin-top:3px">Trúng nhiều nhất:
                  ${esc(m.topWinner.name || m.topWinner.taxCode)} — ${m.topWinner.won}/${m.packageCount} gói

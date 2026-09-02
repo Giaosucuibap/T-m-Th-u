@@ -1,2 +1,68 @@
-<!doctype html><html lang="vi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Bắt đầu với Giáo Sư Cùi Bắp</title><link rel="stylesheet" href="app.css"></head><body><header><b>🚀 Bắt đầu với Giáo Sư Cùi Bắp</b><a href="dashboard.html">Mở phần mềm</a><a href="options.html">Cấu hình</a></header><main><div class="notice ok"><b>Đây là phần mềm mới độc lập hoàn toàn.</b> Không dùng Python, PowerShell, localhost, email IMAP hay server 127.0.0.1.</div><div class="card" style="margin-top:14px"><h2>1. Cấu hình năng lực công ty</h2><p>Vào <a href="options.html">Cấu hình</a> để nhập tỉnh ưu tiên, từ khóa thủy lợi/giao thông, dải giá và giờ chạy.</p></div><div id="filter" class="card" style="margin-top:14px"><h2>2. Ghi nhớ bộ lọc e-GP — chỉ làm một lần</h2><ol><li>Bấm nút dưới đây để mở trang Lựa chọn nhà thầu.</li><li>Trên e-GP, dùng <b>Tìm kiếm nâng cao</b>, chọn loại thông tin/TBMT và lĩnh vực <b>Xây lắp</b>; có thể đặt số dòng/trang lớn nhất.</li><li>Bấm <b>Tìm kiếm</b> trên e-GP và chờ kết quả hiện ra.</li><li>Bấm biểu tượng Giáo Sư Cùi Bắp trên thanh Chrome → <b>Lưu bộ lọc vừa tìm trên e-GP</b>.</li></ol><button id="open" class="btn">Mở e-GP để tạo bộ lọc</button><p class="muted small">Tiện ích chỉ lưu URL/phương thức/nội dung bộ lọc công khai; không lưu mật khẩu, cookie hoặc header Authorization.</p></div><div class="card" style="margin-top:14px"><h2>3. Sử dụng hằng ngày</h2><p>Mở biểu tượng Giáo Sư Cùi Bắp và bấm <b>Quét e-GP ngay</b>. Khi Chrome đang hoạt động, lịch tự động cũng có thể chạy theo giờ đã cấu hình. Nếu máy đang tắt/ngủ, Chrome không thể đánh thức máy; lượt trễ sẽ chạy khi Chrome hoạt động trở lại.</p></div><div class="card" style="margin-top:14px"><h2>4. Xem trên điện thoại</h2><p>Từ Dashboard, bấm <b>Xuất báo cáo điện thoại</b>. Phần mềm tạo một file HTML độc lập; lưu file vào OneDrive/Google Drive để mở trên điện thoại. Chrome di động tiêu chuẩn không cài được tiện ích này.</p></div><div class="card" style="margin-top:14px"><h2>5. Nguyên tắc nguồn</h2><p>Mỗi gói lưu mã TBMT, phiên bản, thời điểm thu thập và link nguồn e-GP. Điểm phù hợp là công cụ ưu tiên nội bộ; quyết định dự thầu phải kiểm tra lại TBMT/HSMT trên nguồn chính thức.</p></div></main><script src="onboarding.js"></script>  <script src="logo.js"></script>
-</body></html>
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Bắt đầu — Giáo Sư Cùi Bắp</title>
+  <link rel="stylesheet" href="app.css">
+</head>
+<body>
+  <header>
+    <b><img class="brand-icon" src="icons/icon32.png" alt="">Giáo Sư Cùi Bắp <span class="version-chip">4.0</span></b>
+    <a href="dashboard.html">Bàn điều hành</a>
+    <a href="search.html">Tìm gói thầu</a>
+    <a href="options.html">Cấu hình</a>
+  </header>
+  <main>
+    <section class="hero">
+      <div>
+        <p class="eyebrow">Thiết lập trong khoảng 3 phút</p>
+        <h1>Biến dữ liệu e-GP thành quyết định dự thầu có căn cứ</h1>
+        <p>Cấu hình năng lực một lần, tìm trên nguồn chính thức, rồi đưa từng cơ hội qua pipeline Go/No-Go.</p>
+      </div>
+      <div class="hero-actions">
+        <a class="btn" href="options.html">Thiết lập năng lực</a>
+        <a class="btn light" href="search.html">Mở trung tâm tìm kiếm</a>
+      </div>
+    </section>
+
+    <div class="notice ok" style="margin-top:14px">
+      <b>Dữ liệu chính được xử lý và lưu trong Chrome trên máy này.</b>
+      Không cần máy chủ riêng cho chức năng tìm kiếm, chấm điểm và báo cáo. Riêng nút tải E-HSMT có thể gọi phần mềm hỗ trợ e-GP tại <code>localhost:1234</code> khi bạn chủ động sử dụng.
+    </div>
+
+    <section class="section-grid">
+      <div class="card">
+        <p class="eyebrow" style="color:var(--accent)">Bước 1</p>
+        <h2>Khai báo “hộ chiếu năng lực”</h2>
+        <p>Nhập địa bàn, ngành nghề, dải giá, từ khóa thế mạnh và điều kiện loại trừ. Radar dùng dữ liệu này để xếp ưu tiên — không thay thế thẩm định hồ sơ.</p>
+        <a class="btn" href="options.html">Mở cấu hình</a>
+      </div>
+      <div class="card">
+        <p class="eyebrow" style="color:var(--accent)">Bước 2</p>
+        <h2>Tra cứu bằng thao tác e-GP hợp lệ</h2>
+        <p>Nhập ít nhất một tiêu chí trong Trung tâm tìm kiếm. Tiện ích mở trang Lựa chọn nhà thầu và để chính giao diện e-GP tạo phiên tìm kiếm, CAPTCHA/token hiện hành.</p>
+        <a class="btn" href="search.html">Tìm gói thầu</a>
+      </div>
+      <div class="card">
+        <p class="eyebrow" style="color:var(--accent)">Bước 3</p>
+        <h2>Ra quyết định và theo dõi thay đổi</h2>
+        <p>Đưa gói qua các trạng thái Mới → Đang đánh giá → Go/No-Go → Đang dự → Đã nộp; ghi chủ trì, ghi chú và kiểm tra Radar thay đổi.</p>
+        <a class="btn" href="dashboard.html">Mở bàn điều hành</a>
+      </div>
+      <div id="filter" class="card">
+        <p class="eyebrow" style="color:var(--accent)">Tùy chọn</p>
+        <h2>Mở trực tiếp e-GP</h2>
+        <p>Dùng khi cần kiểm tra nguồn, tạo lại truy vấn hoặc xem chi tiết hồ sơ trên Hệ thống mạng đấu thầu quốc gia.</p>
+        <button id="open" class="btn light" type="button">Mở trang e-GP chính thức</button>
+      </div>
+    </section>
+
+    <div class="notice">
+      <b>Nguyên tắc kiểm chứng:</b> điểm phù hợp và độ đầy đủ dữ liệu là chỉ báo nội bộ, không phải xác suất trúng thầu. Trước quyết định Go, luôn đối chiếu mã TBMT, phiên bản, thời hạn và E-HSMT trên nguồn e-GP.
+    </div>
+  </main>
+  <script src="onboarding.js"></script>
+  <script src="logo.js"></script>
+</body>
+</html>

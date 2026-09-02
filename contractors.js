@@ -66,5 +66,4 @@ $('btn').addEventListener('click', runSearch);
 $('q').addEventListener('keydown', (e) => { if (e.key === 'Enter') runSearch(); });
 $('clear').addEventListener('click', () => { $('q').value = ''; $('summary').classList.add('hidden'); $('results').classList.add('hidden'); });
 
-document.addEventListener('DOMContentLoaded', load);
-load();
+document.addEventListener('DOMContentLoaded', load, { once: true });

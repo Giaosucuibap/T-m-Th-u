@@ -38,19 +38,28 @@ $('form').onsubmit = async (e) => {
 $('import').onclick = async () => {
   const f = $('backupFile').files[0];
   if (!f) return alert('Chọn file JSON backup.');
+  if (f.size > 15_000_000) return alert('File backup vượt quá 15 MB nên không thể nhập an toàn.');
   try {
     const data = JSON.parse(await f.text());
     const r = await msg('IMPORT_BACKUP', { data });
-    alert(r.ok ? 'Đã nhập backup.' : r.message);
+    alert(r.ok ? (r.message || 'Đã nhập backup.') : r.message);
     load();
   } catch (e) { alert('File không hợp lệ: ' + e.message); }
 };
 
 $('clear').onclick = async () => {
-  if (confirm('Xóa toàn bộ gói thầu và lịch sử quét cục bộ?')) {
+  if (confirm('Xóa danh sách gói thầu và lịch sử quét? Cấu hình và thông tin Telegram vẫn được giữ lại.')) {
     await msg('CLEAR_DATA');
-    alert('Đã xóa.');
+    alert('Đã xóa danh sách và lịch sử quét.');
   }
+};
+
+$('factoryReset').onclick = async () => {
+  if (!confirm('Xóa TOÀN BỘ dữ liệu, cấu hình, Bot Token, logo và đưa tiện ích về mặc định? Thao tác này không thể hoàn tác.')) return;
+  if (!confirm('Xác nhận lần cuối: bạn đã xuất backup an toàn nếu cần giữ dữ liệu?')) return;
+  const r = await msg('FACTORY_RESET');
+  alert(r && r.ok ? 'Đã khôi phục mặc định.' : ((r && r.message) || 'Không thể khôi phục mặc định.'));
+  location.reload();
 };
 
 /* ------------------------------------------------------------------ *

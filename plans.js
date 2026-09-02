@@ -25,6 +25,16 @@ function alertBox(html, kind) {
   show(box, Boolean(html));
 }
 
+function isCapped(lookup) {
+  const seen = Number(lookup && lookup.serverCount) || 0;
+  const total = Number(lookup && lookup.totalElements) || 0;
+  return Boolean(lookup && (lookup.capped || (total > 0 && seen > 0 && seen < total)));
+}
+
+function isIncomplete(lookup) {
+  return Boolean(lookup && (lookup.status === 'PARTIAL' || lookup.partial || lookup.cancelled || isCapped(lookup)));
+}
+
 /* --------------------------------------------------------------------------
  *  Ô CHỌN TỈNH VÀ XÃ/PHƯỜNG
  *
@@ -169,6 +179,7 @@ function planCard(p) {
 function render() {
   const plans = LOOKUP.plans || [];
   const s = LOOKUP.summary;
+  const incomplete = isIncomplete(LOOKUP);
 
   if (LOOKUP.status === 'SUCCESS' && !plans.length) {
     show($('summary'), false);
@@ -178,12 +189,23 @@ function render() {
        hoặc thử rút ngắn tên chủ đầu tư.</span>`, 'error');
     return;
   }
-  if (!plans.length) return;
+  if (!plans.length) {
+    if (incomplete) {
+      alertBox(`<b>Dữ liệu chưa đầy đủ.</b> ${esc(LOOKUP.message || 'e-GP ngừng trả dữ liệu trước khi lấy hết các trang.')}`, 'error');
+    }
+    return;
+  }
 
   /* Bỏ hẳn cảnh báo "không đặt được tiêu chí". Cảnh báo đó có từ thời tiện ích
      điều khiển biểu mẫu e-GP; nay mọi tiêu chí đều đi thẳng vào truy vấn nên
      `applied` luôn rỗng — giữ lại sẽ báo lỗi giả với MỌI lượt tra cứu. */
   const warnings = [];
+  if (incomplete) {
+    const detail = isCapped(LOOKUP)
+      ? `Mới nhận ${LOOKUP.serverCount || plans.length}/${LOOKUP.totalElements || '?'} kế hoạch do đã chạm giới hạn trang.`
+      : (LOOKUP.cancelled ? 'Lượt tra cứu đã dừng giữa chừng.' : 'e-GP ngừng trả dữ liệu trước khi lấy hết các trang.');
+    warnings.push(`<b>Dữ liệu chưa đầy đủ.</b> ${esc(detail)} Không dùng tổng số và tổng giá trị như toàn bộ phạm vi.`);
+  }
   if ((LOOKUP.mismatched || []).length) {
     warnings.push(`<b>${LOOKUP.mismatched.length} kế hoạch</b> e-GP trả về nhưng không khớp hoàn toàn tiêu chí bạn nhập
       (${esc(LOOKUP.mismatched.slice(0, 5).join(', '))}${LOOKUP.mismatched.length > 5 ? '…' : ''}).
@@ -192,7 +214,6 @@ function render() {
   if (LOOKUP.areaDropped) {
     warnings.push(`Đã bỏ <b>${LOOKUP.areaDropped}</b> kế hoạch lệch địa bàn sau khi tải về.`);
   }
-  if (LOOKUP.cancelled) warnings.push('<b>Đã dừng giữa chừng</b> — danh sách chưa đầy đủ.');
   alertBox(warnings.join('<br><br>'), null);
 
   if (s) {

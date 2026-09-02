@@ -34,14 +34,13 @@
         root.style.setProperty('--watermark-size', `min(70vmin, ${Number(entry.size)}px)`);
       }
     } else {
-      /* Chưa nạp logo riêng trong Cấu hình → dùng logo mặc định đi kèm phần mềm.
-       *
-       * Bản trước đặt 'none' rồi fetch() thử xem tệp có tồn tại không. Nhưng
-       * icons/logo.png KHÔNG được đóng gói, nên mọi trang đều bắn một request
-       * 404 và Chrome ghi "Failed to load resource: net::ERR_FILE_NOT_FOUND"
-       * vào console — chính cái rác mà đoạn đó định tránh. Nay tệp được đóng
-       * gói sẵn, nên gán thẳng, bỏ hẳn fetch dò tệp. */
-      root.style.setProperty('--watermark-image', `url("${chrome.runtime.getURL('icons/logo.png')}")`);
+      // Chưa nạp logo trong Cấu hình. Vẫn chấp nhận tệp icons/logo.png cho ai
+      // thích chép tay — nhưng phải KIỂM TRA tệp có thật, chứ đặt bừa vào CSS
+      // thì mọi trang đều bắn một request 404 rác vào console.
+      root.style.setProperty('--watermark-image', 'none');
+      fetch(chrome.runtime.getURL('icons/logo.png'), { method: 'GET' })
+        .then((r) => { if (r.ok) root.style.setProperty('--watermark-image', 'url("icons/logo.png")'); })
+        .catch(() => {});
     }
   }
 

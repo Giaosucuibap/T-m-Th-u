@@ -2,8 +2,9 @@
   "manifest_version": 3,
   "name": "Giáo Sư Cùi Bắp",
   "short_name": "Giáo Sư Cùi Bắp",
-  "version": "3.9.2",
-  "description": "Năm chức năng trên Hệ thống mạng đấu thầu quốc gia: tìm thông báo mời thầu; tra nhà thầu trúng thầu theo mã số thuế; soi biên bản mở thầu kèm tỷ lệ giảm giá; tra kế hoạch lựa chọn nhà thầu theo chủ đầu tư/xã phường; và soi địa bàn để xem xã/phường nào hay có công ty nào trúng thầu.",
+  "version": "4.0.1",
+  "minimum_chrome_version": "111",
+  "description": "Trợ lý ra quyết định dự thầu trên e-GP: tìm và chấm điểm gói thầu, Radar thay đổi, pipeline Go/No-Go, hồ sơ nhà thầu/chủ đầu tư, đối thủ, địa bàn và báo cáo Excel.",
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAuHE7yNZhSq3cXTsv7ibZDS8O8FQg2naaTuVvsGWMzhWWm8h3TPlnTps/NGHd6Nk+PKS6g/A/A8lXroLv4nbGpoJLs1OA1+spnQGRImaZGJwfs5+Hc0l7wKL4zcfQVq6Tcf2Jgl+yUXh8pn3B5r3VFJ3ky1RLf2gnRHRGon15QFIBCkrSNc9DAIlEI/37VTm7DBIB37G7SbEuy+7/58ibz70RGvpQXakhSeUtSRGndV2BtmZ+0GOcFHpPi5x/HuuiV/VC0f3TQ9Bj9EpO6Obf9IyLztvyZl7nGnPi4Zb5plctF7AIf1CP7CTiuEhH1MZUxOw06J7FIT4LRf5ncqLe1wIDAQAB",
   "permissions": [
     "storage",
@@ -18,6 +19,9 @@
     "https://api.telegram.org/*",
     "http://localhost:1234/*"
   ],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'"
+  },
   "background": {
     "service_worker": "background.js",
     "type": "module"
@@ -36,7 +40,8 @@
   "content_scripts": [
     {
       "matches": [
-        "https://muasamcong.mpi.gov.vn/*"
+        "https://muasamcong.mpi.gov.vn/*/web/guest/contractor-selection*",
+        "https://muasamcong.mpi.gov.vn/web/guest/contractor-selection*"
       ],
       "js": [
         "page-hook.js"
@@ -46,7 +51,8 @@
     },
     {
       "matches": [
-        "https://muasamcong.mpi.gov.vn/*"
+        "https://muasamcong.mpi.gov.vn/*/web/guest/contractor-selection*",
+        "https://muasamcong.mpi.gov.vn/web/guest/contractor-selection*"
       ],
       "js": [
         "content.js"

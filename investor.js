@@ -34,6 +34,20 @@ function alertBox(html, kind) {
   show(box, Boolean(html));
 }
 
+function isIncomplete(scan) {
+  return Boolean(scan && (scan.status === 'PARTIAL' || scan.partial || scan.cancelled || scan.capped));
+}
+
+function incompleteBanner(scan) {
+  if (!isIncomplete(scan)) return '';
+  const reason = scan.capped
+    ? 'Lượt tra cứu đã chạm giới hạn số trang.'
+    : scan.cancelled
+      ? 'Lượt tra cứu đã dừng giữa chừng.'
+      : 'e-GP ngừng trả dữ liệu trước khi lấy hết các trang.';
+  return `<b>Dữ liệu chưa đầy đủ.</b> ${reason} Chỉ dùng các số bên dưới như kết quả tạm thời.`;
+}
+
 async function loadProvinces() {
   const res = await send('AREA_OPTIONS', {});
   if (!res || res.ok === false) return;
@@ -105,13 +119,19 @@ async function refresh() {
   if (scan.status === 'ERROR') { alertBox(esc(scan.message), 'error'); return; }
 
   if (scan.mode === 'discover') {
-    if (!scan.candidates || !scan.candidates.length) { alertBox(esc(scan.message), null); return; }
-    alertBox('', null);
+    if (!scan.candidates || !scan.candidates.length) {
+      alertBox(isIncomplete(scan) ? incompleteBanner(scan) : esc(scan.message), isIncomplete(scan) ? 'error' : null);
+      return;
+    }
+    alertBox(incompleteBanner(scan), isIncomplete(scan) ? 'error' : null);
     renderPicker(scan);
     return;
   }
-  if (!scan.summary) { alertBox(esc(scan.message), null); return; }
-  alertBox('', null);
+  if (!scan.summary) {
+    alertBox(isIncomplete(scan) ? incompleteBanner(scan) : esc(scan.message), isIncomplete(scan) ? 'error' : null);
+    return;
+  }
+  alertBox(incompleteBanner(scan), isIncomplete(scan) ? 'error' : null);
   renderProfile(scan);
 }
 
@@ -168,9 +188,16 @@ function renderProfile(scan) {
   const c = s.concentration;
   $('m-hhi').textContent = c.value === null ? '—' : c.level;
   $('m-hhi-sub').textContent = c.value === null
-    ? 'chưa đủ dữ liệu' : `HHI ${c.value.toLocaleString('vi-VN')} trên ${c.n} nhà thầu`;
+    ? 'chưa đủ dữ liệu gói độc lập; liên danh không tính'
+    : `HHI ${c.value.toLocaleString('vi-VN')} trên ${c.n} nhà thầu · chỉ gói độc lập, loại liên danh`;
 
-  $('note-complete').textContent = scan.completeNote || '';
+  const completeHeading = $('note-complete').previousElementSibling;
+  if (completeHeading) completeHeading.textContent = isIncomplete(scan)
+    ? '⚠️ Số liệu chưa đầy đủ'
+    : '✅ Số liệu đầy đủ';
+  $('note-complete').textContent = isIncomplete(scan)
+    ? `Lượt lấy dữ liệu chưa hoàn tất. ${scan.message || 'Chỉ xem các chỉ số này như kết quả tạm thời.'}`
+    : (scan.completeNote || '');
   $('note-join').textContent = scan.joinNote || '';
   $('note-partial').textContent = scan.partialNote || '';
   $('note-disclaimer').textContent = scan.disclaimer || '';

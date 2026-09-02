@@ -33,6 +33,14 @@ const STATUS_TEXT = {
   UNKNOWN: 'Chưa rõ thời điểm đóng thầu',
   CLOSED: 'Đã đóng thầu'
 };
+const RUN_TEXT = {
+  SUCCESS: 'Hoàn tất',
+  ERROR: 'Có lỗi',
+  TIMEOUT: 'Quá thời gian',
+  RUNNING: 'Đang chạy',
+  CANCELLED: 'Đã dừng',
+  PARTIAL: 'Hoàn tất một phần'
+};
 function statusOf(t) {
   if (t && t.status && STATUS_TEXT[t.status]) return t.status;
   if (!t || !String(t.notifyNo || '').trim()) return 'PLAN';
@@ -72,12 +80,24 @@ function renderTemplates() {
   scanAll.style.display = list.length > 1 ? 'block' : 'none';
   if (list.length > 1) scanAll.textContent = `🔁 Quét tất cả ${list.length} bộ lọc`;
   if (!list.length) { box.innerHTML = ''; return; }
-  box.innerHTML = list.map((t) => `<span class="tpl ${t.id === activeId ? 'active' : ''}" data-id="${esc(t.id)}" title="${esc(t.name || '')}"><span class="nm">${esc(t.name || 'Bộ lọc')}</span><span class="del" data-del="${esc(t.id)}">✕</span></span>`).join('');
+  box.innerHTML = list.map((t) => `<span class="tpl-item">
+    <button class="tpl ${t.id === activeId ? 'active' : ''}" type="button" data-id="${esc(t.id)}"
+      aria-pressed="${t.id === activeId}" title="Chọn ${esc(t.name || 'bộ lọc')}">
+      <span class="nm">${esc(t.name || 'Bộ lọc')}</span>
+    </button>
+    <button class="tpl-delete" type="button" data-del="${esc(t.id)}"
+      aria-label="Xóa bộ lọc ${esc(t.name || 'Bộ lọc')}">✕</button>
+  </span>`).join('');
   box.querySelectorAll('.tpl').forEach((el) => {
-    el.addEventListener('click', async (e) => {
-      const delId = e.target && e.target.dataset ? e.target.dataset.del : undefined;
-      if (delId !== undefined) { e.stopPropagation(); await send('DELETE_TEMPLATE', { id: delId }); return refresh(); }
+    el.addEventListener('click', async () => {
       await send('SET_ACTIVE_TEMPLATE', { id: el.dataset.id });
+      refresh();
+    });
+  });
+  box.querySelectorAll('.tpl-delete').forEach((button) => {
+    button.addEventListener('click', async () => {
+      if (!confirm('Xóa bộ lọc đã lưu này?')) return;
+      await send('DELETE_TEMPLATE', { id: button.dataset.del });
       refresh();
     });
   });
@@ -91,15 +111,15 @@ function renderStatus() {
     $('status').innerHTML = `<b>⏳ Đang quét…</b><br><span style="color:var(--muted)">${esc(activeRun.message || activeRun.status)}</span>`;
     bar.classList.add('on');
     scanBtn.disabled = true;
-    scanBtn.textContent = '⏳ Đang trích xuất…';
+    scanBtn.textContent = '⏳ Đang quét dữ liệu…';
   } else {
     const last = runs && runs[0];
-    const tmpl = template ? '✅ Đã có bộ lọc tự động' : '⚠️ Chưa lưu bộ lọc — hãy tìm 1 lần trên e-GP rồi bấm “Lưu bộ lọc”';
-    const lastTxt = last ? ` · Lần cuối: ${esc(last.status)}${last.newCount ? ` (+${last.newCount} mới)` : ''}` : '';
+    const tmpl = template ? '✅ Radar đã có bộ lọc' : '⚠️ Chưa lưu bộ lọc — hãy tìm một lần trên e-GP rồi bấm “Lưu bộ lọc”';
+    const lastTxt = last ? ` · Lần gần nhất: ${esc(RUN_TEXT[last.status] || last.status)}${last.newCount ? ` (+${last.newCount} mới)` : ''}` : '';
     $('status').innerHTML = `<b>${tenders.length}</b> gói thầu đã lưu<br><span style="color:var(--muted)">${tmpl}${lastTxt}</span>`;
     bar.classList.remove('on');
     scanBtn.disabled = false;
-    scanBtn.textContent = '🔍 Quét & trích xuất tất cả gói thầu';
+    scanBtn.textContent = '🔍 Quét theo bộ lọc đang chọn';
   }
 }
 
@@ -148,7 +168,8 @@ function tenderCard(t) {
           <span>${closeTxt}</span>
         </div>
       </div>
-      <button class="star ${t.watchlisted ? 'on' : ''}" title="Theo dõi">${t.watchlisted ? '★' : '☆'}</button>
+      <button class="star ${t.watchlisted ? 'on' : ''}" type="button" title="Theo dõi"
+        aria-pressed="${Boolean(t.watchlisted)}" aria-label="${t.watchlisted ? 'Bỏ theo dõi' : 'Theo dõi'} ${esc(t.bidName || code)}">${t.watchlisted ? '★' : '☆'}</button>
     </div>
     <div class="line">
       <span>💰 <b>${money(t.price)}</b></span>
@@ -169,7 +190,7 @@ function render() {
     : '';
   const box = $('list');
   if (!total) {
-    box.innerHTML = `<div class="empty">Chưa có dữ liệu. Bấm <b>Quét &amp; trích xuất</b> để lấy gói thầu từ e-GP.${STATE.template ? '' : '<br>Trước tiên hãy tìm 1 lần trên e-GP rồi bấm <b>Lưu bộ lọc</b>.'}</div>`;
+    box.innerHTML = `<div class="empty">Chưa có dữ liệu. Bấm <b>Quét theo bộ lọc</b> để lấy gói thầu từ e-GP.${STATE.template ? '' : '<br>Trước tiên hãy tìm một lần trên e-GP rồi bấm <b>Lưu bộ lọc</b>.'}</div>`;
     return;
   }
   if (!list.length) {
@@ -199,6 +220,8 @@ function render() {
       t.watchlisted = value;
       btn.classList.toggle('on', value);
       btn.textContent = value ? '★' : '☆';
+      btn.setAttribute('aria-pressed', String(value));
+      btn.setAttribute('aria-label', `${value ? 'Bỏ theo dõi' : 'Theo dõi'} ${t.bidName || codeOf(t).code}`);
       await send('SET_WATCH', { key, value });
     });
   });
@@ -220,6 +243,7 @@ function bindFilterChip(chip) {
     const f = chip.dataset.f;
     filters[f] = !filters[f];
     chip.classList.toggle('active', filters[f]);
+    chip.setAttribute('aria-pressed', String(filters[f]));
     render();
   });
 }

@@ -32,6 +32,22 @@ function alertBox(message, kind) {
   show(box, Boolean(message));
 }
 
+function isIncomplete(lk) {
+  return Boolean(lk && (lk.status === 'PARTIAL' || lk.partial || lk.cancelled || lk.capped));
+}
+
+function incompleteBanner(lk, count) {
+  if (!isIncomplete(lk)) return '';
+  const total = Number(lk.totalElements) || Number(count) || 0;
+  const progress = total ? ` Mới nhận ${Number(count) || 0}/${total} bản ghi.` : '';
+  const reason = lk.capped
+    ? 'Lượt dò đã chạm giới hạn số trang.'
+    : lk.cancelled
+      ? 'Lượt tra cứu đã dừng giữa chừng.'
+      : 'e-GP ngừng trả dữ liệu trước khi lấy hết các trang.';
+  return `<b>Dữ liệu chưa đầy đủ.</b> ${reason}${progress} Không dùng các số dưới đây như toàn bộ lịch sử.`;
+}
+
 /* ------------------------------------------------------------------ *
  *  Bắt đầu tra cứu
  * ------------------------------------------------------------------ */
@@ -104,10 +120,14 @@ function renderCandidates(lk) {
   show($('summary'), false);
   show($('results'), false);
 
-  if (lk.status !== 'SUCCESS') { show($('pick'), false); return; }
+  if (lk.status !== 'SUCCESS' && lk.status !== 'PARTIAL') { show($('pick'), false); return; }
 
   if (!list.length) {
     show($('pick'), false);
+    if (isIncomplete(lk)) {
+      alertBox(incompleteBanner(lk, 0), 'error');
+      return;
+    }
     alertBox(
       `Không thấy nhà thầu nào khớp <b>${esc(lk.query)}</b>.<br>
        <span class="small">Gợi ý: nhập ngắn gọn phần tên riêng (ví dụ “An Khang” thay vì tên đầy đủ),
@@ -117,7 +137,7 @@ function renderCandidates(lk) {
     return;
   }
 
-  alertBox('', null);
+  alertBox(incompleteBanner(lk, list.length), isIncomplete(lk) ? 'error' : null);
   show($('pick'), true);
   $('cands').innerHTML = list.map((c) => `
     <div class="cand" data-tax="${esc(c.taxCode)}" data-name="${esc(c.name)}">
@@ -171,15 +191,12 @@ function renderPackages(lk) {
   }
   if (!list.length) return;
 
-  alertBox(
-    lk.cancelled
-      ? `<b>Đã dừng giữa chừng.</b> Mới lấy ${list.length}/${lk.totalElements} gói — tra lại để lấy đủ.`
-      : '',
-    null
-  );
+  alertBox(incompleteBanner(lk, list.length), isIncomplete(lk) ? 'error' : null);
 
   const s = lk.summary || {};
-  show($('summary'), true);
+  // Khi người dùng dừng trước trang cuối, background có thể chưa kịp chốt phần
+  // tổng hợp. Vẫn cho xem các dòng đã nhận nhưng không vẽ các số 0 giả.
+  show($('summary'), Boolean(lk.summary));
   show($('results'), true);
   show($('pricenote'), true);
 

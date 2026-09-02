@@ -34,6 +34,20 @@ function alertBox(html, kind) {
   show(box, Boolean(html));
 }
 
+function isIncomplete(scan) {
+  return Boolean(scan && (scan.status === 'PARTIAL' || scan.partial || scan.cancelled || scan.capped));
+}
+
+function incompleteBanner(scan) {
+  if (!isIncomplete(scan)) return '';
+  const reason = scan.capped
+    ? 'Lượt tra cứu đã chạm giới hạn số trang.'
+    : scan.cancelled
+      ? 'Lượt tra cứu đã dừng giữa chừng.'
+      : 'e-GP ngừng trả dữ liệu trước khi lấy hết các trang.';
+  return `<b>Dữ liệu chưa đầy đủ.</b> ${reason} Các tỷ lệ và tín hiệu chỉ phản ánh phần dữ liệu đã nhận.`;
+}
+
 /* --------------------------------------------------------------------------
  *  Ô CHỌN ĐỊA BÀN — dùng chung nguồn với trang Kế hoạch LCNT
  * ------------------------------------------------------------------------ */
@@ -172,9 +186,12 @@ async function refresh() {
   show($('progress'), false);
 
   if (scan.status === 'ERROR') { alertBox(esc(scan.message), 'error'); return; }
-  if (!scan.summary) { alertBox(esc(scan.message), null); return; }
+  if (!scan.summary) {
+    alertBox(isIncomplete(scan) ? incompleteBanner(scan) : esc(scan.message), isIncomplete(scan) ? 'error' : null);
+    return;
+  }
 
-  alertBox('', null);
+  alertBox(incompleteBanner(scan), isIncomplete(scan) ? 'error' : null);
   render(scan);
 }
 
@@ -196,13 +213,18 @@ function render(scan) {
 
   const c = s.concentration;
   $('m-hhi').textContent = c.value === null ? '—' : `${c.level}`;
-  $('m-hhi').title = c.value === null ? '' : `HHI ${c.value.toLocaleString('vi-VN')} trên ${c.n} nhà thầu`;
+  const hhiLabel = $('m-hhi').previousElementSibling;
+  if (hhiLabel) hhiLabel.textContent = 'Mức tập trung · chỉ gói độc lập';
+  $('m-hhi').title = c.value === null ? 'Liên danh không được tính vào HHI'
+    : `HHI ${c.value.toLocaleString('vi-VN')} trên ${c.n} nhà thầu; chỉ tính giá trị trúng độc lập, loại liên danh`;
 
   $('signals').innerHTML = s.signals.length
     ? s.signals.map((x) => `<div class="signal">⚠️ ${esc(x.text)}
         <span class="muted small"> (cỡ mẫu ${x.n})</span></div>`).join('')
-    : `<div class="notice ok" style="margin-top:10px">Không thấy dấu hiệu tập trung nào vượt ngưỡng
-        trên cỡ mẫu hiện có.</div>`;
+    : isIncomplete(scan)
+      ? `<div class="notice" style="margin-top:10px">Chưa thể kết luận về mức tập trung vì lượt lấy dữ liệu chưa đầy đủ.</div>`
+      : `<div class="notice ok" style="margin-top:10px">Không thấy dấu hiệu tập trung nào vượt ngưỡng
+          trên cỡ mẫu hiện có.</div>`;
 
   $('disclaimer').textContent = scan.disclaimer || '';
   $('scope-note').textContent = scan.scopeNote || '';
@@ -298,12 +320,13 @@ function drawInvestors(s) {
           <td class="num"${weak(i.topShare.reliable)}>${esc(i.topShare.text)}</td>
           <td>${i.concentration.value === null ? '—'
               : `<span class="tag ${i.concentration.value > 2500 ? 'tag-hot' : 'tag-ok'}">${esc(i.concentration.level)}</span>
-                 <span class="sub">HHI ${i.concentration.value.toLocaleString('vi-VN')}</span>`}</td>
+                 <span class="sub">HHI ${i.concentration.value.toLocaleString('vi-VN')} · chỉ gói độc lập</span>`}</td>
         </tr>`).join('')}
       </tbody>
     </table>
     <div class="muted small" style="margin-top:10px">
-      <b>Mức tập trung (HHI)</b> đo giá trị gói thầu dồn vào bao nhiêu nhà thầu.
+      <b>Mức tập trung (HHI)</b> chỉ đo giá trị <b>trúng độc lập</b> dồn vào bao nhiêu nhà thầu;
+      toàn bộ gói liên danh bị loại vì e-GP không công bố tỷ lệ góp của từng thành viên.
       Dưới 1.500 là phân tán, trên 2.500 là tập trung cao. Đây là thước đo thống kê,
       không phải kết luận về hành vi.
     </div>`;

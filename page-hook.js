@@ -3,10 +3,9 @@
  *
  * 1) Quan sát mọi phản hồi JSON mà giao diện e-GP tải (fetch + XHR) và đẩy về
  *    content script khi thấy dữ liệu có mã TBMT.
- * 2) Phát lại (replay) đúng NGUYÊN TRẠNG yêu cầu tìm kiếm đã lưu — không sửa
- *    pageSize/limit — để tránh HTTP 400 (bản 1.0.0 tự tăng pageSize gây lỗi).
- * 3) Phân trang THẬT: chỉ tăng CHỈ SỐ TRANG (page/offset), giữ nguyên kích
- *    thước trang, nhằm trích xuất TẤT CẢ gói thầu thay vì chỉ trang đầu.
+ * 2) Chỉ chấp nhận request tìm kiếm đúng origin/endpoint/schema; không nhận
+ *    URL, phương thức hay header tùy ý từ bridge.
+ * 3) Phân trang bằng thao tác của giao diện e-GP, giữ CAPTCHA/token hiện hành.
  * 4) TRA CỨU KQLCNT: tinh chỉnh tiêu chí tìm kiếm ngay trên request mà CHÍNH
  *    TRANG e-GP phát ra khi người dùng bấm "Tìm kiếm", để máy chủ lọc sẵn theo
  *    mã số thuế nhà thầu trúng thầu (xem khối "TRA CỨU KQLCNT" ở cuối tệp).
@@ -38,12 +37,6 @@
   const IDENTITY = ['notifyNo', 'bidName', 'notifyName', 'bidNo'];
 
   // Tên trường phân trang thường gặp trên e-GP và các framework phổ biến.
-  const PAGE_KEYS = ['pageNumber', 'pageNo', 'pageIndex', 'pageNum', 'currentPage', 'current', 'page'];
-  const OFFSET_KEYS = ['offset', 'from', 'start', 'startIndex', 'skip', 'firstResult'];
-  const SIZE_KEYS = ['pageSize', 'size', 'limit', 'rowsPerPage', 'numberOfRows', 'perPage', 'length'];
-  const TOTAL_PAGE_KEYS = ['totalPages', 'totalPage', 'pageTotal', 'totalPageCount'];
-  const TOTAL_COUNT_KEYS = ['total', 'totalRow', 'totalRows', 'totalRecord', 'totalRecords', 'totalCount', 'totalElements', 'recordsTotal', 'totalItems'];
-
   const post = (type, payload) => window.postMessage({ source: SOURCE, type, payload }, '*');
 
   /* ------------------------------------------------------------------------
@@ -110,59 +103,9 @@
     return found;
   }
 
-  // Đếm số bản ghi gói thầu trong một phản hồi — để biết trang còn dữ liệu không.
-  function countCandidates(value) {
-    const seen = new WeakSet();
-    let n = 0;
-    let nodes = 0;
-    (function walk(v, depth) {
-      if (depth > 12 || nodes > 20000 || v == null) return;
-      nodes++;
-      if (Array.isArray(v)) { for (const x of v) walk(x, depth + 1); return; }
-      if (typeof v !== 'object') return;
-      if (seen.has(v)) return;
-      seen.add(v);
-      const keys = Object.keys(v);
-      if (keys.some((k) => RELEVANT.has(k)) && keys.some((k) => IDENTITY.includes(k))) n++;
-      for (const x of Object.values(v)) walk(x, depth + 1);
-    })(value, 0);
-    return n;
-  }
-
-  // Đọc tổng số trang / tổng số bản ghi (nếu API trả về) để dừng đúng lúc.
-  function readTotals(value) {
-    let totalPages = null;
-    let totalCount = null;
-    const seen = new WeakSet();
-    (function walk(v, depth) {
-      if (depth > 8 || v == null || typeof v !== 'object' || seen.has(v)) return;
-      seen.add(v);
-      for (const [k, val] of Object.entries(v)) {
-        if (typeof val === 'number') {
-          if (totalPages == null && TOTAL_PAGE_KEYS.includes(k)) totalPages = val;
-          if (totalCount == null && TOTAL_COUNT_KEYS.includes(k)) totalCount = val;
-        } else walk(val, depth + 1);
-      }
-    })(value, 0);
-    return { totalPages, totalCount };
-  }
-
   function headersToObject(headers) {
     const out = {};
     try { for (const [k, v] of new Headers(headers || {}).entries()) out[k] = v; } catch {}
-    return out;
-  }
-
-  function cookieValue(name) {
-    const hit = document.cookie.split(';').map((x) => x.trim()).find((x) => x.startsWith(`${name}=`));
-    return hit ? decodeURIComponent(hit.slice(name.length + 1)) : '';
-  }
-
-  function withLiveSecurityHeaders(headers) {
-    const out = { ...(headers || {}) };
-    const hasCsrf = Object.keys(out).some((k) => /^x-(xsrf|csrf)-token$/i.test(k));
-    const token = cookieValue('XSRF-TOKEN') || cookieValue('CSRF-TOKEN') || cookieValue('csrfToken') || cookieValue('_csrf');
-    if (token && !hasCsrf) out['x-xsrf-token'] = token;
     return out;
   }
 
@@ -182,7 +125,7 @@
     return { url, method, headers, body: String(body || '') };
   }
 
-  async function inspectResponse(response, request) {
+  async function inspectResponse(response, request, planId = '') {
     try {
       const clone = response.clone();
       const ctype = clone.headers.get('content-type') || '';
@@ -192,7 +135,23 @@
         const text = await clone.text();
         if (/^\s*[\[{]/.test(text)) data = safeParse(text);
       }
-      if (data && hasRelevant(data)) {
+      const responseUrl = response.url || request.url || '';
+      recordEndpoint(responseUrl, request.method, response.status, data);
+      if (planId) {
+        post('KQLCNT_PAGE', {
+          planId,
+          ok: response.status >= 200 && response.status < 300,
+          status: response.status,
+          data
+        });
+      }
+      if (String(responseUrl).includes(LOT_OPEN_DETAIL_ENDPOINT) && Array.isArray(data)) {
+        post('BBMT_BIDDERS', { url: location.href, rows: data, status: response.status });
+      }
+      if (isAttachmentUrl(responseUrl) && data) {
+        post('EGP_ATTACHMENTS', { url: location.href, payload: data });
+      }
+      if (!planId && data && hasRelevant(data)) {
         post('NETWORK_CAPTURE', { request, data, responseUrl: response.url, status: response.status, capturedAt: new Date().toISOString() });
       }
     } catch {}
@@ -203,8 +162,30 @@
   window.fetch = async function (input, init) {
     let request;
     try { request = await serializeFetchRequest(input, init); } catch { request = { url: String(input), method: 'GET', headers: {}, body: '' }; }
-    const response = await originalFetch(input, init);
-    inspectResponse(response, request);
+    let fetchInput = input;
+    let fetchInit = init;
+    let planId = '';
+    if (kqlcntPlan && String(request.url || '').includes(SEARCH_ENDPOINT)) {
+      const refined = refineKqlcntBody(request.url, request.body);
+      if (refined !== null) {
+        planId = kqlcntPlan.id;
+        request.body = refined;
+        try {
+          if (typeof Request !== 'undefined' && input instanceof Request) {
+            fetchInput = new Request(input, { body: refined });
+            fetchInit = undefined;
+          } else {
+            fetchInit = { ...(init || {}), method: request.method, body: refined };
+          }
+        } catch {
+          planId = '';
+          fetchInput = input;
+          fetchInit = init;
+        }
+      }
+    }
+    const response = await originalFetch(fetchInput, fetchInit);
+    void inspectResponse(response, request, planId);
     return response;
   };
 
@@ -228,9 +209,9 @@
       // được chuyển về đúng nơi. Việc THAY tiêu chí là tuỳ chọn: khi kế hoạch
       // không kèm `query` (tính năng KHLCNT), giữ nguyên truy vấn của e-GP.
       if (kqlcntPlan && String(this.__br.url || '').indexOf(SEARCH_ENDPOINT) !== -1) {
-        this.__brKqlcnt = kqlcntPlan.id;
         const refined = refineKqlcntBody(this.__br.url, this.__br.body);
         if (refined !== null) {
+          this.__brKqlcnt = kqlcntPlan.id;
           body = refined;
           this.__br.body = refined;
         }
@@ -271,150 +252,6 @@
   };
 
   // ====================================================================
-  //  PHÂN TRANG: dựng request cho trang thứ `ordinal` (0 = trang đã lưu).
-  //  Chỉ dịch chuyển chỉ số trang, KHÔNG BAO GIỜ đổi pageSize.
-  // ====================================================================
-  function locatePaging(obj) {
-    let page = null;
-    let offset = null;
-    let size = null;
-    const seen = new WeakSet();
-    (function walk(v, depth) {
-      if (!v || typeof v !== 'object' || depth > 8 || seen.has(v)) return;
-      seen.add(v);
-      for (const [k, val] of Object.entries(v)) {
-        if (typeof val === 'number') {
-          if (!page && PAGE_KEYS.includes(k)) page = { parent: v, key: k, value: val };
-          if (!offset && OFFSET_KEYS.includes(k)) offset = { parent: v, key: k, value: val };
-          if (!size && SIZE_KEYS.includes(k)) size = { parent: v, key: k, value: val };
-        } else walk(val, depth + 1);
-      }
-    })(obj, 0);
-    return { page, offset, size };
-  }
-
-  // Trả về {url, body} cho trang thứ ordinal; null nếu không thể phân trang.
-  function buildRequestForPage(request, ordinal) {
-    const method = (request.method || 'GET').toUpperCase();
-    const isBodyMethod = !['GET', 'HEAD'].includes(method);
-    const baseBody = String(request.body || '');
-
-    if (isBodyMethod && baseBody) {
-      if (ordinal === 0) return { url: request.url, body: baseBody };
-      const parsed = safeParse(baseBody);
-      if (!parsed) return null;
-      const p = locatePaging(parsed);
-      if (p.page) {
-        p.page.parent[p.page.key] = p.page.value + ordinal;
-      } else if (p.offset && p.size) {
-        p.offset.parent[p.offset.key] = p.offset.value + ordinal * p.size.value;
-      } else if (p.offset) {
-        p.offset.parent[p.offset.key] = p.offset.value + ordinal;
-      } else {
-        return null;
-      }
-      return { url: request.url, body: JSON.stringify(parsed) };
-    }
-
-    // Phương thức GET: phân trang qua query string.
-    let u;
-    try { u = new URL(request.url); } catch { return { url: request.url, body: '' }; }
-    if (ordinal === 0) return { url: u.href, body: '' };
-    const params = u.searchParams;
-    const pageKey = PAGE_KEYS.find((k) => params.has(k));
-    const offKey = OFFSET_KEYS.find((k) => params.has(k));
-    const sizeKey = SIZE_KEYS.find((k) => params.has(k));
-    if (pageKey) {
-      params.set(pageKey, String(Number(params.get(pageKey) || 0) + ordinal));
-    } else if (offKey) {
-      const sz = sizeKey ? Number(params.get(sizeKey)) || 10 : 10;
-      params.set(offKey, String(Number(params.get(offKey) || 0) + ordinal * sz));
-    } else {
-      return null;
-    }
-    return { url: u.href, body: '' };
-  }
-
-  async function replaySearch(request, maxPages, runId) {
-    const method = (request.method || 'GET').toUpperCase();
-    const isBodyMethod = !['GET', 'HEAD'].includes(method);
-    const cap = Math.max(1, Math.min(Number(maxPages) || 5, 40));
-    let pagesFetched = 0;
-    let recordsSeen = 0;
-    /* Tổng số gói e-GP nói là CÓ, và tổng số trang. Phải mang được hai con số
-       này về: không có chúng thì phần mềm không thể nói cho người dùng biết
-       lượt quét đã lấy hết hay mới lấy được một phần. */
-    let serverTotalCount = null;
-    let serverTotalPages = null;
-    let stoppedBy = 'end';   // end | cap | no-paging | page-error
-
-    for (let ordinal = 0; ordinal < cap; ordinal++) {
-      const built = buildRequestForPage(request, ordinal);
-      if (!built) { stoppedBy = 'no-paging'; break; } // Không phân trang được → dừng sau các trang đã lấy.
-
-      const options = { method, headers: withLiveSecurityHeaders(request.headers), credentials: 'include', cache: 'no-store' };
-      const body = String(built.body || '');
-      if (isBodyMethod && body) options.body = body; // Phát lại NGUYÊN TRẠNG thân request.
-
-      let response;
-      try {
-        response = await originalFetch(built.url, options);
-      } catch (error) {
-        if (ordinal === 0) { post('REPLAY_COMPLETE', { runId, ok: false, error: String(error?.message || error) }); return; }
-        break;
-      }
-
-      if (!response.ok) {
-        // Trang đầu bị từ chối = template hết hiệu lực → báo để dựng lại bộ lọc.
-        if (ordinal === 0) {
-          post('REPLAY_COMPLETE', { runId, ok: false, status: response.status, expired: true, error: `e-GP trả HTTP ${response.status} cho bộ lọc đã lưu.` });
-          return;
-        }
-        stoppedBy = 'page-error';
-        break; // Trang sau lỗi → giữ dữ liệu đã lấy, dừng lại.
-      }
-
-      const text = await response.clone().text();
-      const data = safeParse(text);
-      const pageCount = data ? countCandidates(data) : 0;
-      const totals = data ? readTotals(data) : {};
-      if (totals.totalCount != null) serverTotalCount = totals.totalCount;
-      if (totals.totalPages != null) serverTotalPages = totals.totalPages;
-      if (data && pageCount > 0) {
-        post('NETWORK_CAPTURE', { request: { ...request, url: built.url, body }, data, responseUrl: response.url, status: response.status, capturedAt: new Date().toISOString(), runId, page: ordinal + 1, total: totals.totalCount, totalPages: totals.totalPages });
-      }
-      pagesFetched++;
-      recordsSeen += pageCount;
-
-      // Điều kiện dừng.
-      if (pageCount === 0 && ordinal > 0) break;
-      if (totals.totalPages != null && ordinal + 1 >= totals.totalPages) break;
-      if (buildRequestForPage(request, ordinal + 1) === null) { stoppedBy = 'no-paging'; break; }
-      // Còn trang nhưng đã chạm trần số trang cho phép.
-      if (ordinal + 1 >= cap) { stoppedBy = 'cap'; break; }
-
-      // Nghỉ nhẹ giữa các trang để không dồn dập lên máy chủ e-GP.
-      await new Promise((r) => setTimeout(r, 350));
-    }
-
-    /* Báo về ĐỦ bốn con số. Trước đây chỉ gửi `pages` và `records`, nên khi lượt
-       quét dừng vì chạm trần số trang thì không ai biết — giao diện vẫn nói
-       "Đã quét xong" trong khi e-GP còn hàng trăm gói chưa lấy. Với người đi
-       tìm thầu thì đó là mất cơ hội chứ không phải chuyện hiển thị. */
-    post('REPLAY_COMPLETE', {
-      runId, ok: true,
-      pages: pagesFetched,
-      records: recordsSeen,
-      totalCount: serverTotalCount,
-      totalPages: serverTotalPages,
-      pageCap: cap,
-      truncated: stoppedBy === 'cap'
-        || (serverTotalPages != null && pagesFetched < serverTotalPages),
-      stoppedBy
-    });
-  }
-
-  // ====================================================================
   //  TRA CỨU KQLCNT
   //
   //  e-GP bảo vệ endpoint tìm kiếm bằng reCAPTCHA v3: mỗi request phải kèm
@@ -451,13 +288,6 @@
 
   window.addEventListener('message', (event) => {
     if (event.source !== window || event.data?.source !== CONTENT_SOURCE) return;
-
-    if (event.data.type === 'REPLAY_REQUEST') {
-      const { request, maxPagesHint = 5, runId } = event.data.payload || {};
-      if (!request?.url) { post('REPLAY_COMPLETE', { runId, ok: false, error: 'Chưa có bộ lọc đã ghi nhớ.' }); return; }
-      replaySearch(request, maxPagesHint, runId);
-      return;
-    }
 
     // Bật/tắt chế độ tinh chỉnh tiêu chí cho lượt tra cứu KQLCNT.
     if (event.data.type === 'KQLCNT_PLAN') {

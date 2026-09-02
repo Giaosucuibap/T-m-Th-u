@@ -103,9 +103,13 @@ await popup.screenshot({ path: '/tmp/shot-popup.png', fullPage: true });
 
 const dash = await ctx.newPage();
 dash.on('pageerror', (e) => errors.push('[dashboard] ' + e.message));
+dash.on('console', (m) => { if (m.type() === 'error') errors.push('[dashboard] ' + m.text()); });
 await dash.goto(`chrome-extension://${ID}/dashboard.html`);
-await dash.waitForTimeout(2000);
-console.log('dashboard tổng:', await dash.textContent('#total'), '| đạt ngưỡng:', await dash.textContent('#matched'));
+await dash.waitForTimeout(2500);
+// ID thẻ số liệu khác nhau giữa 3.9.x (#total) và 4.0.0 (#m-live) — thử cả hai.
+const metric = async (sel) => { try { return (await dash.textContent(sel)) || '—'; } catch { return '(không có)'; } };
+console.log('dashboard:', '#total=' + await metric('#total'), '#m-live=' + await metric('#m-live'),
+            '#m-match=' + await metric('#m-match'), '#m-urgent=' + await metric('#m-urgent'));
 await dash.screenshot({ path: '/tmp/shot-dashboard.png', fullPage: true });
 
 console.log('\n--- 5. Xuất Excel ---');

@@ -1,12 +1,6 @@
 (() => {
   const PAGE_SOURCE='BID_RADAR_ONE_PAGE';
   const CONTENT_SOURCE='BID_RADAR_ONE_CONTENT';
-  const RETRYABLE_REPLAY_STATUS=[400,401,403,409,422];
-  let activeRunId=null;
-  let activeSettings=null;
-  let replayDone=false;
-  let capturedThisRun=0;
-
   function postPage(type,payload){ window.postMessage({source:CONTENT_SOURCE,type,payload},'*'); }
   function clean(v){ return String(v ?? '').replace(/\s+/g,' ').trim(); }
   function extractObjects(value,max=750){
@@ -27,11 +21,12 @@
     const nodes=[...document.querySelectorAll('a[href],tr,article,li,[class*="card"],[class*="item"]')];
     for(const node of nodes.slice(0,4000)){
       const href=node.tagName==='A'?node.href:(node.querySelector?.('a[href*="notifyNo="],a[href*="tbmt"],a[href*="web/guest"]')?.href||'');
-      const text=clean(node.innerText||node.textContent||'').slice(0,5000);
+      const rawText=String(node.innerText||node.textContent||'').slice(0,12000);
+      const text=clean(rawText).slice(0,5000);
       const source=`${href} ${text}`;
       const m=source.match(/\bIB\d{6,}\b/i); if(!m)continue;
       const notifyNo=m[0].toUpperCase(); if(seen.has(notifyNo+href))continue; seen.add(notifyNo+href);
-      const lines=text.split(/\n|\r/).map(clean).filter(Boolean);
+      const lines=rawText.split(/\n|\r/).map(clean).filter(Boolean);
       const bidName=lines.find(x=>x.length>12&&!/^(IB\d+|Mã TBMT|Ngày đăng|Chi tiết)$/i.test(x))||notifyNo;
       out.push({notifyNo,bidName,detailUrl:href||location.href,rawText:text});
     }
@@ -56,59 +51,7 @@
   }
   async function sendRecords(records,meta={}){
     if(!records?.length)return {newCount:0};
-    capturedThisRun+=records.length;
-    return chrome.runtime.sendMessage({type:'INGEST_CAPTURE',payload:{records,meta:{sourcePageUrl:location.href,capturedAt:new Date().toISOString(),runId:activeRunId,...meta}}});
-  }
-  async function attemptSearchClick(){
-    const candidates=[...document.querySelectorAll('button,a,[role="button"]')];
-    const target=candidates.find(el=>/^(tìm kiếm|search)$/i.test(clean(el.innerText||el.getAttribute('aria-label'))))||candidates.find(el=>/tìm kiếm thông tin/i.test(clean(el.innerText)));
-    if(target){try{target.click();return true;}catch{}}
-    return false;
-  }
-  async function fallbackToVisibleSearch(payload){
-    if(!RETRYABLE_REPLAY_STATUS.includes(Number(payload?.status)))return false;
-    showOverlay(`e-GP từ chối bộ lọc đã ghi (HTTP ${payload.status}). Giáo Sư Cùi Bắp đang thử nút Tìm kiếm trên trang...`);
-    const clicked=await attemptSearchClick();
-    if(!clicked)return false;
-    setTimeout(()=>finalize(capturedThisRun>0,capturedThisRun>0?`Đã quét bằng giao diện e-GP; ghi nhận ${capturedThisRun} bản ghi trước khi chống trùng.`:'e-GP từ chối bộ lọc cũ và không trả dữ liệu mới. Hãy tìm kiếm lại trên e-GP rồi lưu bộ lọc.'),12000);
-    return true;
-  }
-  async function finalize(ok=true,message='Đã hoàn tất quét trang.'){
-    const dom=scanDom();
-    if(dom.length)await sendRecords(dom,{captureType:'dom'});
-    chrome.runtime.sendMessage({type:'SCAN_DONE',payload:{runId:activeRunId,ok,message,captured:caughtSafe()}}).catch(()=>{});
-    showOverlay(message,ok?'success':'error');
-    activeRunId=null;activeSettings=null;replayDone=false;capturedThisRun=0;
-  }
-  function caughtSafe(){return capturedThisRun;}
-
-  /**
-   * Câu tổng kết một lượt phát lại bộ lọc.
-   *
-   * VÌ SAO PHẢI CÓ RIÊNG MỘT HÀM: lượt quét dừng ở trần "số trang tối đa"
-   * (mặc định 5 trang) là chuyện bình thường, nhưng trước đây nó vẫn báo
-   * "Đã quét xong" y hệt lúc lấy hết. Người dùng tưởng đã thấy toàn bộ gói
-   * thầu trong khi e-GP còn hàng trăm gói chưa lấy — với người đi tìm thầu,
-   * đó là mất cơ hội thật, không phải lỗi hiển thị.
-   *
-   * Nay nói rõ: lấy được bao nhiêu trên tổng bao nhiêu, và chỉnh ở đâu.
-   */
-  function replaySummary(p){
-    const pages=Number(p.pages||0);
-    const total=Number.isFinite(Number(p.totalCount))?Number(p.totalCount):null;
-    const totalPages=Number.isFinite(Number(p.totalPages))?Number(p.totalPages):null;
-    const got=`ghi nhận ${capturedThisRun} bản ghi`;
-
-    if(p.truncated&&totalPages&&pages<totalPages){
-      const con=total?` — e-GP còn khoảng ${Math.max(0,total-capturedThisRun).toLocaleString('vi-VN')} gói chưa lấy`:'';
-      return `CHƯA LẤY HẾT: mới quét ${pages}/${totalPages} trang, ${got}${con}. `
-        +`Vào Cấu hình › "Số trang tối đa gợi ý cho e-GP" tăng lên (tối đa 40) rồi quét lại.`;
-    }
-    if(p.stoppedBy==='page-error'){
-      return `Dừng sớm vì e-GP từ chối một trang; ${got} trước khi dừng. Thử lại sau ít phút.`;
-    }
-    const scope=total?` (e-GP báo có ${total.toLocaleString('vi-VN')} gói khớp bộ lọc)`:'';
-    return `Đã quét hết ${pages} trang${scope}; ${got} trước khi chống trùng.`;
+    return chrome.runtime.sendMessage({type:'INGEST_CAPTURE',payload:{records,meta:{sourcePageUrl:location.href,capturedAt:new Date().toISOString(),...meta}}});
   }
 
   window.addEventListener('message',async event=>{
@@ -120,39 +63,12 @@
         const meta={requestUrl:payload.request?.url||payload.responseUrl||'',captureType:'network',request:payload.request,status:payload.status,page:payload.page,total:payload.total,totalPages:payload.totalPages,domLinks:collectDomLinks()};
         await sendRecords(records,meta);
         chrome.runtime.sendMessage({type:'OBSERVED_TEMPLATE',payload:{request:payload.request,sourcePageUrl:location.href,candidateCount:records.length}}).catch(()=>{});
-        if(activeRunId)showOverlay(`Giáo Sư Cùi Bắp đã nhận ${capturedThisRun} bản ghi từ e-GP...`);
       }
-    }
-    if(type==='REPLAY_COMPLETE'&&payload?.runId===activeRunId){
-      replayDone=true;
-      if(!payload.ok){
-        if(await fallbackToVisibleSearch(payload))return;
-        await finalize(false,`Không phát lại được bộ lọc: ${payload.error||'HTTP '+payload.status}. Hãy tìm kiếm lại trên e-GP rồi lưu bộ lọc mới.`);
-        return;
-      }
-      const msg=replaySummary(payload);
-      setTimeout(()=>finalize(true,msg),1800);
     }
   });
 
   chrome.runtime.onMessage.addListener((message,sender,sendResponse)=>{
     if(message.type==='PING'){sendResponse({ok:true,url:location.href});return;}
-    if(message.type==='START_SCAN'){
-      activeRunId=message.payload.runId;activeSettings=message.payload.settings;capturedThisRun=0;replayDone=false;
-      showOverlay('Giáo Sư Cùi Bắp đang đọc dữ liệu công khai trên trang e-GP...');
-      const template=message.payload.template;
-      (async()=>{
-        await new Promise(r=>setTimeout(r,1200));
-        if(template){
-          postPage('REPLAY_REQUEST',{request:template,maxPagesHint:activeSettings?.maxPagesHint||5,runId:activeRunId});
-          setTimeout(()=>{if(activeRunId&&!replayDone)finalize(false,'Quá thời gian chờ phản hồi từ bộ lọc e-GP. Hãy ghi lại bộ lọc.');},Math.max(30000,(activeSettings?.scanTimeoutSeconds||75)*1000-5000));
-        }else{
-          await attemptSearchClick();
-          setTimeout(()=>finalize(true,`Đã đọc trang hiện tại; ghi nhận ${capturedThisRun} bản ghi trước khi chống trùng.`),12000);
-        }
-      })();
-      sendResponse({ok:true});return true;
-    }
     if(message.type==='SCAN_CURRENT_PAGE'){
       (async()=>{const dom=scanDom();const result=await sendRecords(dom,{captureType:'dom-manual'});sendResponse({ok:true,found:dom.length,result});})();return true;
     }
@@ -535,26 +451,32 @@
     }
 
     const capped=Boolean(maxPages)&&totalPages>maxPages;
+    const expectedPages=Math.min(totalPages,pageLimit);
+    const incomplete=!kqCancelled&&!capped&&pageIndex<expectedPages&&(!page||!page.ok);
     await kqSend('KQLCNT_RESULTS',{
       planId:plan.id,mode:plan.mode,focusTaxCode:plan.focusTaxCode||'',
       records:[],totalElements,totalPages,pageIndex,capped,
       // Báo lên tiêu chí nào đặt được, tiêu chí nào không — để giao diện nói
       // thật với người dùng thay vì trình bày kết quả thiếu như thể đủ.
       applied:plan.applied||null,
-      cancelled:kqCancelled,done:true
+      cancelled:kqCancelled,partial:incomplete,done:true
     });
-    kqFinish(true,kqCancelled
+    kqFinish(!incomplete,kqCancelled
       ?`Đã dừng theo yêu cầu: lấy được ${collected} kết quả của ${plan.label}.`
-      :`Xong: ${collected} kết quả của ${plan.label}${capped?` (mới lấy ${maxPages} trang đầu)`:''}.`);
+      :incomplete
+        ?`e-GP ngừng trả dữ liệu sau ${pageIndex}/${totalPages} trang. Đã giữ ${collected} kết quả và đánh dấu là chưa đầy đủ.`
+        :`Xong: ${collected} kết quả của ${plan.label}${capped?` (mới lấy ${maxPages} trang đầu)`:''}.`);
   }
 
   function kqFinish(ok,message){
+    const donePlan=kqPlan?{planId:kqPlan.id,mode:kqPlan.mode||'',focusTaxCode:kqPlan.focusTaxCode||''}:{};
+    const cancelled=kqCancelled;
     postPage('KQLCNT_PLAN',null);
     kqSaveState(null);
     kqPlan=null;
     kqCancelled=false;
     kqReport(message,ok?'success':'error');
-    kqSend('KQLCNT_DONE',{ok,message});
+    kqSend('KQLCNT_DONE',{...donePlan,ok,cancelled,message});
   }
 
   /** Điểm vào: bắt đầu một lượt tra cứu KQLCNT. */
@@ -608,15 +530,17 @@
    * chính là triệu chứng "tìm mã số thuế mà không ra gì".
    */
   function kqWaitForResultsView(){
+    const planId=kqPlan&&kqPlan.id;
+    if(!planId)return;
     const boot=setInterval(()=>{
-      if(!kqPlan){clearInterval(boot);return;}
+      if(!kqPlan||kqPlan.id!==planId){clearInterval(boot);return;}
       if(!kqIsResultsView())return;
       clearInterval(boot);
       kqRunHarvest();
     },700);
     setTimeout(()=>{
       clearInterval(boot);
-      if(kqPlan&&!kqIsResultsView()){
+      if(kqPlan&&kqPlan.id===planId&&!kqIsResultsView()){
         kqFinish(false,'Trang e-GP không mở được màn hình kết quả trong 40 giây. '
           +'Hãy mở trang Tra cứu Lựa chọn nhà thầu, bấm "Tìm kiếm" một lần cho ra danh sách, rồi chạy lại.');
       }
@@ -680,6 +604,11 @@
       return true;
     }
     if(message.type==='KQLCNT_CANCEL'){
+      const requestedId=String(message.payload?.planId||'');
+      if(requestedId&&kqPlan&&requestedId!==String(kqPlan.id)){
+        sendResponse({ok:false,ignored:true,message:'Yêu cầu dừng không thuộc tác vụ của tab này.'});
+        return true;
+      }
       // Dừng sau khi trang đang chờ trả về, không cắt ngang giữa chừng để
       // dữ liệu đã lấy vẫn toàn vẹn.
       kqCancelled=true;
