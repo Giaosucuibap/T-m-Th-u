@@ -1,10 +1,10 @@
-# Giáo Sư Cùi Bắp 4.0.0
+# Giáo Sư Cùi Bắp 4.0.1
 
 **Trợ lý ra quyết định dự thầu ngay trên nguồn e-GP chính thức.**
 
 Giáo Sư Cùi Bắp là extension Chrome dành cho doanh nghiệp và đội ngũ đấu thầu tại Việt Nam. Phần mềm hỗ trợ tìm kiếm, sàng lọc, theo dõi và quản lý cơ hội từ [Hệ thống mạng đấu thầu quốc gia (e-GP)](https://muasamcong.mof.gov.vn/), đồng thời cung cấp các góc nhìn về nhà thầu, chủ đầu tư, đối thủ và địa bàn. Địa chỉ pháp lý hiện hành chuyển người dùng tới host vận hành `muasamcong.mpi.gov.vn` mà extension đang hỗ trợ.
 
-Phiên bản 4.0.0 tập trung vào ba mục tiêu: **quyết định nhanh hơn**, **truy vết được về nguồn chính thức** và **giảm rủi ro kỹ thuật khi cổng e-GP thay đổi**.
+Dòng 4.0 tập trung vào ba mục tiêu: **quyết định nhanh hơn**, **truy vết được về nguồn chính thức** và **giảm rủi ro kỹ thuật khi cổng e-GP thay đổi**.
 
 > Điểm phù hợp, độ đầy đủ dữ liệu và cảnh báo của extension là chỉ báo nội bộ để sàng lọc, không phải xác suất trúng thầu, kết luận pháp lý hay thay thế việc đọc hồ sơ mời thầu trên e-GP.
 
@@ -83,7 +83,7 @@ Cách làm này giảm phụ thuộc vào URL, header, CAPTCHA hoặc token đã
 2. Mở `chrome://extensions`.
 3. Bật **Chế độ dành cho nhà phát triển**.
 4. Chọn **Tải tiện ích đã giải nén**.
-5. Chọn đúng thư mục chứa `manifest.json` của phiên bản 4.0.0.
+5. Chọn đúng thư mục chứa `manifest.json`.
 6. Ghim biểu tượng Giáo Sư Cùi Bắp lên thanh công cụ.
 7. Mở extension, đọc màn hình giới thiệu và cấu hình các tiêu chí phù hợp của doanh nghiệp.
 
@@ -91,7 +91,7 @@ Cách làm này giảm phụ thuộc vào URL, header, CAPTCHA hoặc token đã
 
 1. Ở phiên bản cũ, xuất bản sao lưu trước khi gỡ extension. Gỡ extension có thể xoá toàn bộ dữ liệu cục bộ.
 2. Giữ lại thư mục/ZIP 3.9.1 và bản sao lưu để có đường lui.
-3. Nạp phiên bản 4.0.0 theo hướng dẫn trên.
+3. Nạp phiên bản mới theo hướng dẫn trên.
 4. Nhập bản sao lưu.
 5. Kiểm tra lại cài đặt. Vì lý do an toàn, quá trình nhập sẽ:
    - bỏ Bot Token và Chat ID Telegram;
@@ -167,9 +167,15 @@ npm test
 
 Bộ hiện tại kiểm tra chuẩn hoá văn bản/tiền/ngày, URL chính thức, request an toàn, ẩn bí mật, pipeline quyết định, xếp hạng, Radar, CSP/manifest, cú pháp/import JavaScript, tài nguyên giao diện, Excel và cách tính liên danh.
 
-Kết quả tại thời điểm bàn giao 4.0.0: **44/44 kiểm thử tự động đạt**. Đây là bằng chứng hồi quy cục bộ, không thay thế kiểm thử trực tiếp trên e-GP, kiểm thử hiệu năng, rà soát Chrome Web Store hoặc kiểm toán bảo mật độc lập.
+Kết quả 4.0.1: **51/51 kiểm thử tự động đạt** (44 bài của 4.0.0 cộng 7 bài hồi quy mới).
 
-Môi trường bàn giao không có Chromium/Chrome nhị phân để chạy E2E giao diện thật. Vì vậy bản này được coi là **release candidate cho pilot/canary**, không phải bằng chứng tương thích tuyệt đối với phiên e-GP hiện hành. Biên bản kiểm thử chi tiết nằm tại [KIEM-THU-PHAT-HANH.md](KIEM-THU-PHAT-HANH.md).
+### Kiểm thử trong trình duyệt thật
+
+Bản 4.0.0 chưa chạy được E2E giao diện vì môi trường đóng gói không có Chromium — và đúng khoảng trống đó đã để lọt một lỗi khiến **người dùng mới không quét được gói nào** (xem [CHANGELOG.md](CHANGELOG.md), mục 4.0.1).
+
+Nay có `tools/test/`: một máy chủ e-GP giả lập trả đúng hình dạng dữ liệu thật, cùng ba kịch bản chạy trong Chromium (nạp tiện ích, người dùng mới, toàn trình). Chạy được **mà không đụng vào máy chủ e-GP thật** — hướng dẫn tại [tools/test/README.md](tools/test/README.md).
+
+Dù vậy, bản giả lập **không** dựng lại reCAPTCHA v3, trạng thái phiên hay thay đổi giao diện tương lai của e-GP. Vì vậy bản này vẫn là **release candidate cho pilot/canary**, không phải bằng chứng tương thích tuyệt đối. Biên bản kiểm thử chi tiết nằm tại [KIEM-THU-PHAT-HANH.md](KIEM-THU-PHAT-HANH.md).
 
 ## Canary e-GP trước khi dùng rộng
 
@@ -224,7 +230,7 @@ Tạm dừng tác vụ định kỳ, lưu tệp chẩn đoán đã ẩn bí mậ
 
 ### Nguyên tắc nếu bổ sung OpenAI sau này
 
-4.0.0 cố ý không yêu cầu người dùng dán OpenAI API key vào extension. Theo hướng dẫn bảo mật chính thức, API key là bí mật và không được lộ trong mã phía trình duyệt; một tính năng AI phát hành nghiêm túc cần backend kiểm soát quyền, redaction, quota và audit. Khi triển khai, nên dùng [Responses API](https://developers.openai.com/api/docs/guides/migrate-to-responses) cho ứng dụng mới và tuân thủ [production best practices](https://developers.openai.com/api/docs/guides/production-best-practices). Mọi tóm tắt E-HSMT phải là opt-in và dẫn về đúng tệp/trang nguồn.
+Extension cố ý không yêu cầu người dùng dán OpenAI API key vào extension. Theo hướng dẫn bảo mật chính thức, API key là bí mật và không được lộ trong mã phía trình duyệt; một tính năng AI phát hành nghiêm túc cần backend kiểm soát quyền, redaction, quota và audit. Khi triển khai, nên dùng [Responses API](https://developers.openai.com/api/docs/guides/migrate-to-responses) cho ứng dụng mới và tuân thủ [production best practices](https://developers.openai.com/api/docs/guides/production-best-practices). Mọi tóm tắt E-HSMT phải là opt-in và dẫn về đúng tệp/trang nguồn.
 
 ## Tuyên bố sử dụng
 
