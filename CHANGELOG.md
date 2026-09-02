@@ -2,6 +2,29 @@
 
 Tài liệu này ghi lại các thay đổi quan trọng của Giáo Sư Cùi Bắp. Cấu trúc tham khảo [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) và phiên bản tuân theo cách đánh số ngữ nghĩa ở mức sản phẩm.
 
+## [4.0.3] — 2026-09-02
+
+Dọn tài liệu và chặn một lớp sai sót lặp lại. Không thay đổi hành vi phần mềm.
+
+### Sửa lỗi
+
+- README công bố số phiên bản lệch với `manifest.json`. Đã xảy ra **hai lần**
+  liên tiếp khi bump phiên bản, và lần trước còn kéo theo hai câu sai sự thật
+  nằm cạnh số hiệu cũ. Nay README nói đúng phiên bản đang cài.
+- Các bước cài đặt trong README không còn gắn cứng số phiên bản, nên lần bump
+  sau không phải sửa lại.
+
+### Kiểm thử
+
+- Thêm `tests/version-consistency.test.js` (6 bài): `manifest.json`,
+  `package.json` và tiêu đề README phải cùng một số hiệu; CHANGELOG phải có mục
+  cho phiên bản hiện tại và đặt nó lên đầu; các bước cài đặt không được nhắc số
+  phiên bản cụ thể.
+
+### Kết quả
+
+`npm test`: 64/64 → **70/70 đạt**.
+
 ## [4.0.2] — 2026-09-02
 
 Bản vá sau khi chạy 4.0.1 **thật trong Chromium**. 4.0.1 đạt 57/57 kiểm thử tự

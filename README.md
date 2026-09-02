@@ -1,10 +1,10 @@
-# Giáo Sư Cùi Bắp 4.0.2
+# Giáo Sư Cùi Bắp 4.0.3
 
 **Trợ lý ra quyết định dự thầu ngay trên nguồn e-GP chính thức.**
 
 Giáo Sư Cùi Bắp là extension Chrome dành cho doanh nghiệp và đội ngũ đấu thầu tại Việt Nam. Phần mềm hỗ trợ tìm kiếm, sàng lọc, theo dõi và quản lý cơ hội từ [Hệ thống mạng đấu thầu quốc gia (e-GP)](https://muasamcong.mof.gov.vn/), đồng thời cung cấp các góc nhìn về nhà thầu, chủ đầu tư, đối thủ và địa bàn. Địa chỉ pháp lý hiện hành chuyển người dùng tới host vận hành `muasamcong.mpi.gov.vn` mà extension đang hỗ trợ.
 
-Phiên bản 4.0.1 hoàn thiện nhánh 4.0 theo ba mục tiêu: **quyết định nhanh hơn**, **truy vết được về nguồn chính thức** và **giảm rủi ro kỹ thuật khi cổng e-GP thay đổi**. Bản này được đối chiếu trực tiếp với 3.9.2 để giữ lại các thao tác nghiệp vụ hữu ích, nhưng không đưa trở lại cơ chế phát lại request thô có thể mang token, CAPTCHA hoặc dữ liệu phiên đã cũ.
+Nhánh 4.0 theo đuổi ba mục tiêu: **quyết định nhanh hơn**, **truy vết được về nguồn chính thức** và **giảm rủi ro kỹ thuật khi cổng e-GP thay đổi**. Bản này được đối chiếu trực tiếp với 3.9.2 để giữ lại các thao tác nghiệp vụ hữu ích, nhưng không đưa trở lại cơ chế phát lại request thô có thể mang token, CAPTCHA hoặc dữ liệu phiên đã cũ.
 
 > Điểm phù hợp, độ đầy đủ dữ liệu và cảnh báo của extension là chỉ báo nội bộ để sàng lọc, không phải xác suất trúng thầu, kết luận pháp lý hay thay thế việc đọc hồ sơ mời thầu trên e-GP.
 
@@ -95,7 +95,7 @@ Cách làm này giảm phụ thuộc vào URL, header, CAPTCHA hoặc token đã
 2. Mở `chrome://extensions`.
 3. Bật **Chế độ dành cho nhà phát triển**.
 4. Chọn **Tải tiện ích đã giải nén**.
-5. Chọn đúng thư mục chứa `manifest.json` của phiên bản 4.0.1.
+5. Chọn đúng thư mục chứa `manifest.json`.
 6. Ghim biểu tượng Giáo Sư Cùi Bắp lên thanh công cụ.
 7. Mở extension, đọc màn hình giới thiệu và cấu hình các tiêu chí phù hợp của doanh nghiệp.
 
@@ -103,7 +103,7 @@ Cách làm này giảm phụ thuộc vào URL, header, CAPTCHA hoặc token đã
 
 1. Ở phiên bản cũ, xuất bản sao lưu trước khi gỡ extension. Gỡ extension có thể xoá toàn bộ dữ liệu cục bộ.
 2. Giữ lại thư mục/ZIP 3.9.2 và bản sao lưu để có đường lui.
-3. Nạp phiên bản 4.0.1 theo hướng dẫn trên.
+3. Nạp phiên bản mới theo hướng dẫn trên.
 4. Nhập bản sao lưu.
 5. Kiểm tra lại cài đặt. Vì lý do an toàn, quá trình nhập sẽ:
    - bỏ Bot Token và Chat ID Telegram;
@@ -155,7 +155,7 @@ Cách làm này giảm phụ thuộc vào URL, header, CAPTCHA hoặc token đã
 - Dữ liệu nghiệp vụ được lưu trong `chrome.storage.local`; khi trình duyệt hỗ trợ, quyền đọc storage được giới hạn cho trusted contexts.
 - Dữ liệu cục bộ không được mã hoá đầu-cuối. Người có quyền truy cập hồ sơ Chrome hoặc hệ điều hành có thể đọc được dữ liệu.
 - Khi bật Telegram, nội dung cảnh báo rời khỏi máy và chịu chính sách của Telegram.
-- 4.0.1 chỉ xuất **Sao lưu an toàn** theo danh sách trắng; Bot Token, Chat ID, queue/request/template phiên, token và CAPTCHA không được đưa vào tệp.
+- Extension chỉ xuất **Sao lưu an toàn** theo danh sách trắng; Bot Token, Chat ID, queue/request/template phiên, token và CAPTCHA không được đưa vào tệp.
 - Tệp chẩn đoán ẩn token, Chat ID và các giá trị nghiệp vụ nhạy cảm; tuy vậy vẫn nên kiểm tra trước khi gửi cho bên khác.
 - Gỡ extension hoặc khôi phục cài đặt gốc có thể xoá dữ liệu không thể phục hồi. Luôn sao lưu trước.
 
@@ -164,7 +164,7 @@ Xem thêm tại màn hình `privacy.html` trong extension.
 ## Sao lưu và khôi phục
 
 - Dùng **Sao lưu an toàn** khi cần chuyển máy hoặc gửi cho người hỗ trợ.
-- 4.0.1 không còn đường xuất **sao lưu đầy đủ** chứa bí mật tích hợp. Nếu cần chuyển máy, hãy lưu Bot Token/Chat ID riêng và nhập lại thủ công sau canary.
+- Không còn đường xuất **sao lưu đầy đủ** chứa bí mật tích hợp. Nếu cần chuyển máy, hãy lưu Bot Token/Chat ID riêng và nhập lại thủ công sau canary.
 - Tệp nhập tối đa 30 MB. Dữ liệu được giới hạn kích thước, chuẩn hoá URL và loại bỏ trường bí mật trước khi lưu.
 - Để bản sao của kho tối đa vẫn nhập được ổn định, backup giữ **5 mốc Radar gần nhất** mỗi gói; kho đang dùng trên máy vẫn giữ tối đa 20 mốc.
 - Sau khi nhập, Telegram và mọi lịch tự động đều bị tắt để tránh gửi dữ liệu hoặc chạy tác vụ ngoài ý muốn.
@@ -180,7 +180,7 @@ npm test
 
 Bộ hiện tại kiểm tra chuẩn hoá văn bản/tiền/ngày, URL chính thức, request an toàn, safe backup theo danh sách trắng, claim/ACK/lease của tác vụ, pipeline quyết định, xếp hạng, Radar, CSP/manifest, cú pháp/import JavaScript, tài nguyên giao diện, hyperlink Excel và cách tính liên danh.
 
-Kết quả 4.0.2: **64/64 kiểm thử tự động đạt** (57 bài của 4.0.1 cộng 7 bài về phạm vi content script). Kết quả này chỉ là bằng chứng hồi quy cục bộ, không thay thế kiểm thử trực tiếp trên e-GP, kiểm thử hiệu năng, rà soát Chrome Web Store hoặc kiểm toán bảo mật độc lập.
+Kết quả 4.0.3: **70/70 kiểm thử tự động đạt** (57 bài của 4.0.1, cộng 7 bài về phạm vi content script và 6 bài về tính nhất quán phiên bản). Kết quả này chỉ là bằng chứng hồi quy cục bộ, không thay thế kiểm thử trực tiếp trên e-GP, kiểm thử hiệu năng, rà soát Chrome Web Store hoặc kiểm toán bảo mật độc lập.
 
 ### Kiểm thử trong trình duyệt thật
 
@@ -233,7 +233,7 @@ Kiểm tra đã nhập lại Bot Token/Chat ID sau khi khôi phục, đã chủ 
 
 Tạm dừng tác vụ định kỳ, lưu tệp chẩn đoán đã ẩn bí mật, ghi rõ hành động gây lỗi và quay về bản ổn định nếu cần. Không chỉnh endpoint theo phỏng đoán trên môi trường sản xuất.
 
-## Phạm vi chưa có trong 4.0.1
+## Phạm vi chưa có
 
 - Không có tích hợp OpenAI/AI tạo sinh trong mã hiện tại.
 - Chưa tự đọc toàn bộ E-HSMT để sinh ma trận tuân thủ có trích dẫn trang/tệp.
@@ -245,7 +245,7 @@ Tạm dừng tác vụ định kỳ, lưu tệp chẩn đoán đã ẩn bí mậ
 
 ### Nguyên tắc nếu bổ sung OpenAI sau này
 
-4.0.1 cố ý không yêu cầu người dùng dán OpenAI API key vào extension. Theo hướng dẫn bảo mật chính thức, API key là bí mật và không được lộ trong mã phía trình duyệt; một tính năng AI phát hành nghiêm túc cần backend kiểm soát quyền, redaction, quota và audit. Khi triển khai, nên dùng [Responses API](https://developers.openai.com/api/docs/guides/migrate-to-responses) cho ứng dụng mới và tuân thủ [production best practices](https://developers.openai.com/api/docs/guides/production-best-practices). Mọi tóm tắt E-HSMT phải là opt-in và dẫn về đúng tệp/trang nguồn.
+Extension cố ý không yêu cầu người dùng dán OpenAI API key vào extension. Theo hướng dẫn bảo mật chính thức, API key là bí mật và không được lộ trong mã phía trình duyệt; một tính năng AI phát hành nghiêm túc cần backend kiểm soát quyền, redaction, quota và audit. Khi triển khai, nên dùng [Responses API](https://developers.openai.com/api/docs/guides/migrate-to-responses) cho ứng dụng mới và tuân thủ [production best practices](https://developers.openai.com/api/docs/guides/production-best-practices). Mọi tóm tắt E-HSMT phải là opt-in và dẫn về đúng tệp/trang nguồn.
 
 ## Tuyên bố sử dụng
 
