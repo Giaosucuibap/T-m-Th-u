@@ -1,7 +1,7 @@
 import {DEFAULT_SETTINGS,extractCandidateObjects,normalizeCandidate,mergeTender,scoreTender,sanitizeRequestTemplate,extractParticipations,dedupeParticipations,mergeParticipation,formatMoney,formatDate,safeFilename,migrateTenderCodes,canonicalEgpUrl,EGP_SCAN_PAGE,hasContentScript,scanTargetUrl} from './lib/core.js';
 import {buildSafeBackupState,safeRunForBackup} from './lib/backup.js';
 import {EGP_SEARCH_PAGE,PAGE_SIZE,normalizeTaxCodeForEgp,normalizeKqlcntRecord,extractContractorCandidates,dedupeKqlcnt,summarizeWinner,buildKqlcntQuery,buildWardMarketQuery,buildTbmtQuery,tbmtMatchesWard} from './lib/kqlcnt.js';
-import {buildBbmtQuery,normalizeBbmtPackage,normalizeBidderTable,notifyNoFromUrl,summarizeBidOpenings,STEPS_DECIDED} from './lib/bbmt.js';
+import {buildBbmtQuery,bbmtDateRange,bbmtInDateRange,normalizeBbmtPackage,normalizeBidderTable,notifyNoFromUrl,summarizeBidOpenings,STEPS_DECIDED} from './lib/bbmt.js';
 import {normalizeKhlcntPlan,dedupeKhlcnt,summarizeKhlcnt,auditPlans,buildKhlcntQuery,filterPlansByArea} from './lib/khlcnt.js';
 import {fetchAllAreas,currentProvinceNames,wardNamesForProvince,provinceCodesByName,wardCodesByName} from './lib/areas.js';
 import {buildXlsx,xlsxDataUrl,XLSX_MIME} from './lib/xlsx.js';
@@ -975,6 +975,10 @@ async function startBidOpenScan(payload={}){
 
   const scope={
     steps:lossMode?STEPS_DECIDED:undefined,
+    // Khoảng ngày do người dùng tự chọn được ưu tiên hơn khoảng năm và "N ngày
+    // gần đây"; thứ tự ưu tiên nằm trong bbmtDateRange() của lib/bbmt.js.
+    fromDate:String(payload.fromDate||'').trim(),
+    toDate:String(payload.toDate||'').trim(),
     fromYear:Number(payload.fromYear)||0,
     toYear:Number(payload.toYear)||0,
     days:lossMode?0:(Number(payload.days)||30),
@@ -1031,14 +1035,28 @@ async function ingestBidOpenList(payload={}){
     if(!scan||scan.id!==payload.planId)return false;
 
     const rows=Array.isArray(payload.records)?payload.records:[];
-    const found=rows.map(normalizeBbmtPackage).filter(Boolean);
+    /* LỌC THỜI GIAN TẠI CHỖ.
+     *
+     * Bộ lọc gửi lên máy chủ chỉ là tối ưu tốc độ: trường publicDateKqmt chưa
+     * được đo là có lập chỉ mục range hay không, và e-GP thì BỎ QUA lặng lẽ bộ
+     * lọc nó không hiểu thay vì báo lỗi. Đúng chỗ này từng làm người dùng chọn
+     * "15 ngày" mà nhận về gói mở thầu năm 2023.
+     *
+     * Vì vậy khoảng thời gian được áp lại một lần nữa trên dữ liệu đã tải về.
+     * Đây mới là thứ bảo đảm kết quả nằm đúng khoảng, bất kể máy chủ làm gì. */
+    const range=bbmtDateRange(scan.scope||{});
+    const all=rows.map(normalizeBbmtPackage).filter(Boolean);
+    const found=all.filter(p=>bbmtInDateRange(p,range));
+    const dropped=Number(scan.outOfRangeCount||0)+(all.length-found.length);
+
     const map=new Map((scan.packages||[]).map(p=>[p.key,p]));
     for(const p of found)if(!map.has(p.key))map.set(p.key,p);
 
     const packages=[...map.values()].slice(0,scan.maxPackages);
-    const next={...scan,packages,
+    const next={...scan,packages,outOfRangeCount:dropped,
       totalCandidates:Number(payload.totalElements||scan.totalCandidates||0),
-      message:`Đã tìm được ${packages.length} gói đang chờ kết quả...`};
+      message:`Đã tìm được ${packages.length} gói đang chờ kết quả`
+        +(dropped?` (đã bỏ ${dropped} gói ngoài khoảng thời gian đã chọn)`:'')+'...'};
     if(payload.done)next.listingDone=true;
     await save({[KEYS.bidOpenScan]:next});
     return Boolean(payload.done&&!scan.listingDone);

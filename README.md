@@ -1,4 +1,4 @@
-# Giáo Sư Cùi Bắp 4.0.3
+# Giáo Sư Cùi Bắp 4.1.0
 
 **Trợ lý ra quyết định dự thầu ngay trên nguồn e-GP chính thức.**
 
@@ -180,7 +180,7 @@ npm test
 
 Bộ hiện tại kiểm tra chuẩn hoá văn bản/tiền/ngày, URL chính thức, request an toàn, safe backup theo danh sách trắng, claim/ACK/lease của tác vụ, pipeline quyết định, xếp hạng, Radar, CSP/manifest, cú pháp/import JavaScript, tài nguyên giao diện, hyperlink Excel và cách tính liên danh.
 
-Kết quả 4.0.3: **70/70 kiểm thử tự động đạt** (57 bài của 4.0.1, cộng 7 bài về phạm vi content script và 6 bài về tính nhất quán phiên bản). Kết quả này chỉ là bằng chứng hồi quy cục bộ, không thay thế kiểm thử trực tiếp trên e-GP, kiểm thử hiệu năng, rà soát Chrome Web Store hoặc kiểm toán bảo mật độc lập.
+Kết quả 4.1.0: **89/89 kiểm thử tự động đạt**. Kết quả này chỉ là bằng chứng hồi quy cục bộ, không thay thế kiểm thử trực tiếp trên e-GP, kiểm thử hiệu năng, rà soát Chrome Web Store hoặc kiểm toán bảo mật độc lập.
 
 ### Kiểm thử trong trình duyệt thật
 

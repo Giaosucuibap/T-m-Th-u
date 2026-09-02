@@ -29,13 +29,32 @@ function alertBox(html, kind) {
 
 $('field').innerHTML = FIELD_OPTIONS.map((o) => `<option value="${esc(o.value)}">${esc(o.label)}</option>`).join('');
 
+/* Khối "Từ ngày / Đến ngày" chỉ hiện khi người dùng chọn "Tự chọn khoảng ngày".
+   Mặc định gợi ý 30 ngày gần đây để không phải gõ từ số không. */
+function syncDateRange() {
+  const custom = $('days').value === 'custom';
+  show($('dateRange'), custom);
+  if (custom && !$('fromDate').value && !$('toDate').value) {
+    const iso = (d) => new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+    const now = new Date();
+    $('toDate').value = iso(now);
+    $('fromDate').value = iso(new Date(now.getTime() - 30 * 86400000));
+  }
+}
+$('days').addEventListener('change', syncDateRange);
+syncDateRange();
+
 /* ------------------------------------------------------------------ */
 
 async function start() {
   const payload = {
     query: $('q').value.trim(),
     taxCode: $('q').value.trim(),
-    days: Number($('days').value),
+    // 'custom' = người dùng tự chọn khoảng ngày; khi đó bỏ hẳn "N ngày gần đây"
+    // để hai cách chọn không chồng nhau (bbmtDateRange ưu tiên khoảng ngày).
+    days: $('days').value === 'custom' ? 0 : Number($('days').value),
+    fromDate: $('days').value === 'custom' ? $('fromDate').value : '',
+    toDate: $('days').value === 'custom' ? $('toDate').value : '',
     field: $('field').value,
     province: $('province') ? $('province').value.trim() : '',
     investor: $('investor') ? $('investor').value.trim() : '',

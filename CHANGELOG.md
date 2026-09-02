@@ -2,6 +2,67 @@
 
 Tài liệu này ghi lại các thay đổi quan trọng của Giáo Sư Cùi Bắp. Cấu trúc tham khảo [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) và phiên bản tuân theo cách đánh số ngữ nghĩa ở mức sản phẩm.
 
+## [4.1.0] — 2026-09-02
+
+Sửa lỗi bộ lọc thời gian ở màn hình **Gói đang chờ kết quả**, và bổ sung chọn
+khoảng ngày theo yêu cầu người dùng.
+
+### Sửa lỗi
+
+- **Bộ lọc thời gian không có tác dụng.** Người dùng chọn "Mở thầu trong vòng
+  15 ngày" (tháng 9/2026) nhưng nhận về gói mở thầu tháng 4–5 năm **2023**.
+
+  Nguyên nhân: truy vấn lọc bằng `searchType:'greater_equal'` với chuỗi ISO
+  trong `fieldValues`. e-GP **không hiểu dạng này và bỏ qua lặng lẽ** — không
+  báo lỗi, chỉ trả về mọi gói từ trước tới nay. Dạng đã được đo là chạy đúng
+  (ghi trong `lib/kqlcnt.js`) là `searchType:'range'` với `from`/`to` là **số
+  epoch mili-giây**.
+
+  Ngoài ra `days` và `fromYear/toYear` cùng đẩy filter lên một trường, nên máy
+  chủ nhận hai điều kiện chồng nhau.
+
+  Sửa ở hai lớp, vì máy chủ nuốt lỗi thay vì báo nên lớp máy chủ không đủ tin:
+  1. truy vấn gửi lên đúng định dạng, gộp về **một** filter `range`;
+  2. dữ liệu tải về được **lọc lại tại chỗ** — đây mới là thứ bảo đảm kết quả
+     nằm đúng khoảng, bất kể máy chủ làm gì. Cùng cách `lib/khlcnt.js` đã dùng
+     cho xã/phường. Số gói bị loại được báo ngay trên thanh tiến trình.
+- **Khoảng giá gói thầu cũng dính đúng lỗi đó** trên cùng màn hình: hai filter
+  `greater_equal`/`less_equal` chồng lên `bidPrice`. Gộp về một filter `range`
+  với `from`/`to` là số, đúng dạng bắt được từ request do chính e-GP dựng.
+- **Ngày không tồn tại bị JavaScript cuộn sang ngày khác.** `2026-13-45` thành
+  14/02/2027, `31/02` thành 03/03 — người dùng sẽ nhận kết quả của một khoảng
+  họ không hề chọn. Nay đối chiếu lại cả ba thành phần sau khi dựng `Date`.
+
+### Thêm mới
+
+- Ô **Từ ngày / Đến ngày** ở màn hình Gói đang chờ kết quả. Chọn
+  "Tự chọn khoảng ngày…" trong ô *Mở thầu trong khoảng* để hiện, và hai ô được
+  gợi ý sẵn 30 ngày gần đây. Bỏ trống một đầu thì đầu đó không giới hạn; chọn
+  ngược từ/đến thì tự hoán đổi.
+- Thêm hai mốc nhanh **6 tháng** và **1 năm gần đây**.
+- Thứ tự ưu tiên khi có nhiều cách chọn: khoảng ngày → khoảng năm → N ngày gần
+  đây.
+
+### Kiểm thử
+
+- Thêm `tests/bbmt-date-range.test.js` (19 bài): định dạng filter gửi lên, quy
+  đổi lựa chọn thành khoảng, biên của khoảng, ngày không hợp lệ, khoảng giá, và
+  lớp lọc tại chỗ — trong đó có bài dùng **đúng bốn gói năm 2023 từ ảnh chụp
+  màn hình người dùng gửi** làm dữ liệu kiểm tra.
+- Gói thiếu mốc thời gian được **giữ lại** kèm ghi chú, không loại — loại bỏ sẽ
+  là bịa ra kết luận từ chỗ không có dữ liệu.
+
+### Kết quả
+
+`npm test`: 70/70 → **89/89 đạt**. Khối chọn ngày đã chạy thử trong Chromium: 0 lỗi.
+
+### Hạn chế còn lại
+
+- Trường đã đo được là lọc `range` chắc chắn đúng là `publicDate`. Chưa có phép
+  đo nào chứng minh `publicDateKqmt` cũng vậy. Vì thế lớp lọc tại chỗ là bắt
+  buộc, không phải phòng xa. Cần canary trên e-GP thật để biết máy chủ có lọc
+  sẵn hay không — nếu không, lượt quét sẽ chậm hơn nhưng **kết quả vẫn đúng**.
+
 ## [4.0.3] — 2026-09-02
 
 Dọn tài liệu và chặn một lớp sai sót lặp lại. Không thay đổi hành vi phần mềm.
