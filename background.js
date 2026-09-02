@@ -1,5 +1,5 @@
 import {DEFAULT_SETTINGS,extractCandidateObjects,normalizeCandidate,mergeTender,scoreTender,sanitizeRequestTemplate,extractParticipations,dedupeParticipations,mergeParticipation,formatMoney,formatDate,safeFilename,migrateTenderCodes,canonicalEgpUrl,EGP_SCAN_PAGE,hasContentScript,scanTargetUrl} from './lib/core.js';
-import {countSecrets} from './lib/redact.js';
+import {buildSafeBackupState,safeRunForBackup} from './lib/backup.js';
 import {EGP_SEARCH_PAGE,PAGE_SIZE,normalizeTaxCodeForEgp,normalizeKqlcntRecord,extractContractorCandidates,dedupeKqlcnt,summarizeWinner,buildKqlcntQuery,buildWardMarketQuery,buildTbmtQuery,tbmtMatchesWard} from './lib/kqlcnt.js';
 import {buildBbmtQuery,normalizeBbmtPackage,normalizeBidderTable,notifyNoFromUrl,summarizeBidOpenings,STEPS_DECIDED} from './lib/bbmt.js';
 import {normalizeKhlcntPlan,dedupeKhlcnt,summarizeKhlcnt,auditPlans,buildKhlcntQuery,filterPlansByArea} from './lib/khlcnt.js';
@@ -17,12 +17,10 @@ import {DECISION_STATE_LABEL,normalizeDecisionState} from './lib/decision.js';
 const KEYS={settings:'settings',tenders:'tenders',runs:'runs',template:'searchTemplate',templates:'searchTemplates',lastTemplate:'lastObservedTemplate',activeRun:'activeRun',participations:'participations',winnerLookup:'winnerLookup',winnerCache:'winnerCache',bidOpenScan:'bidOpenScan',planLookup:'planLookup',telegramLog:'telegramLog',observations:'observations',areas:'areas',areaScan:'areaScan',attachments:'attachments',investorScan:'investorScan',endpointMap:'endpointMap'};
 const DAILY_ALARM='gscb-daily';
 const TIMEOUT_PREFIX='gscb-timeout:';
-/* Trang e-GP dùng khi chưa có bộ lọc đã lưu.
- *
- * TUYỆT ĐỐI KHÔNG đổi về /web/guest/home: từ 4.0.0 content script chỉ chạy trên
- * các trang contractor-selection, nên trang chủ không có ai nhận thông điệp và
- * lượt quét chết ngay. Lấy hằng số từ lib/core.js để phạm vi này chỉ có MỘT
- * nguồn sự thật, đối chiếu được với manifest bằng kiểm thử. */
+// Mọi tác vụ cần content script, vì vậy URL mặc định phải nằm đúng route mà
+// manifest cho phép. Trang home không nạp bridge và làm lượt quét thủ công treo.
+// Lấy từ lib/core.js để phạm vi content script chỉ có MỘT nguồn sự thật,
+// đối chiếu được với manifest bằng kiểm thử.
 const EGP_DEFAULT_URL=EGP_SCAN_PAGE;
 const notifUrls=new Map();
 const pendingKqlcntDoneByTab=new Map();
@@ -59,15 +57,16 @@ function samePageContext(currentUrl,sourcePageUrl=''){
 /**
  * Chuẩn bị tab e-GP cho một lượt quét.
  *
- * Bất biến phải giữ: tab trả về LUÔN nằm trên một trang có content script.
- * Trước đây hàm này vi phạm bất biến ở hai chỗ, cả hai đều làm lượt quét chết
- * bằng thông báo tiếng Anh khó hiểu của Chrome:
+ * BẤT BIẾN: tab trả về LUÔN nằm trên trang có content script.
  *
- *   1. Chưa lưu bộ lọc  -> dự phòng về /web/guest/home (không có content script)
- *   2. Đang mở e-GP sẵn -> tái dùng tab đó nguyên trạng, dù nó là trang chủ,
- *                          trang tin tức hay bất kỳ trang e-GP nào khác
+ * 4.0.1 đã sửa đường hỏng thứ nhất (route mặc định trỏ về /web/guest/home),
+ * nhưng đường thứ hai vẫn còn: khi người dùng đang mở sẵn MỘT trang e-GP bất
+ * kỳ — trang chủ chẳng hạn — và chưa lưu bộ lọc, hàm này tái dùng tab đó
+ * nguyên trạng. Không có content script ở đó, nên lượt quét chết với nguyên
+ * văn "Could not establish connection. Receiving end does not exist." và 0 gói.
+ * Đã tái hiện trong Chromium trước khi sửa.
  *
- * Nay mọi đường đều đi qua scanTargetUrl()/hasContentScript().
+ * Nay mọi đường đều đi qua scanTargetUrl()/hasContentScript() của lib/core.js.
  */
 async function prepareScanTabFor(mode,template,s){
   const targetUrl=scanTargetUrl(template?.sourcePageUrl);
@@ -76,8 +75,8 @@ async function prepareScanTabFor(mode,template,s){
 
   if(mode==='manual'){
     const [current]=await chrome.tabs.query({active:true,currentWindow:true});
-    // Chỉ tái dùng tab đang mở khi nó vừa thuộc e-GP, vừa có content script,
-    // vừa đúng ngữ cảnh trang của bộ lọc đã lưu.
+    // Chỉ tái dùng tab đang mở khi nó vừa có content script, vừa đúng ngữ cảnh
+    // trang của bộ lọc đã lưu.
     if(hasContentScript(current?.url)
        &&(!template||samePageContext(current.url,template.sourcePageUrl)))tab=current;
     else if(current?.url&&isEgpUrl(current.url))tab=await chrome.tabs.update(current.id,{url:targetUrl,active:true});
@@ -121,8 +120,11 @@ async function finishRun(runId,status,message){
   await chrome.alarms.clear(TIMEOUT_PREFIX+runId);
   const s=await getState();
   if(s.activeRun?.id===runId)await save({[KEYS.activeRun]:null});
-  if(status==='SUCCESS'){
-    chrome.notifications.create({type:'basic',iconUrl:'icons/icon128.png',title:'Giáo Sư Cùi Bắp',message:`Quét xong: ${run?.newCount||0} gói mới, ${run?.matchedCount||0} gói đạt ngưỡng.`}).catch(()=>{});
+  if(status==='SUCCESS'||status==='PARTIAL'){
+    const partial=status==='PARTIAL';
+    chrome.notifications.create({type:'basic',iconUrl:'icons/icon128.png',
+      title:partial?'Giáo Sư Cùi Bắp — dữ liệu chưa đầy đủ':'Giáo Sư Cùi Bắp',
+      message:`${partial?'Quét một phần':'Quét xong'}: ${run?.newCount||0} gói mới, ${run?.matchedCount||0} gói đạt ngưỡng.${partial?' Hãy mở tiện ích để xem phạm vi còn thiếu.':''}`}).catch(()=>{});
     await notifyHighScore(run?.pendingAlerts||[]);
     await pushTelegramMatches(s.settings,run?.pendingMatches||[],run);
     if(s.settings.autoExportMobileReport)await exportMobileReport(false);
@@ -285,6 +287,8 @@ function telegramTenderLine(t){
 async function pushTelegramMatches(settings,matches,run){
   if(!settings.telegramEnabled)return;
   const list=matches||[];
+  const partial=run?.status==='PARTIAL'||Boolean(run?.partial);
+  const scopeNote=partial?'\n⚠️ <b>DỮ LIỆU CHƯA ĐẦY ĐỦ</b>: lượt quét bị giới hạn hoặc gián đoạn.':' ';
 
   // Không có gói mới: chỉ nhắn khi người dùng bật "báo cả khi không có gì mới",
   // để biết hệ thống vẫn sống chứ không phải đã chết âm thầm.
@@ -292,14 +296,14 @@ async function pushTelegramMatches(settings,matches,run){
     if(!settings.telegramDailySummary)return;
     await sendTelegram(settings,
       `📡 <b>Giáo Sư Cùi Bắp</b> — ${new Date().toLocaleString('vi-VN')}\n`
-      +`Đã quét xong, <b>không có gói mới</b> đạt ngưỡng.\n`
+      +`${partial?'Đã quét một phần':'Đã quét xong'}, <b>không có gói mới</b> đạt ngưỡng.${scopeNote}\n`
       +`Tổng cộng đã nhận ${Number(run?.captured||0)} bản ghi từ e-GP.`,
       {kind:'summary'});
     return;
   }
 
   const head=`📡 <b>Giáo Sư Cùi Bắp</b>: ${list.length} gói mới đạt ngưỡng\n`
-    +`<i>${new Date().toLocaleString('vi-VN')}</i>`;
+    +`<i>${new Date().toLocaleString('vi-VN')}</i>${scopeNote}`;
   // Sắp theo điểm giảm dần để gói đáng chú ý nhất nằm ngay đầu tin nhắn.
   const body=[...list].sort((a,b)=>Number(b.score||0)-Number(a.score||0))
     .slice(0,25).map(telegramTenderLine).join('\n\n');
@@ -419,7 +423,7 @@ async function dispatchRunQueryToTab(tabId,run,template,settings){
   return dispatchLookupToTab(tabId,{
     id:run.id,mode:'tbmt',label:total>1?`${label} (${index+1}/${total})`:label,
     query:nativeTbmtQueryFromTemplate(template),pageSize:PAGE_SIZE,
-    maxPages:Math.max(1,Number(settings.maxPagesHint)||10)
+    maxPages:Math.max(1,Number(settings.maxPagesHint)||DEFAULT_SETTINGS.maxPagesHint)
   });
 }
 
@@ -439,7 +443,8 @@ async function startScan(mode='manual',opts={}){
     queue=[null];
   }
   const run={...newRun(mode),queue,qi:0,nativeQuery:true,ownedTab:mode!=='manual'};
-  await save({[KEYS.runs]:[run,...s.runs].slice(0,100),[KEYS.activeRun]:run});
+  const claimed=await claimActiveRun(run);
+  if(!claimed.ok)return {ok:false,message:'Một lượt quét khác vừa được bắt đầu.',run:claimed.current};
   try{
     const tab=await prepareScanTabFor(mode,queue[0],s);
     await updateRun(run.id,{tabId:tab.id,status:'OPENING',message:'Đang mở trang tra cứu nhà thầu...'});
@@ -575,27 +580,20 @@ function mobileHtml(tenders){
   return `<!doctype html><html lang="vi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Giáo Sư Cùi Bắp - Báo cáo điện thoại</title><style>body{font-family:system-ui;margin:0;background:#f5f7fb;color:#0f172a}header{background:#0f172a;color:#fff;padding:16px;position:sticky;top:0}main{max-width:900px;margin:auto;padding:14px}.card{background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:14px;margin:10px 0}.score{font-size:24px;font-weight:900}.muted{color:#64748b;font-size:13px}input,select{padding:10px;border:1px solid #cbd5e1;border-radius:9px;width:100%;box-sizing:border-box;margin:5px 0}a{color:#0f766e;font-weight:700}</style></head><body><header><b>📡 Giáo Sư Cùi Bắp</b><div style="font-size:12px">Xuất lúc ${new Date().toLocaleString('vi-VN')}</div></header><main><input id="q" placeholder="Tìm tên gói, tỉnh, chủ đầu tư..."><select id="score"><option value="0">Tất cả điểm</option><option value="55">≥55</option><option value="70">≥70</option><option value="85">≥85</option></select><div id="list"></div></main><script>const D=${data};const q=document.getElementById('q'),s=document.getElementById('score'),l=document.getElementById('list');function esc(x){return String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}function money(v){return v?Number(v).toLocaleString('vi-VN')+' đ':'Chưa xác định'}function draw(){const k=q.value.toLowerCase(),m=Number(s.value);const a=D.filter(x=>x.score>=m&&JSON.stringify(x).toLowerCase().includes(k)).sort((a,b)=>b.score-a.score);l.innerHTML='<p>'+a.length+' gói thầu</p>'+a.map(x=>'<div class="card"><div class="score">'+x.score+'/100</div><b>'+esc(x.bidName)+'</b><p class="muted">'+esc(x.codeLabel||'Mã TBMT')+': '+esc(x.displayCode||x.notifyNo||x.bidNo||'')+' · '+esc(x.location||'Chưa xác định')+'</p><p>'+esc(x.statusLabel||'')+'</p><p>💰 '+money(x.price)+'</p><p>'+esc(x.recommendation)+'</p><a href="'+esc(x.detailUrl)+'" target="_blank">Mở nguồn e-GP</a></div>').join('')}q.oninput=s.onchange=draw;draw();<\/script></body></html>`;
 }
 async function exportMobileReport(saveAs=true){const s=await getState();return downloadData(`GiaoSuCuiBap/Bao-cao-dien-thoai-${new Date().toISOString().slice(0,10)}.html`,'text/html',mobileHtml(s.tenders),saveAs);}
-async function exportBackup(includeSecrets=false){
+async function exportBackup(){
   const s=await getState();
-  /* SAFE luôn bỏ bí mật Telegram. FULL chỉ giữ cấu hình Telegram để người dùng
-     tự lưu riêng; cả hai chế độ đều scrub request template/phiên e-GP cũ. */
-  const secrets=countSecrets(s.settings);
-  const settings=includeSecrets?s.settings:{...s.settings,telegramBotToken:'',telegramChatId:''};
-  // Cả FULL lẫn SAFE chỉ xuất template đã qua allowlist/scrubber. "Full" chỉ
-  // có nghĩa là giữ cấu hình Telegram, không bao giờ giữ captcha/CSRF/cookie
-  // hoặc header phiên từng tồn tại trong template 3.9.x.
   const cleanTemplates=sanitizedTemplateState(s);
-  const exportState={...s,...cleanTemplates};
+  // Danh sách trắng: không xuất activeRun, runs[].queue, cache, log Telegram,
+  // request lồng hoặc bất kỳ khóa nào có dấu hiệu bí mật.
+  const exportState=buildSafeBackupState(s,cleanTemplates,DEFAULT_SETTINGS);
   const stamp=new Date().toISOString().replace(/[:.]/g,'-');
-  return downloadData(`GiaoSuCuiBap/${includeSecrets?'backup-day-du':'backup-an-toan'}-${stamp}.json`,
+  return downloadData(`GiaoSuCuiBap/backup-du-lieu-an-toan-${stamp}.json`,
     'application/json',
     JSON.stringify({version:chrome.runtime.getManifest().version,
       exportedAt:new Date().toISOString(),
-      backupMode:includeSecrets?'FULL':'SAFE',
-      _CANH_BAO:includeSecrets&&secrets
-        ?'TEP NAY CHUA BI MAT (Bot Token / Chat ID). KHONG gui cho nguoi khac.'
-        :'Ban sao an toan: Bot Token va Chat ID da duoc loai bo.',
-      ...exportState,settings},null,2),true);
+      backupMode:'SAFE',
+      _LUU_Y:'Ban sao an toan: queue request, token, CAPTCHA, cookie, Bot Token va Chat ID da duoc loai bo.',
+      ...exportState}),true);
 }
 
 /* ==========================================================================
@@ -704,6 +702,33 @@ async function ensureEgpSearchTab(active){
   return tab;
 }
 
+const ACTIVE_JOB_STATUSES=new Set(['STARTING','OPENING','RUNNING','LISTING','SCANNING']);
+
+/** Giữ chỗ nguyên tử cho một tính năng; chặn double-click tạo job/tab mồ côi. */
+async function claimLookupJob(key,job){
+  return withLock(async()=>{
+    const s=await getState();
+    const current=s[key];
+    if(current&&ACTIVE_JOB_STATUSES.has(String(current.status||''))){
+      return {ok:false,current};
+    }
+    await save({[KEYS[key]]:job});
+    return {ok:true,job};
+  });
+}
+
+/** Giữ chỗ nguyên tử cho lượt quét TBMT dùng kho activeRun. */
+async function claimActiveRun(run){
+  return withLock(async()=>{
+    const s=await getState();
+    if(s.activeRun&&ACTIVE_JOB_STATUSES.has(String(s.activeRun.status||''))){
+      return {ok:false,current:s.activeRun};
+    }
+    await save({[KEYS.runs]:[run,...s.runs].slice(0,100),[KEYS.activeRun]:run});
+    return {ok:true,run};
+  });
+}
+
 /**
  * Bắt đầu một lượt tra cứu. `query` là tên công ty hoặc mã số thuế.
  * Nếu truyền sẵn `taxCode` thì luôn chạy chế độ chính xác.
@@ -729,7 +754,8 @@ async function startWinnerLookup(payload={}){
     totalElements:0,totalPages:0,capped:false,
     packages:[],candidates:[]
   };
-  await save({[KEYS.winnerLookup]:lookup});
+  const claimed=await claimLookupJob('winnerLookup',lookup);
+  if(!claimed.ok)return {ok:false,message:'Một lượt tra cứu nhà thầu đang chạy. Hãy chờ hoặc bấm Dừng trước khi tra lại.',lookup:claimed.current};
 
   try{
     const tab=await ensureEgpSearchTab(payload.focusTab!==false);
@@ -974,7 +1000,8 @@ async function startBidOpenScan(payload={}){
     startedAt:new Date().toISOString(),finishedAt:null,
     totalCandidates:0,packages:[],scannedCount:0,cancelled:false
   };
-  await save({[KEYS.bidOpenScan]:scan});
+  const claimed=await claimLookupJob('bidOpenScan',scan);
+  if(!claimed.ok)return {ok:false,message:'Một lượt soi biên bản mở thầu đang chạy. Hãy chờ hoặc bấm Dừng trước khi chạy lại.',scan:claimed.current};
   bbmtCancelled=false;
 
   try{
@@ -1734,7 +1761,8 @@ async function startInvestorScan(payload={}){
     completeNote:INVESTOR_COMPLETE_NOTE,joinNote:INVESTOR_JOIN_NOTE,
     partialNote:INVESTOR_PARTIAL_NOTE,disclaimer:INVESTOR_DISCLAIMER
   };
-  await save({[KEYS.investorScan]:scan});
+  const claimed=await claimLookupJob('investorScan',scan);
+  if(!claimed.ok)return {ok:false,message:'Một lượt hồ sơ chủ đầu tư đang chạy. Hãy chờ hoặc bấm Dừng trước khi chạy lại.',scan:claimed.current};
 
   try{
     const tab=await ensureEgpSearchTab(payload.focusTab!==false);
@@ -1927,7 +1955,8 @@ async function startAreaScan(payload={}){
     disclaimer:AREA_DISCLAIMER,scopeNote:AREA_SCOPE_NOTE,
     pricingDisclaimer:PRICING_DISCLAIMER,pricingMethod:PRICING_METHOD_NOTE
   };
-  await save({[KEYS.areaScan]:scan});
+  const claimed=await claimLookupJob('areaScan',scan);
+  if(!claimed.ok)return {ok:false,message:'Một lượt soi địa bàn đang chạy. Hãy chờ hoặc bấm Dừng trước khi chạy lại.',scan:claimed.current};
 
   try{
     const tab=await ensureEgpSearchTab(payload.focusTab!==false);
@@ -2199,7 +2228,8 @@ async function startPlanLookup(payload={}){
     plans:[],totalElements:0,serverCount:0,areaDropped:0,
     cancelled:false,applied:null,mismatched:[]
   };
-  await save({[KEYS.planLookup]:lookup});
+  const claimed=await claimLookupJob('planLookup',lookup);
+  if(!claimed.ok)return {ok:false,message:'Một lượt tra kế hoạch đang chạy. Hãy chờ hoặc bấm Dừng trước khi tra lại.',lookup:claimed.current};
 
   try{
     const tab=await ensureEgpSearchTab(payload.focusTab!==false);
@@ -2328,6 +2358,53 @@ const TBMT_NOTICE_LABEL='Thông báo mời thầu';
 /** Lượt quét quá hạn này coi như đã chết, dù chưa ai báo kết thúc. */
 const RUN_STALE_MS=8*60*1000;
 
+/** Gia hạn timeout theo tiến độ hợp lệ, thay vì cắt job dài đúng phút thứ 8. */
+async function renewProgressLease(key,id){
+  const at=new Date().toISOString();
+  let timeoutMs=RUN_STALE_MS;
+  let touched=false;
+  if(key==='activeRun'){
+    const s=await getState();
+    if(s.activeRun?.id===id&&s.activeRun.status==='RUNNING'){
+      timeoutMs=scanTimeoutMs(s);
+      await updateRun(id,{lastProgressAt:at});
+      touched=true;
+    }
+  }else{
+    touched=await withLock(async()=>{
+      const s=await getState();
+      const cur=s[key];
+      if(!cur||cur.id!==id||!isLookupActive(lookupKind(key),cur))return false;
+      await save({[KEYS[key]]:{...cur,lastProgressAt:at}});
+      return true;
+    });
+  }
+  if(touched)await chrome.alarms.create(TIMEOUT_PREFIX+id,{when:Date.now()+timeoutMs});
+  return touched;
+}
+
+function receivedPageIndexes(job={}){
+  return new Set((Array.isArray(job.receivedPages)?job.receivedPages:[])
+    .map(Number).filter(n=>Number.isInteger(n)&&n>=0&&n<200000));
+}
+
+async function recordReceivedPage(key,id,pageIndex){
+  if(!Number.isInteger(pageIndex)||pageIndex<0)return false;
+  return withLock(async()=>{
+    const s=await getState();
+    const job=key==='activeRun'?s.activeRun:s[key];
+    if(!job||job.id!==id)return false;
+    const pages=receivedPageIndexes(job);
+    pages.add(pageIndex);
+    const next={...job,receivedPages:[...pages].sort((a,b)=>a-b)};
+    if(key==='activeRun'){
+      const runs=s.runs.map(r=>r.id===id?{...r,receivedPages:next.receivedPages}:r);
+      await save({[KEYS.runs]:runs.slice(0,100),[KEYS.activeRun]:next});
+    }else await save({[KEYS[key]]:next});
+    return true;
+  });
+}
+
 /**
  * Dọn lượt quét kẹt.
  *
@@ -2342,7 +2419,7 @@ const RUN_STALE_MS=8*60*1000;
 async function clearStaleRun(activeRun){
   if(!activeRun)return null;
 
-  const age=Date.now()-new Date(activeRun.startedAt||0).getTime();
+  const age=Date.now()-new Date(activeRun.lastProgressAt||activeRun.startedAt||0).getTime();
   let tabGone=false;
   if(activeRun.tabId){
     try{ await chrome.tabs.get(activeRun.tabId); }catch{ tabGone=true; }
@@ -2382,6 +2459,14 @@ const LOOKUP_KINDS=[
 
 function lookupKind(key){return LOOKUP_KINDS.find(k=>k.key===key)||null;}
 function isLookupActive(kind,value){return Boolean(value&&kind&&kind.statuses.includes(value.status));}
+function lookupResultCount(key,job={}){
+  if(key==='planLookup')return Array.isArray(job.plans)?job.plans.length:0;
+  if(key==='winnerLookup'&&job.mode==='discover')return Array.isArray(job.candidates)?job.candidates.length:0;
+  if(key==='investorScan'&&job.mode==='discover'&&Array.isArray(job.candidates)&&job.candidates.length){
+    return job.candidates.length;
+  }
+  return Array.isArray(job.packages)?job.packages.length:0;
+}
 
 /** Gắn job vào tab trước khi giao việc; chặn một start cũ ghi đè job mới. */
 async function bindLookupTab(key,id,tabId){
@@ -2422,7 +2507,7 @@ async function markLookupDoneFailure(key,id,message,partial=false){
     const s=await getState();
     const cur=s[key];
     if(!cur||cur.id!==id)return {changed:false,stopBid:false};
-    const got=(cur.packages||cur.plans||cur.candidates||[]).length;
+    const got=lookupResultCount(key,cur);
     const isPartial=Boolean(partial||cur.partial||got);
     // Danh sách BBMT có thể thiếu một phần nhưng các gói đã nhận vẫn đáng để
     // đọc biên bản. Giữ phase LISTING/SCANNING chạy tiếp, rồi finalize PARTIAL.
@@ -2498,7 +2583,7 @@ async function cancelLookups(which,reason='Đã dừng theo yêu cầu.',expecte
       const next={...cur,cancelled:true,partial:true,finishedAt:new Date().toISOString()};
       // Đã thu được dữ liệu thì vẫn tổng hợp và coi là thành công một phần —
       // bỏ đi thì phí công chờ của người dùng.
-      const got=(cur.packages||cur.plans||cur.candidates||[]).length;
+      const got=lookupResultCount(kind.key,cur);
       if(kind.key==='areaScan'&&got){
         next.status='PARTIAL';
         next.summary=summarizeArea(cur.packages,cur.criteria);
@@ -2582,28 +2667,50 @@ chrome.tabs.onRemoved.addListener(async tabId=>{
  *
  * Coi là kẹt khi: quá hạn RUN_STALE_MS, HOẶC không còn tab e-GP nào mở.
  */
-async function reconcileStaleLookups(){
+async function reconcileStaleLookups({coldStart=false}={}){
   const tabs=await chrome.tabs.query({url:'https://muasamcong.mpi.gov.vn/*'});
   const tabIds=new Set(tabs.map(t=>t.id));
   const noTab=tabs.length===0;
   const s=await getState();
+  const cleared=[];
+  if(s.activeRun?.status==='RUNNING'){
+    const age=Date.now()-new Date(s.activeRun.lastProgressAt||s.activeRun.startedAt||0).getTime();
+    const ownTabGone=Number.isInteger(s.activeRun.tabId)
+      ?!tabIds.has(s.activeRun.tabId):noTab;
+    if(ownTabGone||age>RUN_STALE_MS){
+      await finishRun(s.activeRun.id,'TIMEOUT',ownTabGone
+        ?'Lượt quét của phiên trước đã dừng vì tab e-GP không còn mở.'
+        :'Lượt quét của phiên trước đã dừng vì không có tiến triển trong thời gian cho phép.');
+      cleared.push('activeRun');
+    }
+  }
   const stale=[];
   for(const kind of LOOKUP_KINDS){
     const cur=s[kind.key];
     if(!isLookupActive(kind,cur))continue;
-    const age=Date.now()-new Date(cur.startedAt||0).getTime();
+    const age=Date.now()-new Date(cur.lastProgressAt||cur.startedAt||0).getTime();
     const ownTabGone=Number.isInteger(cur.tabId)?!tabIds.has(cur.tabId):noTab;
-    if(ownTabGone||age>RUN_STALE_MS)stale.push(kind.key);
+    // Giai đoạn đọc từng BBMT được điều phối trong service worker (waiter và
+    // cursor nằm trong RAM). Nếu worker vừa bị Chrome dọn, không giả vờ tiếp
+    // tục: chốt ngay PARTIAL và giữ mọi gói đã đọc. Các job phân trang khác
+    // do content script điều phối nên vẫn có thể tiếp tục sau khi worker thức.
+    const coordinatorLost=coldStart&&kind.key==='bidOpenScan'&&cur.status==='SCANNING';
+    if(ownTabGone||age>RUN_STALE_MS||coordinatorLost){
+      stale.push({key:kind.key,coordinatorLost});
+    }
   }
-  if(!stale.length)return {ok:true,cleared:[]};
-  for(const key of stale){
-    await cancelLookups(key,'Lượt tra cứu của phiên trước đã dừng — không còn tab e-GP nào đang chạy.',s[key]?.id);
+  if(!stale.length)return {ok:true,cleared};
+  for(const item of stale){
+    await cancelLookups(item.key,item.coordinatorLost
+      ?'Service worker đã khởi động lại giữa lúc đọc biên bản; dữ liệu đã nhận được giữ ở trạng thái chưa đầy đủ.'
+      :'Lượt tra cứu của phiên trước đã dừng — không còn tab e-GP nào đang chạy.',s[item.key]?.id);
   }
-  return {ok:true,cleared:stale};
+  return {ok:true,cleared:[...cleared,...stale.map(item=>item.key)]};
 }
 
-// Dọn ngay khi tiện ích khởi động lại, không chờ người dùng mở trang.
-chrome.runtime.onStartup.addListener(()=>{ reconcileStaleLookups().catch(()=>{}); });
+// Mỗi lần service worker được nạp lại, dọn coordinator BBMT mất trong RAM.
+// onStartup bên dưới vẫn xử lý riêng lịch quét theo cấu hình người dùng.
+reconcileStaleLookups({coldStart:true}).catch(()=>{});
 
 /** Dừng hẳn lượt quét đang chạy theo yêu cầu người dùng. */
 async function cancelActiveRun(){
@@ -2664,7 +2771,8 @@ async function startTbmtSearch(payload={}){
 
   const run={...newRun('form'),queue:[],qi:0,criteria:{...criteria,provinces},
     message:'Đang hỏi e-GP các gói thầu khớp tiêu chí...'};
-  await save({[KEYS.runs]:[run,...s.runs].slice(0,100),[KEYS.activeRun]:run});
+  const claimed=await claimActiveRun(run);
+  if(!claimed.ok)return {ok:false,message:'Một lượt quét khác vừa được bắt đầu.',run:claimed.current};
 
   try{
     const tab=await ensureEgpSearchTab(payload.focusTab!==false);
@@ -2676,7 +2784,7 @@ async function startTbmtSearch(payload={}){
          Đã đo thật: chỉ lọc tỉnh Lâm Đồng -> 579 gói; thêm giá ≥3 tỷ -> 186. */
       query:buildTbmtQuery({...criteria,provinces}),
       pageSize:PAGE_SIZE,
-      maxPages:Math.max(1,Number(s.settings.maxPagesHint)||10)
+      maxPages:Math.max(1,Number(s.settings.maxPagesHint)||DEFAULT_SETTINGS.maxPagesHint)
     });
     // Hen gio tu ket thuc — khong co cai nay thi luot treo se ket cung mai mai.
     await chrome.alarms.create(TIMEOUT_PREFIX+run.id,{when:Date.now()+RUN_STALE_MS});
@@ -2840,7 +2948,7 @@ function importedSettings(raw={}){
   out.alertMinScore=Math.max(0,Math.min(100,Number(out.alertMinScore)||0));
   out.telegramMinScore=Math.max(0,Math.min(100,Number(out.telegramMinScore)||0));
   out.maxStoredTenders=Math.max(100,Math.min(10000,Number(out.maxStoredTenders)||3000));
-  out.maxPagesHint=Math.max(1,Math.min(40,Number(out.maxPagesHint)||5));
+  out.maxPagesHint=Math.max(1,Math.min(40,Number(out.maxPagesHint)||DEFAULT_SETTINGS.maxPagesHint));
   out.scanTimeoutSeconds=Math.max(45,Math.min(600,Number(out.scanTimeoutSeconds)||75));
   out.minPrice=Math.max(0,Math.min(1e15,Number(out.minPrice)||0));
   out.maxPrice=Math.max(out.minPrice,Math.min(1e15,Number(out.maxPrice)||Number.MAX_SAFE_INTEGER));
@@ -2881,6 +2989,9 @@ function importedTender(raw,settings){
   });
   const merged={...base,
     detailUrl:canonicalEgpUrl(raw.detailUrl,base.detailUrl),
+    capturedAt:Number.isFinite(Date.parse(raw.capturedAt))?new Date(raw.capturedAt).toISOString():base.capturedAt,
+    firstSeenAt:Number.isFinite(Date.parse(raw.firstSeenAt))?new Date(raw.firstSeenAt).toISOString():base.firstSeenAt,
+    lastSeenAt:Number.isFinite(Date.parse(raw.lastSeenAt))?new Date(raw.lastSeenAt).toISOString():base.lastSeenAt,
     watchlisted:Boolean(raw.watchlisted),
     decisionState:normalizeDecisionState(raw.decisionState),
     decisionOwner:String(raw.decisionOwner||'').slice(0,120),
@@ -3047,25 +3158,46 @@ async function routeKqlcntResults(payload,sender){
   if(!payload.planId||!payload.mode)return {ok:false,message:'Thiếu mode hoặc mã job KQLCNT.'};
   const target=await resolveKqlcntJob(payload,sender);
   if(!target)return {ok:false,message:'Kết quả không khớp job/tab đang chạy.'};
-  let result;
-  if(target.key==='activeRun')result=await ingestTbmtPage(payload);
-  else if(target.key==='bidOpenScan')result=await ingestBidOpenList(payload);
-  else if(target.key==='planLookup')result=await ingestPlanPage(payload);
-  else if(target.key==='areaScan')result=await ingestAreaPage(payload);
-  else if(target.key==='investorScan')result=await ingestInvestorPage(payload);
-  else result=await ingestWinnerPage(payload);
+  if(!payload.done&&receivedPageIndexes(target.job).has(payload.pageIndex)){
+    return {ok:true,duplicate:true,pageIndex:payload.pageIndex};
+  }
+  let effective=payload;
   if(payload.done){
+    const received=receivedPageIndexes(target.job);
+    const expected=Math.max(0,Number(payload.pageIndex)||0);
+    const missing=[];
+    for(let i=0;i<expected;i++)if(!received.has(i))missing.push(i+1);
+    if(missing.length){
+      effective={...payload,partial:true,
+        deliveryMessage:`Thiếu ${missing.length} trang dữ liệu khi chuyển từ tab e-GP (${missing.slice(0,8).join(', ')}${missing.length>8?', …':''}).`};
+    }
+  }
+  let result;
+  if(target.key==='activeRun')result=await ingestTbmtPage(effective);
+  else if(target.key==='bidOpenScan')result=await ingestBidOpenList(effective);
+  else if(target.key==='planLookup')result=await ingestPlanPage(effective);
+  else if(target.key==='areaScan')result=await ingestAreaPage(effective);
+  else if(target.key==='investorScan')result=await ingestInvestorPage(effective);
+  else result=await ingestWinnerPage(effective);
+  if(!effective.done&&result?.ok!==false){
+    if(!await recordReceivedPage(target.key,target.job.id,effective.pageIndex)){
+      return {ok:false,retryable:true,message:'Chưa ghi nhận được trang dữ liệu; tiện ích sẽ thử lại.'};
+    }
+    await renewProgressLease(target.key,target.job.id);
+  }
+  if(effective.done){
     pendingKqlcntDoneByTab.set(sender.tab.id,{key:target.key,id:target.job.id,
       mode:kqlcntModeForJob(target.key,target.job),at:Date.now()});
     if(target.key!=='activeRun'&&target.key!=='bidOpenScan'){
       await chrome.alarms.clear(TIMEOUT_PREFIX+target.job.id).catch(()=>{});
     }
-    if(payload.partial||(target.key==='activeRun'&&payload.capped)){
-      if(target.key==='activeRun')await updateRun(target.job.id,{partial:true});
-      else await markLookupPartial(target.key,target.job.id);
+    if(effective.partial||(target.key==='activeRun'&&effective.capped)){
+      if(target.key==='activeRun')await updateRun(target.job.id,{partial:true,
+        partialMessage:effective.deliveryMessage||target.job.partialMessage||''});
+      else await markLookupPartial(target.key,target.job.id,effective.deliveryMessage||'');
     }
   }
-  return result;
+  return {...(result||{}),ok:result?.ok!==false,pageIndex:effective.pageIndex};
 }
 
 async function routeKqlcntDone(payload,sender){
@@ -3138,7 +3270,7 @@ async function handleJobTimeout(id){
     const job=s[kind.key];
     if(job?.id!==id||!isLookupActive(kind,job))continue;
     await tellJobsToStop([{id,tabId:job.tabId}]);
-    const got=(job.packages||job.plans||job.candidates||[]).length;
+    const got=lookupResultCount(kind.key,job);
     await failLookupJob(kind.key,id,'Quá thời gian chờ e-GP. Dữ liệu đã nhận (nếu có) được giữ lại.',got?'PARTIAL':'ERROR');
     return;
   }
@@ -3146,9 +3278,20 @@ async function handleJobTimeout(id){
 
 chrome.runtime.onInstalled.addListener(async details=>{
   const s0=await getState();
+  if(s0.activeRun)await cancelActiveRun();
+  await cancelLookups(null,'Tiện ích vừa được cập nhật; hãy chạy lại tác vụ.');
   const cleanTemplates=sanitizedTemplateState(s0);
+  const settings={...DEFAULT_SETTINGS,...s0.settings};
+  // 3.9.1 và 4.0.0 từng dùng 5 trang làm mặc định. Khi nâng cấp, chỉ đổi đúng
+  // giá trị mặc định cũ sang 20; mọi giá trị khác do người dùng chọn được giữ.
+  if(details.reason==='update'&&Number(settings.maxPagesHint)===5){
+    settings.maxPagesHint=DEFAULT_SETTINGS.maxPagesHint;
+  }
   const patch={
-    [KEYS.settings]:{...DEFAULT_SETTINGS,...s0.settings},
+    [KEYS.settings]:settings,
+    [KEYS.runs]:(s0.runs||[]).slice(0,100)
+      .map(run=>safeRunForBackup(run,{terminalize:true})),
+    [KEYS.activeRun]:null,
     [KEYS.template]:cleanTemplates.template,
     [KEYS.templates]:cleanTemplates.templates,
     [KEYS.lastTemplate]:cleanTemplates.lastTemplate
@@ -3160,7 +3303,19 @@ chrome.runtime.onInstalled.addListener(async details=>{
   await ensureDailyAlarm();
   if(details.reason==='install')chrome.tabs.create({url:chrome.runtime.getURL('onboarding.html')});
 });
-chrome.runtime.onStartup.addListener(async()=>{await ensureDailyAlarm();const s=await getState();if(s.settings.scanOnStartup&&s.template){const last=s.runs.find(r=>r.status==='SUCCESS');if(!last||Date.now()-new Date(last.finishedAt||last.startedAt).getTime()>18*3600000)startScan('startup');}});
+chrome.runtime.onStartup.addListener(async()=>{
+  await ensureDailyAlarm();
+  const s=await getState();
+  if(!s.settings.scanOnStartup||!s.template)return;
+  const now=Date.now();
+  const lastSuccess=s.runs.find(r=>r.status==='SUCCESS');
+  const lastPartial=s.runs.find(r=>r.status==='PARTIAL');
+  const successFresh=lastSuccess&&now-new Date(lastSuccess.finishedAt||lastSuccess.startedAt).getTime()<=18*3600000;
+  // PARTIAL không phải thành công đầy đủ, nhưng tránh chạy lặp mỗi lần mở
+  // Chrome: nghỉ hai giờ rồi mới quét bù lại phần còn thiếu.
+  const partialCooling=lastPartial&&now-new Date(lastPartial.finishedAt||lastPartial.startedAt).getTime()<=2*3600000;
+  if(!successFresh&&!partialCooling)startScan('startup');
+});
 chrome.alarms.onAlarm.addListener(async alarm=>{
   if(alarm.name===DAILY_ALARM)await startScan('scheduled');
   else if(alarm.name.startsWith(TIMEOUT_PREFIX)){
@@ -3245,13 +3400,18 @@ chrome.runtime.onMessage.addListener((message,sender,sendResponse)=>{
       }
       case 'EXPORT_CSV': await exportCsv(message.payload?.saveAs!==false);sendResponse({ok:true});break;
       case 'EXPORT_MOBILE': await exportMobileReport(message.payload?.saveAs!==false);sendResponse({ok:true});break;
-      case 'EXPORT_BACKUP_SAFE': await exportBackup(false);sendResponse({ok:true});break;
-      case 'EXPORT_BACKUP': await exportBackup(true);sendResponse({ok:true});break;
+      case 'EXPORT_BACKUP_SAFE': await exportBackup();sendResponse({ok:true});break;
+      // Tương thích lệnh cũ nhưng luôn xuất định dạng an toàn.
+      case 'EXPORT_BACKUP': await exportBackup();sendResponse({ok:true});break;
       case 'IMPORT_BACKUP': {
         const data=message.payload?.data;
         // Chốt phụ ở service worker; phía giao diện đã chặn theo kích thước tệp.
-        if(JSON.stringify(data||{}).length>15_000_000)throw new Error('File backup vượt quá 15 MB.');
+        if(JSON.stringify(data||{}).length>30_000_000)throw new Error('File backup vượt quá 30 MB.');
         const clean=sanitizeBackupImport(data);
+        // Chỉ dừng tác vụ sau khi file đã qua kiểm tra. Không để tab/alarm cũ
+        // tiếp tục gửi dữ liệu vào state vừa được khôi phục.
+        await cancelActiveRun();
+        await cancelLookups(null,'Đã dừng để nhập bản sao dữ liệu.');
         await save({[KEYS.settings]:clean.settings,[KEYS.tenders]:clean.tenders,[KEYS.runs]:clean.runs,
           [KEYS.template]:clean.template,[KEYS.templates]:clean.templates,[KEYS.lastTemplate]:clean.lastTemplate,
           [KEYS.activeRun]:null,[KEYS.participations]:clean.participations,[KEYS.winnerLookup]:null,

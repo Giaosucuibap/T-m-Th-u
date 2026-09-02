@@ -38,7 +38,7 @@ $('form').onsubmit = async (e) => {
 $('import').onclick = async () => {
   const f = $('backupFile').files[0];
   if (!f) return alert('Chọn file JSON backup.');
-  if (f.size > 15_000_000) return alert('File backup vượt quá 15 MB nên không thể nhập an toàn.');
+  if (f.size > 30_000_000) return alert('File backup vượt quá 30 MB nên không thể nhập an toàn.');
   try {
     const data = JSON.parse(await f.text());
     const r = await msg('IMPORT_BACKUP', { data });

@@ -7,7 +7,8 @@ import {
   scoreTender,
   DEFAULT_SETTINGS
 } from './lib/core.js';
-import { redactSettings } from './lib/redact.js';
+import { redactSettings, stripSecretsDeep } from './lib/redact.js';
+import { safeRunForBackup } from './lib/backup.js';
 
 const $ = (id) => document.getElementById(id);
 const msg = (type, payload = {}) => chrome.runtime.sendMessage({ type, payload });
@@ -62,9 +63,9 @@ $('export').onclick = async () => {
     _luuY: 'Tep nay da che bi mat (Bot Token, Chat ID). An toan de gui di.',
     _daChe: safe.redacted,
     settings: safe.settings,
-    template: state.template ? { ...state.template, body: '[đã ẩn trong file chẩn đoán]' } : null,
-    lastTemplate: state.lastTemplate ? { ...state.lastTemplate, body: '[đã ẩn]' } : null,
-    runs: state.runs.slice(0, 50),
+    template: state.template ? stripSecretsDeep({ ...state.template, body: '[đã ẩn trong file chẩn đoán]' }) : null,
+    lastTemplate: state.lastTemplate ? stripSecretsDeep({ ...state.lastTemplate, body: '[đã ẩn]' }) : null,
+    runs: state.runs.slice(0, 50).map(safeRunForBackup),
     counts: { tenders: state.tenders.length }
   };
   const url = 'data:application/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(payload, null, 2));

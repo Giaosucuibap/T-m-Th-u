@@ -34,13 +34,9 @@
         root.style.setProperty('--watermark-size', `min(70vmin, ${Number(entry.size)}px)`);
       }
     } else {
-      // Chưa nạp logo trong Cấu hình. Vẫn chấp nhận tệp icons/logo.png cho ai
-      // thích chép tay — nhưng phải KIỂM TRA tệp có thật, chứ đặt bừa vào CSS
-      // thì mọi trang đều bắn một request 404 rác vào console.
-      root.style.setProperty('--watermark-image', 'none');
-      fetch(chrome.runtime.getURL('icons/logo.png'), { method: 'GET' })
-        .then((r) => { if (r.ok) root.style.setProperty('--watermark-image', 'url("icons/logo.png")'); })
-        .catch(() => {});
+      // Logo mặc định luôn được đóng gói, nên dùng trực tiếp thay vì phát một
+      // request dò tệp trên mọi trang.
+      root.style.setProperty('--watermark-image', `url("${chrome.runtime.getURL('icons/logo.png')}")`);
     }
   }
 

@@ -156,6 +156,9 @@ async function refresh() {
       alertBox(`<b>Không tra cứu được.</b> ${esc(run.message || '')}`, 'error');
     } else {
       const notes = [];
+      if (run && run.status === 'PARTIAL') {
+        notes.push(`<b>Dữ liệu chưa đầy đủ.</b> ${esc(run.message || 'Lượt tra cứu bị giới hạn hoặc gián đoạn.')} Không dùng số liệu này như tổng số toàn bộ thị trường.`);
+      }
       if (run && (run.missed || []).length) {
         notes.push(`<b>Không đặt được tiêu chí:</b> ${esc(run.missed.join(', '))}.
           Kết quả dưới đây <b>chưa lọc theo tiêu chí đó</b> — kiểm tra lại cách viết tên cho đúng với e-GP.`);
@@ -165,7 +168,7 @@ async function refresh() {
       if (run && (run.swapped || []).length) {
         notes.push(`<b>e-GP dùng tên chuẩn:</b> ${esc(run.swapped.join(' · '))}.`);
       }
-      alertBox(notes.join('<br><br>'), (run && (run.missed || []).length) ? 'error' : null);
+      alertBox(notes.join('<br><br>'), (run && (run.status === 'PARTIAL' || (run.missed || []).length)) ? 'error' : null);
     }
   }
   render();

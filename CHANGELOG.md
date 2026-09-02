@@ -2,59 +2,102 @@
 
 Tài liệu này ghi lại các thay đổi quan trọng của Giáo Sư Cùi Bắp. Cấu trúc tham khảo [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) và phiên bản tuân theo cách đánh số ngữ nghĩa ở mức sản phẩm.
 
-## [4.0.1] — 2026-09-02
+## [4.0.2] — 2026-09-02
 
-Bản vá sau khi chạy 4.0.0 **thật trong Chromium** — điều mà môi trường đóng gói
-4.0.0 chưa làm được (xem mục "Hạn chế đã biết" bên dưới). Ba lỗi lọt qua toàn
-bộ 44 bài kiểm thử tự động vì chúng chỉ lộ ra khi nạp tiện ích vào trình duyệt.
+Bản vá sau khi chạy 4.0.1 **thật trong Chromium**. 4.0.1 đạt 57/57 kiểm thử tự
+động nhưng vẫn còn một lỗi cùng gốc với lỗi nó vừa sửa, vì lỗi này chỉ lộ ra
+khi nạp tiện ích vào trình duyệt.
 
 ### Sửa lỗi
 
-- **Người dùng mới không quét được gói nào.** 4.0.0 thu hẹp `content_scripts`
-  xuống đúng các trang lựa chọn nhà thầu, nhưng phần nền vẫn dự phòng mở
-  `/web/guest/home` — trang không còn content script. Ai chưa lưu bộ lọc mà bấm
-  "Quét e-GP ngay" sẽ nhận nguyên văn `Could not establish connection.
-  Receiving end does not exist.` và 0 gói. Đo trong Chromium: 4.0.0 = `ERROR`,
-  0 gói; sau khi sửa = `SUCCESS`, 137/137 gói.
+- **Đang mở sẵn một trang e-GP khác thì không quét được gói nào.** 4.0.1 đã
+  sửa route mặc định (`EGP_DEFAULT_URL`), nhưng `prepareScanTabFor()` vẫn tái
+  dùng tab e-GP đang mở **nguyên trạng** khi chưa có bộ lọc. Người dùng đang
+  xem trang chủ e-GP rồi bấm "Quét e-GP ngay" sẽ nhận nguyên văn
+  `Could not establish connection. Receiving end does not exist.` và 0 gói.
+  Đo trong Chromium: 4.0.1 = `ERROR`, 0 gói; sau khi sửa = `SUCCESS`, 137 gói.
   - `lib/core.js` thêm `EGP_SCAN_PAGE`, `hasContentScript()`, `scanTargetUrl()`
     làm nguồn sự thật duy nhất về phạm vi content script.
-  - `prepareScanTabFor()` không còn tái dùng tab e-GP nằm ngoài phạm vi đó —
-    đây là đường hỏng thứ hai, xảy ra khi người dùng đang mở sẵn trang chủ e-GP.
-- **Link trong tệp Excel không bấm được.** Cột "Link e-GP" chỉ được tô xanh
-  gạch chân, không có phần tử `<hyperlinks>` nào, dù chú thích đầu
-  `lib/xlsx.js` nêu "liên kết bấm được" là ưu điểm so với CSV. Nay sinh
-  `<hyperlinks>` (sau `<autoFilter>` theo đúng thứ tự lược đồ OOXML) kèm tệp
-  `xl/worksheets/_rels/sheetN.xml.rels` với `TargetMode="External"`. Sửa tại
-  tầng dựng nên cả bảy bản xuất đều có hiệu lực.
-- **`popup.html` thiếu thẻ `<title>`**, tab trình duyệt hiện chuỗi rỗng.
+  - `prepareScanTabFor()` điều hướng tab về trang tìm kiếm khi tab hiện tại
+    nằm ngoài phạm vi đó, thay vì dùng lại.
 
 ### Kiểm thử
 
-- Thêm `tests/regression-4.0.1.test.js` (7 bài) chặn cả ba lỗi trên bằng Node
-  thuần, không cần Chromium:
-  - đối chiếu `EGP_SCAN_PAGE` và `hasContentScript()` **trực tiếp với
-    `content_scripts.matches`** trong `manifest.json`, nên hai nơi không thể
-    lệch nhau lần nữa;
-  - kiểm `<hyperlinks>`, quan hệ `TargetMode="External"`, thoát ký tự `&`,
-    khai báo namespace `r:`, thứ tự lược đồ, và trang không link thì không sinh
-    tệp quan hệ thừa;
-  - kiểm mọi trang HTML đều có `<title>` không rỗng.
-- `tests/structure.test.js` bỏ qua `tools/`, `scripts/`, `test/` khi soi tài
-  nguyên và script inline — các thư mục này không được đóng gói.
-- Thêm `tools/test/` gồm máy chủ e-GP giả lập và ba kịch bản trình duyệt
-  (nạp tiện ích, người dùng mới, toàn trình), chạy được **mà không đụng vào
-  máy chủ e-GP thật**.
-- Thêm `tools/pack.mjs` đóng gói tệp `.zip` cài được, dùng chung danh sách loại
-  trừ với `tests/structure.test.js`.
+- Thêm `tests/content-script-scope.test.js` (7 bài): dịch chính
+  `content_scripts.matches` trong `manifest.json` sang RegExp rồi đối chiếu với
+  `hasContentScript()`, nên manifest và phần nền không thể lệch nhau lần nữa.
+  Có bài chốt riêng rằng `background.js` không được viết tay URL trang chủ e-GP.
+- `tests/background-security.test.js` kiểm thêm cả đường thứ hai, không chỉ
+  route mặc định.
+- `tests/structure.test.js` bỏ qua `tools/`, `scripts/`, `test/`, `dist/` khi
+  soi tài nguyên và script inline — các thư mục này không được đóng gói.
+- Thêm `tools/test/`: máy chủ e-GP giả lập trả đúng hình dạng dữ liệu thật,
+  cùng bốn kịch bản chạy trong Chromium — nạp tiện ích, người dùng mới, đang mở
+  sẵn trang e-GP khác, và toàn trình. Chạy được **mà không đụng vào máy chủ
+  e-GP thật**.
+- Thêm `tools/pack.mjs` đóng gói `.zip` cài được, dùng chung danh sách loại trừ
+  với `tests/structure.test.js`.
 
 ### Kết quả đo được
 
-| | 4.0.0 | 4.0.1 |
+| | 4.0.1 | 4.0.2 |
 |---|---|---|
-| `npm test` | 44/44 đạt | **51/51 đạt** |
+| `npm test` | 57/57 đạt | **64/64 đạt** |
 | Nạp 16 trang trong Chromium | 0 lỗi | 0 lỗi |
-| Người dùng mới bấm Quét | `ERROR`, 0 gói | **`SUCCESS`, 137/137 gói** |
-| Siêu liên kết trong Excel | 0 | **đúng số ô có link** |
+| Người dùng mới bấm Quét | `SUCCESS`, 137 gói | `SUCCESS`, 137 gói |
+| Đang mở trang chủ e-GP rồi bấm Quét | `ERROR`, **0 gói** | **`SUCCESS`, 137 gói** |
+
+### Hạn chế còn lại
+
+- Bản giả lập dựng lại đúng hình dạng dữ liệu e-GP nhưng **không** dựng lại
+  reCAPTCHA v3, trạng thái phiên hay thay đổi giao diện tương lai. Vẫn cần
+  canary trên e-GP thật trước khi triển khai rộng.
+
+## [4.0.1] — 2026-09-02
+
+4.0.1 là bản hợp nhất chọn lọc sau khi đối chiếu 4.0.0 với 3.9.2. Mục tiêu là giữ lớp quyết định, bảo mật và độ tin cậy của 4.0, đồng thời phục hồi các thao tác nghiệp vụ mà 3.9.2 làm tốt hơn. Bản này **không** đưa trở lại cơ chế phát lại nguyên request/header/body cũ có thể chứa token, CAPTCHA, CSRF hoặc dữ liệu phiên.
+
+### Khôi phục và hoàn thiện nghiệp vụ
+
+- Khôi phục liên kết bấm được thật trong báo cáo XLSX bằng phần tử hyperlink và tệp quan hệ OOXML; chỉ tạo liên kết cho URL HTTP(S) hợp lệ.
+- Khôi phục mặc định **20 trang mỗi lượt quét**, cho phép chọn 1–40 trang và giải thích rõ rằng hạ giới hạn có thể bỏ sót cơ hội.
+- Khi nâng từ cấu hình mặc định 5 trang của nhánh 4.0.0, tự chuyển về 20 trang; các giá trị tuỳ chỉnh khác của người dùng được giữ nguyên.
+- Khôi phục bộ lọc **Chỉ gói đạt ngưỡng** trên Dashboard đầy đủ.
+- Khôi phục nút xoá từng gói khỏi dữ liệu cục bộ, kèm xác nhận trước khi xoá.
+
+### Dữ liệu một phần và thông báo
+
+- Lượt quét `PARTIAL` được chốt là **Hoàn tất một phần**, không bị nâng sai thành `SUCCESS`.
+- Lượt `PARTIAL` vẫn chạy thông báo Desktop, cảnh báo gói điểm cao, Telegram và xuất báo cáo di động nếu người dùng đã bật các đầu ra tương ứng.
+- Thông báo Desktop/Telegram của lượt `PARTIAL` ghi rõ dữ liệu chưa đầy đủ và yêu cầu kiểm tra phạm vi còn thiếu.
+- Sau một lượt `PARTIAL`, quét khi khởi động có thời gian chờ hai giờ để tránh lặp request mỗi lần mở Chrome; lượt `SUCCESS` vẫn dùng cửa sổ 18 giờ.
+
+### An toàn và độ tin cậy
+
+- Sao lưu an toàn chuyển sang danh sách trắng dữ liệu được phép xuất, loại queue/request lồng, cache và log tích hợp không cần thiết.
+- Loại bỏ đường xuất full backup chứa bí mật tích hợp; người dùng phải cấu hình lại Telegram thủ công sau khi nhập.
+- Backup an toàn giữ năm mốc Radar gần nhất mỗi gói và bỏ các trường dẫn xuất có thể tính lại để tệp kho tối đa nằm trong giới hạn nhập 30 MB; dữ liệu đang dùng vẫn giữ tối đa 20 mốc.
+- Template/request e-GP được scrub cả khi nâng cấp, xuất và nhập; token, CAPTCHA, cookie, header xác thực và dữ liệu phiên không được dùng lại.
+- Nhập backup giữ đúng các trạng thái kết thúc như `PARTIAL` và `TIMEOUT`; trạng thái không hợp lệ được xử lý fail-closed thay vì giả thành công.
+- Giữ các lớp bảo vệ của 4.0.0: URL/endpoint allowlist, request sanitization, cô lập job/tab, timeout/reconcile, CSP, import không tự bật Telegram hoặc lịch tự động, chuẩn hoá tiền/ngày/từ khoá và sửa tổng hợp liên danh/HHI.
+- Nhận active run/lookup bằng claim nguyên tử trong storage để hai thao tác khởi chạy gần nhau không cùng chiếm một job.
+- Phân trang chỉ chuyển tiếp sau ACK; trang chưa được xác nhận sẽ retry, còn trang lặp theo `jobId + pageIndex` được xử lý idempotent.
+- Timeout chuyển thành lease theo `lastProgressAt` và chỉ gia hạn sau khi trang đã được ghi nhận bền vững.
+- Đối soát khi service worker khởi động lạnh; coordinator BBMT chi tiết mất khỏi RAM được chốt an toàn thay vì treo giả.
+- Sửa route e-GP mặc định để luôn mở đúng trang tìm kiếm lựa chọn nhà thầu có content bridge.
+
+### Kiểm thử phát hành
+
+- Kiểm tra workbook có quan hệ hyperlink ngoài đúng chuẩn, không chỉ tô xanh/gạch chân chuỗi URL.
+- Kiểm tra mặc định/migration 20 trang, lọc đạt ngưỡng, xoá từng gói và hành vi `PARTIAL` trong các đường thông báo/startup.
+- Kiểm tra claim nguyên tử, ACK/retry, chống ghi trùng trang, gia hạn lease, cold-start reconcile và route e-GP mặc định.
+- Kết quả QA cuối: **57/57 kiểm thử tự động đạt, 0 lỗi, 0 bỏ qua**.
+
+### Hạn chế đã biết
+
+- Chưa chạy E2E bằng Chrome/Chromium thật hoặc đối chiếu trực tiếp phiên e-GP đang vận hành trong môi trường đóng gói; cần pilot/canary trước khi triển khai rộng.
+- Luồng quét chi tiết BBMT kết thúc an toàn nếu service worker bị dọn, nhưng chưa tự tiếp tục từ đúng cursor; người dùng cần chạy lại.
+- Không có OpenAI/AI tạo sinh trong phiên bản này. Nếu bổ sung, API key phải nằm ở backend có kiểm soát quyền, redaction, quota/chi phí và audit; không đặt key trong extension trình duyệt.
 
 ## [4.0.0] — 2026-09-02
 
@@ -156,6 +199,20 @@ Phiên bản 4.0.0 là đợt nâng cấp về quy trình ra quyết định, đ
 - Không có OpenAI/AI tạo sinh trong phiên bản này; điểm số là logic xác định cục bộ.
 - Phân tích thị trường phụ thuộc vào phạm vi và độ đầy đủ của dữ liệu đã thu thập.
 - Telegram và Agent localhost là tích hợp ngoài tuỳ chọn, cần người dùng tự đánh giá rủi ro.
+
+## [3.9.2] — Mốc đối chiếu cho 4.0.1
+
+### Điểm được giữ lại trong 4.0.1
+
+- Báo cáo XLSX có liên kết nguồn bấm được.
+- Giới hạn quét mặc định 20 trang, phù hợp hơn cho lượt rà soát rộng.
+- Dashboard có bộ lọc chỉ hiển thị gói đạt ngưỡng và thao tác xoá từng gói.
+- Bộ nghiệp vụ rộng gồm TBMT, KHLCNT, kết quả, mở thầu, địa bàn, nhà thầu, chủ đầu tư, lịch quét, Telegram và xuất báo cáo.
+
+### Điểm không được hợp nhất nguyên trạng
+
+- Không giữ cơ chế phát lại nguyên request đã bắt vì có thể mang token/CAPTCHA/CSRF/header phiên hết hạn và mở rộng bề mặt rò rỉ.
+- Không đánh đổi pipeline Go/No-Go, Radar, độ đầy đủ dữ liệu, trạng thái `PARTIAL`, cô lập job/tab, sửa liên danh/HHI hoặc quy trình backup/import an toàn của nhánh 4.0.
 
 ## [3.9.1] — Mốc nền trước 4.0
 

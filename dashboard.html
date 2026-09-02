@@ -129,12 +129,14 @@
         <label class="checkline" for="onlyWatch">
           <input id="onlyWatch" type="checkbox"> Chỉ gói theo dõi
         </label>
+        <label class="checkline" for="onlyMatched">
+          <input id="onlyMatched" type="checkbox"> Chỉ gói đạt ngưỡng
+        </label>
       </div>
       <div class="row" style="margin-top:12px">
         <button id="csv" class="btn light" type="button">Xuất Excel</button>
         <button id="mobile" class="btn light" type="button">Báo cáo điện thoại</button>
-        <button id="backupSafe" class="btn light" type="button" title="Không chứa Bot Token hoặc Chat ID">Sao lưu an toàn</button>
-        <button id="backupFull" class="btn warn" type="button" title="Có thể chứa Bot Token và Chat ID">Sao lưu đầy đủ</button>
+        <button id="backupSafe" class="btn light" type="button" title="Không chứa queue request, token, CAPTCHA, Bot Token hoặc Chat ID">Sao lưu dữ liệu an toàn</button>
       </div>
     </section>
 

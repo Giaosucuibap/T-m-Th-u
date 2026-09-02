@@ -30,23 +30,23 @@
         <div><label for="negativeKeywords">Từ khóa hạn chế</label><textarea id="negativeKeywords"></textarea></div>
         <div><label for="minPrice">Giá từ (đồng)</label><input id="minPrice" inputmode="numeric"><label for="maxPrice">Đến (đồng)</label><input id="maxPrice" inputmode="numeric"></div>
         <div><label for="minDaysToClose">Số ngày tối thiểu trước đóng thầu</label><input id="minDaysToClose" type="number" min="0"><label for="reportMinScore">Ngưỡng điểm đạt</label><input id="reportMinScore" type="number" min="0" max="100"></div>
-        <div><label class="checkline"><input id="requireConstruction" type="checkbox">Chỉ coi là phù hợp khi có dấu hiệu xây lắp/thi công</label><label for="maxPagesHint">Số trang tối đa mỗi lượt</label><input id="maxPagesHint" type="number" min="1" max="40"></div>
+        <div><label class="checkline"><input id="requireConstruction" type="checkbox">Chỉ coi là phù hợp khi có dấu hiệu xây lắp/thi công</label><label for="maxPagesHint">Số trang tối đa mỗi lượt</label><input id="maxPagesHint" type="number" min="1" max="40" aria-describedby="maxPagesHintHelp"><div id="maxPagesHintHelp" class="muted small">Mặc định 20 trang. Đặt thấp giúp quét nhanh hơn nhưng có thể bỏ sót; kết quả bị giới hạn luôn được đánh dấu “Hoàn tất một phần”. Không dùng tổng số của lượt này như toàn bộ phạm vi.</div></div>
       </div>
 
       <hr style="margin:24px 0;border:0;border-top:1px solid var(--line)">
       <h2>Lịch chạy</h2>
       <div class="form-grid">
-        <div><label class="checkline"><input id="autoScan" type="checkbox">Quét mỗi ngày khi Chrome đang hoạt động</label><label for="dailyTime">Giờ chạy</label><input id="dailyTime" type="time"></div>
+        <div><label class="checkline"><input id="autoScan" type="checkbox" aria-describedby="scheduleOfflineHelp">Quét mỗi ngày khi Chrome đang hoạt động</label><label for="dailyTime">Giờ chạy</label><input id="dailyTime" type="time" aria-describedby="scheduleOfflineHelp"><div id="scheduleOfflineHelp" class="muted small">Chrome không thể tự đánh thức máy đang tắt hoặc ngủ. Lượt bị trễ sẽ chạy bù sau khi Chrome hoạt động lại nếu tùy chọn quét bù được bật.</div></div>
         <div><label class="checkline"><input id="scanOnStartup" type="checkbox">Quét bù khi mở Chrome nếu hơn 18 giờ chưa thành công</label><label class="checkline"><input id="openScheduledTabActive" type="checkbox">Đưa tab e-GP ra trước màn hình khi chạy lịch</label><label class="checkline"><input id="autoExportMobileReport" type="checkbox">Tự xuất báo cáo HTML sau lượt quét</label></div>
       </div>
 
       <hr style="margin:24px 0;border:0;border-top:1px solid var(--line)">
       <h2>Cảnh báo trên máy tính và Telegram</h2>
       <div class="form-grid"><div><label for="alertMinScore">Ngưỡng điểm bật thông báo trên máy</label><input id="alertMinScore" type="number" min="0" max="100"></div><div><label for="telegramMinScore">Ngưỡng điểm gửi Telegram</label><input id="telegramMinScore" type="number" min="0" max="100"></div></div>
-      <div class="notice" style="margin:14px 0"><b>Thiết lập Telegram tùy chọn</b><div class="small">Tạo bot bằng @BotFather, nhắn START cho bot, nhập Bot Token rồi dùng nút “Dò Chat ID”. Bot Token được lưu cục bộ; không chia sẻ bản backup đầy đủ cho người khác.</div></div>
+      <details id="telegramHelp" class="notice" style="margin:14px 0"><summary><b>Ba bước thiết lập Telegram (tùy chọn)</b></summary><ol class="small" style="line-height:1.7"><li>Mở @BotFather, gõ <code>/newbot</code> và lấy Bot Token.</li><li>Mở đúng bot vừa tạo, bấm START rồi nhắn một câu bất kỳ.</li><li>Nhập Bot Token, bấm “Dò Chat ID”, gửi thử và chỉ bật tự động sau khi kiểm tra thành công.</li></ol><div class="small">Bot Token chỉ lưu cục bộ và không được đưa vào bản sao dữ liệu an toàn.</div></details>
       <div class="form-grid">
-        <div class="full"><label for="telegramBotToken">Bot Token</label><input id="telegramBotToken" type="password" autocomplete="off" placeholder="Ví dụ: 7123456789:AAH2b...-xYz"></div>
-        <div><label for="telegramChatId">Chat ID</label><input id="telegramChatId" autocomplete="off" placeholder="Bấm Dò Chat ID để tự điền"></div>
+        <div class="full"><label for="telegramBotToken">Bot Token</label><input id="telegramBotToken" type="password" autocomplete="off" aria-describedby="telegramHelp" placeholder="Ví dụ: 7123456789:AAH2b...-xYz"></div>
+        <div><label for="telegramChatId">Chat ID</label><input id="telegramChatId" autocomplete="off" aria-describedby="telegramHelp" placeholder="Bấm Dò Chat ID để tự điền"></div>
         <div class="row" style="align-self:end"><button id="telegramDetect" class="btn secondary" type="button">Dò Chat ID</button><button id="telegramTest" class="btn light" type="button">Gửi thử</button></div>
         <div id="tgMsg" class="small full" role="status"></div>
         <div class="full"><label class="checkline"><input id="telegramEnabled" type="checkbox"><b>Bật gửi tự động</b> — gửi gói mới đạt ngưỡng</label><label class="checkline"><input id="telegramDailySummary" type="checkbox">Nhắn cả khi không có gói mới</label></div>
@@ -64,7 +64,7 @@
       <p class="muted small">Chọn PNG, JPG hoặc WEBP. Logo được lưu cục bộ và không mất khi cập nhật tiện ích.</p>
       <div class="form-grid">
         <div class="full"><input id="logoFile" type="file" accept="image/png,image/jpeg,image/webp,image/*"></div>
-        <div class="full"><label class="checkline"><input id="logoStripWhite" type="checkbox" checked><b>Xóa nền trắng</b></label></div>
+        <div class="full"><label class="checkline"><input id="logoStripWhite" type="checkbox" checked aria-describedby="logoStripWhiteHelp"><b>Xóa nền trắng</b></label><div id="logoStripWhiteHelp" class="muted small">Nên bật khi ảnh logo có nền trắng để tránh hiện một ô trắng phía sau watermark; hãy tắt nếu nền trắng là một phần có chủ ý của logo.</div></div>
         <div><label for="logoOpacity">Độ đậm <span id="logoOpacityVal" class="muted">4%</span></label><input id="logoOpacity" type="range" min="1" max="8" step="1" value="4"></div>
         <div><label for="logoSize">Cỡ logo <span id="logoSizeVal" class="muted">560 px</span></label><input id="logoSize" type="range" min="220" max="900" step="20" value="560"></div>
       </div>
@@ -74,7 +74,7 @@
 
     <div class="card" style="margin-top:14px">
       <h2>Khôi phục và xóa dữ liệu</h2>
-      <p class="muted small">Tệp nhập tối đa 15 MB. Khi nhập, Telegram và lịch tự động luôn được tắt để tránh thay đổi ngoài ý muốn.</p>
+      <p class="muted small">Tệp nhập tối đa 30 MB. Khi nhập, Telegram và lịch tự động luôn được tắt để tránh thay đổi ngoài ý muốn.</p>
       <input id="backupFile" type="file" accept="application/json">
       <div class="row" style="margin-top:10px"><button id="import" class="btn light" type="button">Nhập backup</button><button id="clear" class="btn danger" type="button">Xóa danh sách và lịch sử quét</button><button id="factoryReset" class="btn light" type="button">Khôi phục mặc định — xóa toàn bộ</button></div>
     </div>

@@ -35,7 +35,23 @@ Mô phỏng đúng việc đầu tiên một người dùng mới làm: cài xon
 content script không còn chạy, nên lượt quét chết với thông báo tiếng Anh
 `Could not establish connection. Receiving end does not exist.`
 
-## 3. Chạy toàn trình với e-GP giả lập
+## 3. Kịch bản đang mở sẵn một trang e-GP khác
+
+```bash
+# cửa sổ 1
+node tools/test/mock-egp.mjs
+# cửa sổ 2
+node tools/test/open-tab.mjs
+```
+
+Người dùng đang xem **trang chủ e-GP** — chuyện rất bình thường — rồi bấm
+**Quét e-GP ngay**. Kết quả mong đợi: `SUCCESS`, **137 gói**.
+
+Đây là đường hỏng THỨ HAI, cùng gốc với bài số 2 nhưng không được sửa cùng
+lúc: 4.0.1 sửa route mặc định nhưng `prepareScanTabFor()` vẫn tái dùng tab
+e-GP đang mở nguyên trạng, kể cả khi trang đó không có content script.
+
+## 4. Chạy toàn trình với e-GP giả lập
 
 ```bash
 # cửa sổ 1
@@ -81,7 +97,7 @@ Chứng thư tự ký này chỉ dùng cho máy chủ giả lập trên `127.0.0
 duyệt kiểm thử được chạy riêng với `--ignore-certificate-errors`. **Không**
 commit thư mục `certs/`.
 
-## 4. Kiểm tra tệp Excel xuất ra
+## 5. Kiểm tra tệp Excel xuất ra
 
 ```bash
 node tools/test/xlsx-test.mjs      # ghi /tmp/t1.xlsx và /tmp/t2.xlsx

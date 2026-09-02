@@ -1,6 +1,6 @@
 {
   "name": "giao-su-cui-bap-extension",
-  "version": "4.0.1",
+  "version": "4.0.2",
   "private": true,
   "type": "module",
   "description": "Automated regression tests for the Giáo Sư Cùi Bắp Chrome extension",

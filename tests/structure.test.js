@@ -22,12 +22,12 @@ function filesUnder(dir, predicate = () => true) {
 
 /* Thư mục KHÔNG được đóng gói vào tiện ích, nên không phải tuân luật CSP hay
  * luật "tài nguyên phải tồn tại" của trang tiện ích:
- *   tests/  test/   bài kiểm thử
+ *   tests/  test/    bài kiểm thử
  *   tools/  công cụ kiểm thử — trong đó có mock-page.html, một trang e-GP GIẢ
  *           LẬP cố tình dùng script inline để bắt chước trang thật
  *   scripts/ công cụ dựng bookmarklet
  * Danh sách này phải khớp phần loại trừ khi đóng gói (xem tools/pack.mjs). */
-const NON_SHIPPED_DIRS = ['tests', 'test', 'tools', 'scripts', 'node_modules'];
+const NON_SHIPPED_DIRS = ['tests', 'test', 'tools', 'scripts', 'node_modules', 'dist'];
 
 function extensionFiles(extension) {
   return filesUnder(ROOT, (path) => {

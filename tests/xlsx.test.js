@@ -61,12 +61,14 @@ test('buildXlsx creates a complete, escaped OOXML workbook', () => {
     'xl/workbook.xml',
     'xl/_rels/workbook.xml.rels',
     'xl/styles.xml',
-    'xl/worksheets/sheet1.xml'
+    'xl/worksheets/sheet1.xml',
+    'xl/worksheets/_rels/sheet1.xml.rels'
   ];
   for (const name of required) assert.ok(entries.has(name), `missing ${name}`);
 
   const workbook = entries.get('xl/workbook.xml').toString('utf8');
   const sheet = entries.get('xl/worksheets/sheet1.xml').toString('utf8');
+  const sheetRels = entries.get('xl/worksheets/_rels/sheet1.xml.rels').toString('utf8');
   const styles = entries.get('xl/styles.xml').toString('utf8');
 
   assert.match(workbook, /<sheet name="Gói  thầu  2026  "/);
@@ -77,8 +79,58 @@ test('buildXlsx creates a complete, escaped OOXML workbook', () => {
   assert.match(sheet, /<c r="B2" s="2"><v>1234567890<\/v><\/c>/);
   assert.match(sheet, /<c r="C2" s="3"><v>0\.0276<\/v><\/c>/);
   assert.match(sheet, /x=1&amp;y=2/);
+  assert.match(sheet, /xmlns:r="http:\/\/schemas\.openxmlformats\.org\/officeDocument\/2006\/relationships"/);
+  assert.match(sheet, /<hyperlinks><hyperlink ref="D2" r:id="rId1"\/><\/hyperlinks>/);
+  assert.match(
+    sheetRels,
+    /Type="http:\/\/schemas\.openxmlformats\.org\/officeDocument\/2006\/relationships\/hyperlink"/
+  );
+  assert.match(sheetRels, /Target="https:\/\/muasamcong\.mpi\.gov\.vn\/vi\/web\/guest\/contractor-selection\?x=1&amp;y=2"/);
+  assert.match(sheetRels, /TargetMode="External"/);
   assert.match(styles, /numFmtId="164"/);
   assert.match(styles, /numFmtId="165"/);
+});
+
+test('URL cells create relationships only for bounded HTTP(S) URLs', () => {
+  const bytes = buildXlsx({
+    sheetName: 'Liên kết',
+    columns: [{ header: 'Nguồn', key: 'url', type: 'url' }],
+    rows: [
+      { url: 'https://example.com/a?x=1&y=2' },
+      { url: 'http://example.org/public' },
+      { url: 'javascript:alert(1)' },
+      { url: 'ftp://example.com/file' },
+      { url: 'không phải URL' },
+      { url: 'https://' },
+      { url: `https://example.com/${'x'.repeat(4097)}` }
+    ]
+  });
+
+  const entries = storedZipEntries(bytes);
+  const sheet = entries.get('xl/worksheets/sheet1.xml').toString('utf8');
+  const rels = entries.get('xl/worksheets/_rels/sheet1.xml.rels').toString('utf8');
+
+  assert.match(sheet, /<hyperlink ref="A2" r:id="rId1"\/>/);
+  assert.match(sheet, /<hyperlink ref="A3" r:id="rId2"\/>/);
+  for (const ref of ['A4', 'A5', 'A6', 'A7', 'A8']) {
+    assert.doesNotMatch(sheet, new RegExp(`<hyperlink ref="${ref}"`));
+  }
+  assert.equal((rels.match(/<Relationship Id=/g) || []).length, 2);
+  assert.match(rels, /Target="https:\/\/example\.com\/a\?x=1&amp;y=2"/);
+  assert.match(rels, /Target="http:\/\/example\.org\/public"/);
+  assert.doesNotMatch(rels, /javascript:|ftp:|không phải URL/);
+});
+
+test('a sheet with no valid URL does not emit hyperlink metadata', () => {
+  const bytes = buildXlsx({
+    columns: [{ header: 'Nguồn', key: 'url', type: 'url' }],
+    rows: [{ url: 'javascript:alert(1)' }, { url: 'not-a-url' }]
+  });
+  const entries = storedZipEntries(bytes);
+  const sheet = entries.get('xl/worksheets/sheet1.xml').toString('utf8');
+
+  assert.equal(entries.has('xl/worksheets/_rels/sheet1.xml.rels'), false);
+  assert.doesNotMatch(sheet, /<hyperlinks>/);
 });
 
 test('buildXlsx supports multiple sheets and xlsxDataUrl round-trips bytes', () => {

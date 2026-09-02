@@ -149,7 +149,18 @@
     }catch{}
   }
   function kqReport(message,kind='info'){ showOverlay(`🏢 ${message}`,kind); }
-  function kqSend(type,payload){ return chrome.runtime.sendMessage({type,payload}).catch(()=>{}); }
+  async function kqSend(type,payload,{requireAck=false,attempts=3}={}){
+    let lastMessage='Không liên lạc được service worker.';
+    for(let attempt=1;attempt<=attempts;attempt++){
+      try{
+        const response=await chrome.runtime.sendMessage({type,payload});
+        if(!requireAck||response?.ok===true)return response||{ok:true};
+        lastMessage=response?.message||'Service worker chưa xác nhận dữ liệu.';
+      }catch(error){ lastMessage=String(error?.message||error||lastMessage); }
+      if(attempt<attempts)await new Promise(r=>setTimeout(r,250*attempt));
+    }
+    return {ok:false,message:lastMessage};
+  }
 
   /* --- Điều khiển biểu mẫu tìm kiếm nâng cao của e-GP -------------------- */
 
@@ -419,7 +430,7 @@
       return;
     }
 
-    let collected=0,pageIndex=0,totalPages=1,totalElements=0;
+    let collected=0,pageIndex=0,totalPages=1,totalElements=0,deliveryFailed=false;
     // maxPages = 0 nghĩa là KHÔNG giới hạn: lấy hết mọi trang e-GP trả về.
     const maxPages=Math.max(0,Number(plan.maxPages)||0);
     const pageLimit=maxPages||Infinity;
@@ -430,13 +441,15 @@
       totalPages=Number(envelope&&envelope.totalPages)||totalPages;
       totalElements=Number(envelope&&envelope.totalElements)||totalElements;
 
-      if(rows.length){
-        collected+=rows.length;
-        await kqSend('KQLCNT_RESULTS',{
-          planId:plan.id,mode:plan.mode,focusTaxCode:plan.focusTaxCode||'',
-          records:rows,totalElements,totalPages,pageIndex,done:false
-        });
-      }
+      // Gửi cả trang rỗng để service worker kiểm chứng chuỗi pageIndex đầy đủ.
+      // Chỉ chuyển trang sau khi nhận ACK; retry là an toàn vì background chống
+      // trùng theo job + pageIndex.
+      const ack=await kqSend('KQLCNT_RESULTS',{
+        planId:plan.id,mode:plan.mode,focusTaxCode:plan.focusTaxCode||'',
+        records:rows,totalElements,totalPages,pageIndex,done:false
+      },{requireAck:true,attempts:3});
+      if(!ack?.ok){ deliveryFailed=true; break; }
+      collected+=rows.length;
 
       pageIndex+=1;
       // Dừng khi hết trang, chạm trần (nếu có), hoặc trang rỗng — điều kiện
@@ -452,17 +465,22 @@
 
     const capped=Boolean(maxPages)&&totalPages>maxPages;
     const expectedPages=Math.min(totalPages,pageLimit);
-    const incomplete=!kqCancelled&&!capped&&pageIndex<expectedPages&&(!page||!page.ok);
-    await kqSend('KQLCNT_RESULTS',{
+    const incomplete=deliveryFailed||(!kqCancelled&&!capped&&pageIndex<expectedPages&&(!page||!page.ok));
+    const finalAck=await kqSend('KQLCNT_RESULTS',{
       planId:plan.id,mode:plan.mode,focusTaxCode:plan.focusTaxCode||'',
       records:[],totalElements,totalPages,pageIndex,capped,
       // Báo lên tiêu chí nào đặt được, tiêu chí nào không — để giao diện nói
       // thật với người dùng thay vì trình bày kết quả thiếu như thể đủ.
       applied:plan.applied||null,
       cancelled:kqCancelled,partial:incomplete,done:true
-    });
-    kqFinish(!incomplete,kqCancelled
+    },{requireAck:true,attempts:3});
+    const transferFailed=!finalAck?.ok;
+    kqFinish(!incomplete&&!transferFailed,kqCancelled
       ?`Đã dừng theo yêu cầu: lấy được ${collected} kết quả của ${plan.label}.`
+      :transferFailed
+        ?`Không xác nhận được trang kết thúc với tiện ích. Dữ liệu đã nhận được sẽ được giữ và đánh dấu chưa đầy đủ.`
+      :deliveryFailed
+        ?`Mất kết nối khi chuyển một trang dữ liệu. Đã giữ ${collected} kết quả và đánh dấu chưa đầy đủ.`
       :incomplete
         ?`e-GP ngừng trả dữ liệu sau ${pageIndex}/${totalPages} trang. Đã giữ ${collected} kết quả và đánh dấu là chưa đầy đủ.`
         :`Xong: ${collected} kết quả của ${plan.label}${capped?` (mới lấy ${maxPages} trang đầu)`:''}.`);
@@ -476,7 +494,10 @@
     kqPlan=null;
     kqCancelled=false;
     kqReport(message,ok?'success':'error');
-    kqSend('KQLCNT_DONE',{...donePlan,ok,cancelled,message});
+    // KQLCNT_DONE là chốt cuối của job. Gửi có ACK/retry để service worker
+    // vừa được Chrome khởi động lại vẫn có cơ hội nhận tín hiệu hoàn tất.
+    void kqSend('KQLCNT_DONE',{...donePlan,ok,cancelled,partial:!ok,message},
+      {requireAck:true,attempts:3});
   }
 
   /** Điểm vào: bắt đầu một lượt tra cứu KQLCNT. */

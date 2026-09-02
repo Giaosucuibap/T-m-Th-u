@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
+  DEFAULT_SETTINGS,
   canonicalEgpUrl,
   cleanText,
   foldText,
@@ -20,6 +21,11 @@ import {
 
 const SEARCH_ENDPOINT =
   'https://muasamcong.mpi.gov.vn/o/egp-portal-contractor-selection-v2/services/smart/search';
+
+test('release defaults scan twenty result pages unless the user overrides it', () => {
+  assert.equal(DEFAULT_SETTINGS.maxPagesHint, 20);
+  assert.ok(Object.isFrozen(DEFAULT_SETTINGS));
+});
 
 test('Vietnamese text normalization is deterministic', () => {
   assert.equal(cleanText('  Kênh\n  mương\tĐắk Lắk  '), 'Kênh mương Đắk Lắk');
@@ -105,7 +111,11 @@ test('sanitizeRequestTemplate accepts only the smart-search contract and removes
     },
     body: JSON.stringify([{
       pageSize: 20,
-      query: [{ index: 'es-contractor-selection', keyWord: 'kênh mương' }],
+      query: [
+        { index: 'es-contractor-selection', keyWord: 'kênh mương' },
+        { fieldName: 'captchaToken', fieldValues: ['SEMANTIC_QUERY_SECRET'] },
+        { field: 'authorization', value: 'SEMANTIC_AUTH_SECRET' }
+      ],
       recaptchaToken: 'BODY_CAPTCHA',
       nested: {
         csrf: 'BODY_CSRF',
@@ -117,7 +127,7 @@ test('sanitizeRequestTemplate accepts only the smart-search contract and removes
 
   const safe = sanitizeRequestTemplate(
     request,
-    'https://muasamcong.mpi.gov.vn/vi/web/guest/contractor-selection?render=search',
+    'https://muasamcong.mpi.gov.vn/vi/web/guest/contractor-selection?render=search&access_token=SOURCE_URL_SECRET&tab=private',
     99_999
   );
 
@@ -133,12 +143,20 @@ test('sanitizeRequestTemplate accepts only the smart-search contract and removes
   assert.equal(safe.candidateCount, 5000);
 
   const parsed = JSON.parse(safe.body);
+  assert.deepEqual(parsed[0].query, [
+    { index: 'es-contractor-selection', keyWord: 'kênh mương' }
+  ]);
   assert.equal(parsed[0].nested.keep, 'safe value');
   assert.equal(parsed[0].nested.rows[0].publicValue, 7);
   assert.equal('recaptchaToken' in parsed[0], false);
   assert.equal('csrf' in parsed[0].nested, false);
   assert.equal('authorization' in parsed[0].nested.rows[0], false);
-  assert.doesNotMatch(safe.body, /BODY_|HEADER_|URL_TOKEN|URL_SESSION/);
+  assert.doesNotMatch(safe.body, /BODY_|HEADER_|URL_TOKEN|URL_SESSION|SEMANTIC_/);
+  assert.equal(
+    safe.sourcePageUrl,
+    'https://muasamcong.mpi.gov.vn/vi/web/guest/contractor-selection?render=search'
+  );
+  assert.doesNotMatch(safe.sourcePageUrl, /SOURCE_URL_SECRET|access_token|tab=private/);
   assert.match(safe.capturedAt, /^\d{4}-\d{2}-\d{2}T/);
 });
 
@@ -152,6 +170,11 @@ test('sanitizeRequestTemplate rejects requests outside its allowlist', () => {
     { url: SEARCH_ENDPOINT, method: 'POST', body: '{bad json' },
     { url: SEARCH_ENDPOINT, method: 'POST', body: JSON.stringify({ query: [{}] }) },
     { url: SEARCH_ENDPOINT, method: 'POST', body: JSON.stringify([{ query: [] }]) },
+    {
+      url: SEARCH_ENDPOINT,
+      method: 'POST',
+      body: JSON.stringify([{ query: [{ fieldName: 'csrfToken', fieldValues: ['ONLY_SECRET'] }] }])
+    },
     { url: SEARCH_ENDPOINT, method: 'POST', body: 'x'.repeat(100_001) }
   ];
   for (const request of cases) {

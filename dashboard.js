@@ -227,7 +227,7 @@ function currentResults() {
     status: $('statusFilter').value,
     minScore: Number($('minScore').value || 0),
     sortBy: $('sortBy').value || 'decision',
-    onlyMatched: false
+    onlyMatched: $('onlyMatched').checked
   };
   return filterAndSort(state.tenders || [], view)
     .filter((tender) => !$('onlyWatch').checked || tender.watchlisted)
@@ -292,6 +292,8 @@ function resultCard(tender) {
           <button class="btn" type="button" data-save-decision>Lưu quyết định</button>
           <button class="btn light" type="button" data-watch aria-pressed="${Boolean(tender.watchlisted)}"
             aria-label="${tender.watchlisted ? 'Bỏ theo dõi' : 'Theo dõi'} ${esc(tender.bidName || code)}">${tender.watchlisted ? '★ Theo dõi' : '☆ Theo dõi'}</button>
+          <button class="btn light" type="button" data-delete
+            aria-label="Xóa ${esc(tender.bidName || code)} khỏi dữ liệu cục bộ">Xóa</button>
         </div>
       </div>
     </div>
@@ -307,6 +309,7 @@ function renderList() {
   if ($('statusFilter').value) filters.push(STATUS_LABEL[$('statusFilter').value]);
   if (Number($('minScore').value)) filters.push(`điểm từ ${$('minScore').value}`);
   if ($('onlyWatch').checked) filters.push('đang theo dõi');
+  if ($('onlyMatched').checked) filters.push('đạt ngưỡng năng lực');
   if (pipelineFilter) filters.push(DECISION_STATE_LABEL[pipelineFilter]);
   $('result-caption').textContent = filters.length
     ? `Đang lọc: ${filters.join(' · ')}` : 'Xếp theo mức ưu tiên xử lý, sau đó đến điểm phù hợp và hạn nộp.';
@@ -355,6 +358,29 @@ function bindResultActions() {
         if (!response || response.ok === false) throw new Error(response && response.message || 'Không cập nhật được.');
         tender.watchlisted = !tender.watchlisted;
         showToast(tender.watchlisted ? 'Đã thêm gói vào danh sách theo dõi.' : 'Đã bỏ gói khỏi danh sách theo dõi.');
+        renderList();
+      } catch (error) {
+        button.disabled = false;
+        showToast(error.message || String(error), 'error');
+      }
+    });
+  });
+
+  $('list').querySelectorAll('[data-delete]').forEach((button) => {
+    button.addEventListener('click', async () => {
+      const card = button.closest('[data-key]');
+      const tender = state.tenders.find((item) => item.key === card.dataset.key);
+      if (!tender) return;
+      if (!confirm(`Xóa “${tender.bidName || tender.displayCode || 'gói thầu này'}” khỏi dữ liệu cục bộ?`)) return;
+      button.disabled = true;
+      try {
+        const response = await msg('DELETE_TENDER', { key: tender.key });
+        if (!response || response.ok === false) throw new Error(response && response.message || 'Không xóa được.');
+        state.tenders = state.tenders.filter((item) => item.key !== tender.key);
+        showToast('Đã xóa gói khỏi dữ liệu cục bộ.');
+        renderMetrics();
+        renderPriority();
+        renderPipeline();
         renderList();
       } catch (error) {
         button.disabled = false;
@@ -455,7 +481,7 @@ function bindEvents() {
   $('openGuide').addEventListener('click', () => chrome.tabs.create({ url: chrome.runtime.getURL('onboarding.html#filter') }));
 
   $('q').addEventListener('input', resetAndRenderList);
-  ['statusFilter', 'minScore', 'sortBy', 'onlyWatch'].forEach((id) => $(id).addEventListener('change', resetAndRenderList));
+  ['statusFilter', 'minScore', 'sortBy', 'onlyWatch', 'onlyMatched'].forEach((id) => $(id).addEventListener('change', resetAndRenderList));
   $('clearPipeline').addEventListener('click', () => {
     pipelineFilter = '';
     visibleLimit = PAGE_SIZE;
@@ -473,13 +499,6 @@ function bindEvents() {
     await msg('EXPORT_BACKUP_SAFE');
     showToast('Đã tạo bản sao an toàn, không chứa Bot Token hoặc Chat ID.');
   });
-  $('backupFull').addEventListener('click', async () => {
-    const accepted = confirm('Bản sao đầy đủ có thể chứa Bot Token và Chat ID. Chỉ lưu ở nơi riêng tư và không gửi cho người khác. Tiếp tục?');
-    if (!accepted) return;
-    await msg('EXPORT_BACKUP');
-    showToast('Đã tạo bản sao đầy đủ. Hãy giữ tệp ở nơi riêng tư.', 'info');
-  });
-
   chrome.storage.onChanged.addListener(() => {
     clearTimeout(reloadTimer);
     reloadTimer = setTimeout(load, 120);

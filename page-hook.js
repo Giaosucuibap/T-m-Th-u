@@ -18,15 +18,46 @@
   const CONTENT_SOURCE = 'BID_RADAR_ONE_CONTENT';
 
   /* --- TRA CỨU NHÀ THẦU (KQLCNT / Biên bản mở thầu) ---------------------- */
-  const SEARCH_ENDPOINT = '/o/egp-portal-contractor-selection-v2/services/smart/search';
-  const LOT_OPEN_DETAIL_ENDPOINT = '/services/expose/ldtkqmt/bid-notification-p/lotOpenDetail';
+  const EGP_ORIGIN = 'https://muasamcong.mpi.gov.vn';
+  const PORTAL_SERVICE_ROOT = '/o/egp-portal-contractor-selection-v2';
+  const SEARCH_ENDPOINT = `${PORTAL_SERVICE_ROOT}/services/smart/search`;
+  const LOT_OPEN_DETAIL_ENDPOINTS = new Set([
+    `${PORTAL_SERVICE_ROOT}/services/expose/ldtkqmt/bid-notification-p/lotOpenDetail`,
+    '/services/expose/ldtkqmt/bid-notification-p/lotOpenDetail'
+  ]);
 
   /* Hai endpoint mà trang chi tiết tự gọi, có kèm danh sách tệp đính kèm:
    *   lcnt_tbmt_hsmt                     -> hồ sơ mời thầu (E-HSMT)
    *   expose/contractor-input-result/get -> quyết định phê duyệt + báo cáo đánh giá
    * Chỉ ĐỌC phản hồi, không can thiệp — đúng nguyên tắc thu thụ động. */
-  const ATTACHMENT_ENDPOINTS = ['/services/lcnt_tbmt_hsmt', '/services/expose/contractor-input-result/get'];
-  const isAttachmentUrl = (u) => ATTACHMENT_ENDPOINTS.some((e) => String(u || '').indexOf(e) !== -1);
+  const ATTACHMENT_ENDPOINTS = new Set([
+    `${PORTAL_SERVICE_ROOT}/services/lcnt_tbmt_hsmt`,
+    `${PORTAL_SERVICE_ROOT}/services/expose/contractor-input-result/get`,
+    '/services/lcnt_tbmt_hsmt',
+    '/services/expose/contractor-input-result/get'
+  ]);
+
+  function officialEgpUrl(value) {
+    try {
+      const url = new URL(String(value || ''), location.href);
+      return url.protocol === 'https:' && url.origin === EGP_ORIGIN
+        && !url.username && !url.password ? url : null;
+    } catch {
+      return null;
+    }
+  }
+
+  function isExactEgpEndpoint(value, paths) {
+    const url = officialEgpUrl(value);
+    return Boolean(url && paths.has(url.pathname));
+  }
+
+  function isSearchRequest(value, method) {
+    const url = officialEgpUrl(value);
+    return Boolean(url && url.pathname === SEARCH_ENDPOINT && String(method || '').toUpperCase() === 'POST');
+  }
+
+  const isAttachmentUrl = (value) => isExactEgpEndpoint(value, ATTACHMENT_ENDPOINTS);
 
   // Kế hoạch tra cứu đang chạy; null = không can thiệp bất kỳ request nào.
   // Khối truy vấn do background.js dựng sẵn (lib/kqlcnt.js hoặc lib/bbmt.js)
@@ -35,6 +66,102 @@
 
   const RELEVANT = new Set(['notifyNo', 'notify_no', 'tbmtNo', 'bidNo', 'bidName', 'notifyName', 'packageName', 'publicDate', 'publishDate', 'investorName', 'procuringEntityName', 'bidPrice', 'packagePrice', 'bidPackagePrice', 'notifyVersion', 'notifyVersionNo', 'investField', 'investFieldName', 'fieldName', 'closeDate', 'bidCloseDate', 'projectName', 'provinceName', 'executionLocation']);
   const IDENTITY = ['notifyNo', 'bidName', 'notifyName', 'bidNo'];
+
+  const PLAN_KEYS = new Set(['id', 'query', 'pageSize']);
+  const QUERY_KEYS = new Set(['index', 'filters', 'keyWord', 'matchType', 'matchFields']);
+  const FILTER_KEYS = new Set(['fieldName', 'searchType', 'fieldValues', 'from', 'to']);
+  const SEARCH_TYPES = new Set(['in', 'range', 'not_null', 'greater_equal', 'less_equal']);
+  const MATCH_TYPES = new Set(['all-0', 'all-1', 'any-0', 'any-1', 'exact']);
+  const RECORD_TYPES = new Set(['es-notify-contractor', 'es-plan-project-p']);
+  const NOTICE_STEPS = new Set([
+    'notify-contractor-step-1-tbmt',
+    'notify-contractor-step-2-kqmt',
+    'notify-contractor-step-3-dsntdkt',
+    'notify-contractor-step-4-kqlcnt'
+  ]);
+  const SECRET_FIELD = /(token|captcha|csrf|xsrf|jwt|session|auth|signature|secret|cookie|password)/i;
+  const FIELD_NAME = /^[A-Za-z0-9_.-]{1,120}$/;
+  const PLAN_ID = /^[A-Za-z0-9_-]{1,120}$/;
+  const MAX_QUERY_CHARS = 100000;
+  const MAX_ENVELOPE_CHARS = MAX_QUERY_CHARS * 2;
+  const MAX_FILTERS = 80;
+  const MAX_VALUES = 200;
+
+  function isPlainObject(value) {
+    // postMessage đi từ ISOLATED world sang MAIN world, nên prototype có thể
+    // thuộc realm khác. Dùng nhãn built-in thay vì so Object.prototype trực tiếp.
+    return Boolean(value && typeof value === 'object' && !Array.isArray(value)
+      && Object.prototype.toString.call(value) === '[object Object]');
+  }
+
+  function safeFilterValue(value) {
+    if (typeof value === 'string') return value.length <= 4000;
+    if (typeof value === 'number') return Number.isFinite(value) && Math.abs(value) <= 1e18;
+    return typeof value === 'boolean' || value === null;
+  }
+
+  function validFilter(filter) {
+    if (!isPlainObject(filter) || Object.keys(filter).some((key) => !FILTER_KEYS.has(key))) return false;
+    if (!FIELD_NAME.test(String(filter.fieldName || '')) || SECRET_FIELD.test(filter.fieldName)) return false;
+    if (!SEARCH_TYPES.has(String(filter.searchType || ''))) return false;
+
+    const values = filter.fieldValues;
+    if (values !== undefined && (!Array.isArray(values) || values.length > MAX_VALUES || values.some((v) => !safeFilterValue(v)))) return false;
+    if (filter.from !== undefined && !safeFilterValue(filter.from)) return false;
+    if (filter.to !== undefined && !safeFilterValue(filter.to)) return false;
+    if (filter.searchType === 'range') return filter.from !== undefined || filter.to !== undefined;
+    return Array.isArray(values);
+  }
+
+  function filterValues(filters, name) {
+    const matches = filters.filter((filter) => filter.fieldName === name);
+    if (matches.length !== 1 || matches[0].searchType !== 'in') return null;
+    return matches[0].fieldValues;
+  }
+
+  function validQuery(query) {
+    if (!isPlainObject(query) || Object.keys(query).some((key) => !QUERY_KEYS.has(key))) return false;
+    if (query.index !== 'es-contractor-selection') return false;
+    if (!Array.isArray(query.filters) || query.filters.length < 1 || query.filters.length > MAX_FILTERS) return false;
+    if (!query.filters.every(validFilter)) return false;
+
+    const types = filterValues(query.filters, 'type');
+    if (!types || types.length !== 1 || !RECORD_TYPES.has(types[0])) return false;
+    const stepFilters = query.filters.filter((filter) => filter.fieldName === 'stepCode');
+    if (types[0] === 'es-notify-contractor') {
+      const steps = filterValues(query.filters, 'stepCode');
+      if (!steps || steps.length < 1 || steps.some((step) => !NOTICE_STEPS.has(step))) return false;
+    } else if (stepFilters.length) {
+      return false;
+    }
+
+    const hasKeyword = Object.prototype.hasOwnProperty.call(query, 'keyWord');
+    if (hasKeyword && (typeof query.keyWord !== 'string' || !query.keyWord.trim() || query.keyWord.length > 500)) return false;
+    if (Object.prototype.hasOwnProperty.call(query, 'matchType') && !MATCH_TYPES.has(query.matchType)) return false;
+    if (Object.prototype.hasOwnProperty.call(query, 'matchFields')) {
+      if (!Array.isArray(query.matchFields) || query.matchFields.length < 1 || query.matchFields.length > 20) return false;
+      if (query.matchFields.some((field) => !FIELD_NAME.test(String(field || '')) || SECRET_FIELD.test(field))) return false;
+    }
+    if (hasKeyword !== Object.prototype.hasOwnProperty.call(query, 'matchType')) return false;
+    if (hasKeyword !== Object.prototype.hasOwnProperty.call(query, 'matchFields')) return false;
+
+    try {
+      return JSON.stringify(query).length <= MAX_QUERY_CHARS;
+    } catch {
+      return false;
+    }
+  }
+
+  function validatedPlan(value) {
+    if (!isPlainObject(value) || Object.keys(value).some((key) => !PLAN_KEYS.has(key))) return null;
+    if (typeof value.id !== 'string' || !PLAN_ID.test(value.id) || !validQuery(value.query)) return null;
+    if (!Number.isInteger(value.pageSize) || ![10, 20, 50].includes(value.pageSize)) return null;
+    try {
+      return { id: value.id, query: JSON.parse(JSON.stringify(value.query)), pageSize: value.pageSize };
+    } catch {
+      return null;
+    }
+  }
 
   // Tên trường phân trang thường gặp trên e-GP và các framework phổ biến.
   const post = (type, payload) => window.postMessage({ source: SOURCE, type, payload }, '*');
@@ -67,11 +194,9 @@
 
   function recordEndpoint(url, method, status, data) {
     try {
-      let path = String(url || '');
-      const i = path.indexOf('://');
-      if (i !== -1) path = path.slice(path.indexOf('/', i + 3));
-      path = path.split('?')[0];
-      if (!path) return;
+      const parsed = officialEgpUrl(url);
+      if (!parsed) return;
+      const path = parsed.pathname;
       const key = (method || 'GET') + ' ' + path;
       if (seenEndpoints.has(key)) return;
       seenEndpoints.add(key);
@@ -136,6 +261,7 @@
         if (/^\s*[\[{]/.test(text)) data = safeParse(text);
       }
       const responseUrl = response.url || request.url || '';
+      if (!officialEgpUrl(responseUrl)) return;
       recordEndpoint(responseUrl, request.method, response.status, data);
       if (planId) {
         post('KQLCNT_PAGE', {
@@ -145,7 +271,7 @@
           data
         });
       }
-      if (String(responseUrl).includes(LOT_OPEN_DETAIL_ENDPOINT) && Array.isArray(data)) {
+      if (isExactEgpEndpoint(responseUrl, LOT_OPEN_DETAIL_ENDPOINTS) && Array.isArray(data)) {
         post('BBMT_BIDDERS', { url: location.href, rows: data, status: response.status });
       }
       if (isAttachmentUrl(responseUrl) && data) {
@@ -165,8 +291,8 @@
     let fetchInput = input;
     let fetchInit = init;
     let planId = '';
-    if (kqlcntPlan && String(request.url || '').includes(SEARCH_ENDPOINT)) {
-      const refined = refineKqlcntBody(request.url, request.body);
+    if (kqlcntPlan && isSearchRequest(request.url, request.method)) {
+      const refined = refineKqlcntBody(request.url, request.method, request.body);
       if (refined !== null) {
         planId = kqlcntPlan.id;
         request.body = refined;
@@ -206,10 +332,10 @@
       try { this.__br.body = typeof body === 'string' ? body : body ? JSON.stringify(body) : ''; } catch { this.__br.body = ''; }
 
       // Đánh dấu mọi request tìm kiếm thuộc lượt tra cứu đang chạy, để phản hồi
-      // được chuyển về đúng nơi. Việc THAY tiêu chí là tuỳ chọn: khi kế hoạch
-      // không kèm `query` (tính năng KHLCNT), giữ nguyên truy vấn của e-GP.
-      if (kqlcntPlan && String(this.__br.url || '').indexOf(SEARCH_ENDPOINT) !== -1) {
-        const refined = refineKqlcntBody(this.__br.url, this.__br.body);
+      // được chuyển về đúng nơi. Chỉ thay tiêu chí khi kế hoạch đã qua allowlist
+      // và request do chính giao diện e-GP phát tới đúng endpoint chính thức.
+      if (kqlcntPlan && isSearchRequest(this.__br.url, this.__br.method)) {
+        const refined = refineKqlcntBody(this.__br.url, this.__br.method, this.__br.body);
         if (refined !== null) {
           this.__brKqlcnt = kqlcntPlan.id;
           body = refined;
@@ -230,7 +356,7 @@
           }
           // Bảng nhà thầu tham dự của một Biên bản mở thầu. Luôn chuyển tiếp,
           // kể cả khi người dùng tự mở trang — dữ liệu này chỉ có ở đây.
-          if (String(this.__br.url || '').indexOf(LOT_OPEN_DETAIL_ENDPOINT) !== -1 && Array.isArray(data)) {
+          if (isExactEgpEndpoint(this.__br.url, LOT_OPEN_DETAIL_ENDPOINTS) && Array.isArray(data)) {
             post('BBMT_BIDDERS', { url: location.href, rows: data, status: this.status });
           }
           // Danh sách tệp đính kèm của gói đang xem. Chuyển nguyên phản hồi về
@@ -273,16 +399,17 @@
    * lib/bbmt.js — nơi có kiểm thử — nên ở đây chỉ việc gắn vào, giữ nguyên
    * phân trang mà giao diện e-GP đang dùng.
    */
-  function refineKqlcntBody(url, rawBody) {
+  function refineKqlcntBody(url, method, rawBody) {
     if (!kqlcntPlan || !kqlcntPlan.query || !rawBody) return null;
-    if (String(url || '').indexOf(SEARCH_ENDPOINT) === -1) return null;
+    if (!isSearchRequest(url, method) || !validQuery(kqlcntPlan.query)) return null;
+    if (typeof rawBody !== 'string' || rawBody.length > MAX_ENVELOPE_CHARS) return null;
 
     let parsed;
     try { parsed = JSON.parse(rawBody); } catch { return null; }
-    if (!Array.isArray(parsed) || !parsed[0] || typeof parsed[0] !== 'object') return null;
+    if (!Array.isArray(parsed) || parsed.length !== 1 || !isPlainObject(parsed[0])) return null;
 
     const envelope = { ...parsed[0], query: [kqlcntPlan.query] };
-    if (kqlcntPlan.pageSize) envelope.pageSize = String(kqlcntPlan.pageSize);
+    envelope.pageSize = String(kqlcntPlan.pageSize);
     return JSON.stringify([envelope]);
   }
 
@@ -292,8 +419,8 @@
     // Bật/tắt chế độ tinh chỉnh tiêu chí cho lượt tra cứu KQLCNT.
     if (event.data.type === 'KQLCNT_PLAN') {
       const plan = event.data.payload || null;
-      kqlcntPlan = plan && plan.id ? plan : null;
-      post('KQLCNT_PLAN_ACK', { planId: kqlcntPlan ? kqlcntPlan.id : null });
+      kqlcntPlan = plan === null ? null : validatedPlan(plan);
+      post('KQLCNT_PLAN_ACK', { planId: kqlcntPlan ? kqlcntPlan.id : null, accepted: plan === null || Boolean(kqlcntPlan) });
     }
   });
 

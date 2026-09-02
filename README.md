@@ -1,10 +1,10 @@
-# Giáo Sư Cùi Bắp 4.0.1
+# Giáo Sư Cùi Bắp 4.0.2
 
 **Trợ lý ra quyết định dự thầu ngay trên nguồn e-GP chính thức.**
 
 Giáo Sư Cùi Bắp là extension Chrome dành cho doanh nghiệp và đội ngũ đấu thầu tại Việt Nam. Phần mềm hỗ trợ tìm kiếm, sàng lọc, theo dõi và quản lý cơ hội từ [Hệ thống mạng đấu thầu quốc gia (e-GP)](https://muasamcong.mof.gov.vn/), đồng thời cung cấp các góc nhìn về nhà thầu, chủ đầu tư, đối thủ và địa bàn. Địa chỉ pháp lý hiện hành chuyển người dùng tới host vận hành `muasamcong.mpi.gov.vn` mà extension đang hỗ trợ.
 
-Dòng 4.0 tập trung vào ba mục tiêu: **quyết định nhanh hơn**, **truy vết được về nguồn chính thức** và **giảm rủi ro kỹ thuật khi cổng e-GP thay đổi**.
+Phiên bản 4.0.1 hoàn thiện nhánh 4.0 theo ba mục tiêu: **quyết định nhanh hơn**, **truy vết được về nguồn chính thức** và **giảm rủi ro kỹ thuật khi cổng e-GP thay đổi**. Bản này được đối chiếu trực tiếp với 3.9.2 để giữ lại các thao tác nghiệp vụ hữu ích, nhưng không đưa trở lại cơ chế phát lại request thô có thể mang token, CAPTCHA hoặc dữ liệu phiên đã cũ.
 
 > Điểm phù hợp, độ đầy đủ dữ liệu và cảnh báo của extension là chỉ báo nội bộ để sàng lọc, không phải xác suất trúng thầu, kết luận pháp lý hay thay thế việc đọc hồ sơ mời thầu trên e-GP.
 
@@ -23,6 +23,18 @@ Dòng 4.0 tập trung vào ba mục tiêu: **quyết định nhanh hơn**, **tru
 - Sao lưu an toàn loại bỏ bí mật Telegram; nhập dữ liệu luôn tắt tự động hoá và tích hợp ngoài cho đến khi người dùng chủ động bật lại.
 - Bộ nhận diện mới, giao diện responsive và bộ kiểm thử hồi quy tự động.
 
+### Hoàn thiện trong 4.0.1 sau khi đối chiếu 3.9.2
+
+- Khôi phục liên kết nguồn bấm được trong Excel bằng quan hệ hyperlink OOXML; chỉ URL HTTP(S) hợp lệ mới được tạo liên kết ngoài.
+- Trả mặc định mỗi lượt quét về **20 trang** (có thể chọn 1–40), kèm cảnh báo rõ rằng hạ giới hạn có thể bỏ sót và kết quả bị chặn phải mang trạng thái **Hoàn tất một phần**.
+- Khôi phục bộ lọc **Chỉ gói đạt ngưỡng** trên Dashboard đầy đủ.
+- Khôi phục thao tác xoá từng gói khỏi dữ liệu cục bộ, có hộp thoại xác nhận.
+- Lượt quét `PARTIAL` vẫn phát thông báo và các đầu ra tự động đã bật; thông báo Desktop/Telegram ghi rõ dữ liệu chưa đầy đủ thay vì im lặng hoặc giả là thành công trọn vẹn.
+- Ngăn quét lặp mỗi lần Chrome khởi động sau một lượt `PARTIAL` gần đây, nhưng vẫn cho phép quét bù sớm hơn chu kỳ của một lượt thành công đầy đủ.
+- Siết sao lưu an toàn theo danh sách trắng, loại request/template phiên cũ và giữ đúng trạng thái `PARTIAL`, `TIMEOUT` khi nhập lại.
+- Mỗi trang kết quả phải được service worker xác nhận đã ghi nhận trước khi chuyển trang; retry cùng trang không cộng trùng, còn timeout được gia hạn theo tiến triển thật.
+- Nhận tác vụ bằng thao tác claim nguyên tử và đối soát khi service worker khởi động lạnh, giảm chạy trùng hoặc để lại trạng thái “đang chạy” giả.
+
 Chi tiết thay đổi xem tại [CHANGELOG.md](CHANGELOG.md). Đánh giá kỹ thuật, rủi ro và lộ trình xem tại [BAO-CAO-DANH-GIA.md](BAO-CAO-DANH-GIA.md).
 
 ## Khả năng chính
@@ -30,11 +42,11 @@ Chi tiết thay đổi xem tại [CHANGELOG.md](CHANGELOG.md). Đánh giá kỹ 
 | Nhóm | Khả năng |
 |---|---|
 | Tìm cơ hội | Tìm TBMT, KHLCNT, kết quả theo mã số thuế, biên bản mở thầu và cơ hội theo địa bàn |
-| Sàng lọc | Chấm điểm phù hợp, chuẩn hoá dữ liệu, xếp hạng OPEN trước PLAN, đánh dấu cơ hội khẩn cấp |
+| Sàng lọc | Chấm điểm phù hợp, chuẩn hoá dữ liệu, lọc riêng gói đạt ngưỡng, xếp hạng OPEN trước PLAN và đánh dấu cơ hội khẩn cấp |
 | Ra quyết định | Pipeline Go/No-Go, người phụ trách, ghi chú, watchlist và khuyến nghị hành động |
-| Theo dõi | Radar phát hiện thay đổi ở các trường quan trọng và lưu tối đa 20 mốc gần nhất cho mỗi gói |
+| Theo dõi | Radar phát hiện thay đổi, lưu tối đa 20 mốc gần nhất cho mỗi gói và cảnh báo rõ khi lượt quét chỉ hoàn tất một phần |
 | Phân tích | Hồ sơ nhà thầu 360, chủ đầu tư, đối thủ, địa bàn, giá trị trúng thầu và mức tập trung thị trường |
-| Báo cáo | Xuất Excel, xuất dữ liệu di động, sao lưu/khôi phục và chẩn đoán đã ẩn thông tin nhạy cảm |
+| Báo cáo | Xuất Excel có liên kết nguồn bấm được, xuất dữ liệu di động, sao lưu/khôi phục và chẩn đoán đã ẩn thông tin nhạy cảm |
 | Thông báo | Thông báo Chrome; Telegram là tuỳ chọn và chỉ hoạt động sau khi người dùng cấu hình |
 | Tài liệu | Có thể gọi Agent cục bộ tại `localhost:1234` để tải E-HSMT khi người dùng chủ động yêu cầu |
 
@@ -83,15 +95,15 @@ Cách làm này giảm phụ thuộc vào URL, header, CAPTCHA hoặc token đã
 2. Mở `chrome://extensions`.
 3. Bật **Chế độ dành cho nhà phát triển**.
 4. Chọn **Tải tiện ích đã giải nén**.
-5. Chọn đúng thư mục chứa `manifest.json`.
+5. Chọn đúng thư mục chứa `manifest.json` của phiên bản 4.0.1.
 6. Ghim biểu tượng Giáo Sư Cùi Bắp lên thanh công cụ.
 7. Mở extension, đọc màn hình giới thiệu và cấu hình các tiêu chí phù hợp của doanh nghiệp.
 
-### Nâng cấp từ 3.9.1
+### Nâng cấp từ 3.9.2
 
 1. Ở phiên bản cũ, xuất bản sao lưu trước khi gỡ extension. Gỡ extension có thể xoá toàn bộ dữ liệu cục bộ.
-2. Giữ lại thư mục/ZIP 3.9.1 và bản sao lưu để có đường lui.
-3. Nạp phiên bản mới theo hướng dẫn trên.
+2. Giữ lại thư mục/ZIP 3.9.2 và bản sao lưu để có đường lui.
+3. Nạp phiên bản 4.0.1 theo hướng dẫn trên.
 4. Nhập bản sao lưu.
 5. Kiểm tra lại cài đặt. Vì lý do an toàn, quá trình nhập sẽ:
    - bỏ Bot Token và Chat ID Telegram;
@@ -143,7 +155,7 @@ Cách làm này giảm phụ thuộc vào URL, header, CAPTCHA hoặc token đã
 - Dữ liệu nghiệp vụ được lưu trong `chrome.storage.local`; khi trình duyệt hỗ trợ, quyền đọc storage được giới hạn cho trusted contexts.
 - Dữ liệu cục bộ không được mã hoá đầu-cuối. Người có quyền truy cập hồ sơ Chrome hoặc hệ điều hành có thể đọc được dữ liệu.
 - Khi bật Telegram, nội dung cảnh báo rời khỏi máy và chịu chính sách của Telegram.
-- **Sao lưu an toàn** loại Bot Token và Chat ID; **sao lưu đầy đủ** có thể chứa bí mật và không nên chia sẻ.
+- 4.0.1 chỉ xuất **Sao lưu an toàn** theo danh sách trắng; Bot Token, Chat ID, queue/request/template phiên, token và CAPTCHA không được đưa vào tệp.
 - Tệp chẩn đoán ẩn token, Chat ID và các giá trị nghiệp vụ nhạy cảm; tuy vậy vẫn nên kiểm tra trước khi gửi cho bên khác.
 - Gỡ extension hoặc khôi phục cài đặt gốc có thể xoá dữ liệu không thể phục hồi. Luôn sao lưu trước.
 
@@ -152,8 +164,9 @@ Xem thêm tại màn hình `privacy.html` trong extension.
 ## Sao lưu và khôi phục
 
 - Dùng **Sao lưu an toàn** khi cần chuyển máy hoặc gửi cho người hỗ trợ.
-- Chỉ dùng **Sao lưu đầy đủ** để lưu giữ riêng tư; tệp có thể chứa thông tin tích hợp ngoài.
-- Tệp nhập tối đa 15 MB. Dữ liệu được giới hạn kích thước, chuẩn hoá URL và loại bỏ trường bí mật trước khi lưu.
+- 4.0.1 không còn đường xuất **sao lưu đầy đủ** chứa bí mật tích hợp. Nếu cần chuyển máy, hãy lưu Bot Token/Chat ID riêng và nhập lại thủ công sau canary.
+- Tệp nhập tối đa 30 MB. Dữ liệu được giới hạn kích thước, chuẩn hoá URL và loại bỏ trường bí mật trước khi lưu.
+- Để bản sao của kho tối đa vẫn nhập được ổn định, backup giữ **5 mốc Radar gần nhất** mỗi gói; kho đang dùng trên máy vẫn giữ tối đa 20 mốc.
 - Sau khi nhập, Telegram và mọi lịch tự động đều bị tắt để tránh gửi dữ liệu hoặc chạy tác vụ ngoài ý muốn.
 - **Xoá dữ liệu** giữ lại một số cài đặt; **Khôi phục cài đặt gốc** xoá toàn bộ storage và lịch, yêu cầu xác nhận hai lần.
 
@@ -165,33 +178,35 @@ Từ thư mục extension:
 npm test
 ```
 
-Bộ hiện tại kiểm tra chuẩn hoá văn bản/tiền/ngày, URL chính thức, request an toàn, ẩn bí mật, pipeline quyết định, xếp hạng, Radar, CSP/manifest, cú pháp/import JavaScript, tài nguyên giao diện, Excel và cách tính liên danh.
+Bộ hiện tại kiểm tra chuẩn hoá văn bản/tiền/ngày, URL chính thức, request an toàn, safe backup theo danh sách trắng, claim/ACK/lease của tác vụ, pipeline quyết định, xếp hạng, Radar, CSP/manifest, cú pháp/import JavaScript, tài nguyên giao diện, hyperlink Excel và cách tính liên danh.
 
-Kết quả 4.0.1: **51/51 kiểm thử tự động đạt** (44 bài của 4.0.0 cộng 7 bài hồi quy mới).
+Kết quả 4.0.2: **64/64 kiểm thử tự động đạt** (57 bài của 4.0.1 cộng 7 bài về phạm vi content script). Kết quả này chỉ là bằng chứng hồi quy cục bộ, không thay thế kiểm thử trực tiếp trên e-GP, kiểm thử hiệu năng, rà soát Chrome Web Store hoặc kiểm toán bảo mật độc lập.
 
 ### Kiểm thử trong trình duyệt thật
 
-Bản 4.0.0 chưa chạy được E2E giao diện vì môi trường đóng gói không có Chromium — và đúng khoảng trống đó đã để lọt một lỗi khiến **người dùng mới không quét được gói nào** (xem [CHANGELOG.md](CHANGELOG.md), mục 4.0.1).
+Hai bản trước chưa chạy được E2E vì môi trường đóng gói không có Chromium — và đúng khoảng trống đó đã để lọt **hai lỗi cùng gốc** khiến người dùng không quét được gói nào (xem [CHANGELOG.md](CHANGELOG.md), mục 4.0.1 và 4.0.2). Cả hai đều lọt qua toàn bộ bộ kiểm thử tự động.
 
-Nay có `tools/test/`: một máy chủ e-GP giả lập trả đúng hình dạng dữ liệu thật, cùng ba kịch bản chạy trong Chromium (nạp tiện ích, người dùng mới, toàn trình). Chạy được **mà không đụng vào máy chủ e-GP thật** — hướng dẫn tại [tools/test/README.md](tools/test/README.md).
+Nay có `tools/test/`: một máy chủ e-GP giả lập trả đúng hình dạng dữ liệu thật, cùng bốn kịch bản chạy trong Chromium — nạp tiện ích, người dùng mới, đang mở sẵn trang e-GP khác, và toàn trình. Chạy được **mà không đụng vào máy chủ e-GP thật**; hướng dẫn tại [tools/test/README.md](tools/test/README.md).
 
-Dù vậy, bản giả lập **không** dựng lại reCAPTCHA v3, trạng thái phiên hay thay đổi giao diện tương lai của e-GP. Vì vậy bản này vẫn là **release candidate cho pilot/canary**, không phải bằng chứng tương thích tuyệt đối. Biên bản kiểm thử chi tiết nằm tại [KIEM-THU-PHAT-HANH.md](KIEM-THU-PHAT-HANH.md).
+Dù vậy bản giả lập **không** dựng lại reCAPTCHA v3, trạng thái phiên hay thay đổi giao diện tương lai của e-GP. Vì vậy bản này vẫn là **release candidate cho pilot/canary**, không phải bằng chứng tương thích tuyệt đối. Biên bản kiểm thử chi tiết nằm tại [KIEM-THU-PHAT-HANH.md](KIEM-THU-PHAT-HANH.md).
 
 ## Canary e-GP trước khi dùng rộng
 
 Chạy trên một Chrome profile thử nghiệm, chưa bật Telegram và lịch tự động:
 
 - [ ] Ghi lại phiên bản Chrome, extension, thời điểm và trạng thái đăng nhập e-GP.
-- [ ] Sao lưu dữ liệu và giữ bản 3.9.1 để rollback.
+- [ ] Sao lưu dữ liệu và giữ bản 3.9.2 để rollback.
 - [ ] Tìm một TBMT đã biết; đối chiếu mã, tên, giá, hạn, đơn vị, địa điểm và URL với trang nguồn.
 - [ ] Thử truy vấn không có kết quả, có dấu/không dấu và ít nhất hai trang kết quả.
 - [ ] Xác nhận kết quả phân trang một phần/giới hạn luôn được ghi rõ, không bị hiểu là đầy đủ.
+- [ ] Với một lượt `PARTIAL` kiểm soát, xác nhận thông báo Desktop/Telegram (nếu bật) ghi rõ dữ liệu chưa đầy đủ và Chrome không quét lặp ngay mỗi lần khởi động.
 - [ ] Lưu bộ lọc, quét lại và kiểm tra không tạo bản ghi trùng bất thường.
+- [ ] Bật **Chỉ gói đạt ngưỡng**, kiểm tra danh sách; sau đó xoá một gói thử nghiệm và xác nhận gói biến mất khỏi dữ liệu cục bộ.
 - [ ] Kiểm tra trạng thái, người phụ trách và ghi chú còn nguyên sau khi tải lại/quét lại.
 - [ ] Kiểm tra Radar trên một gói đã sửa đổi hoặc bằng hai snapshot kiểm soát.
 - [ ] Chạy song song ở hai tab, huỷ một tác vụ và xác nhận tác vụ còn lại tiếp tục.
 - [ ] Kiểm tra KHLCNT, kết quả, mở thầu, địa bàn và chủ đầu tư; đặc biệt xác nhận giá trị liên danh không bị nhân trùng.
-- [ ] Mở tệp Excel, bản sao lưu an toàn và tệp chẩn đoán; xác nhận không lộ Bot Token/Chat ID.
+- [ ] Mở tệp Excel, bấm thử liên kết nguồn và xác nhận đúng trang e-GP; kiểm tra bản sao lưu an toàn/tệp chẩn đoán không lộ Bot Token/Chat ID hay request phiên cũ.
 - [ ] Chỉ sau khi đạt các bước trên mới thử Telegram, lịch tự động và Agent cục bộ.
 
 Tiêu chí đạt tối thiểu: không có lỗi runtime chặn luồng, không có URL ngoài nguồn chính thức trong kết quả, không sai trường ở mẫu đối chiếu, không báo đầy đủ khi dữ liệu còn một phần, không trùng bản ghi bất thường và dữ liệu vẫn còn sau khi khởi động lại Chrome.
@@ -218,7 +233,7 @@ Kiểm tra đã nhập lại Bot Token/Chat ID sau khi khôi phục, đã chủ 
 
 Tạm dừng tác vụ định kỳ, lưu tệp chẩn đoán đã ẩn bí mật, ghi rõ hành động gây lỗi và quay về bản ổn định nếu cần. Không chỉnh endpoint theo phỏng đoán trên môi trường sản xuất.
 
-## Phạm vi chưa có trong 4.0
+## Phạm vi chưa có trong 4.0.1
 
 - Không có tích hợp OpenAI/AI tạo sinh trong mã hiện tại.
 - Chưa tự đọc toàn bộ E-HSMT để sinh ma trận tuân thủ có trích dẫn trang/tệp.
@@ -230,7 +245,7 @@ Tạm dừng tác vụ định kỳ, lưu tệp chẩn đoán đã ẩn bí mậ
 
 ### Nguyên tắc nếu bổ sung OpenAI sau này
 
-Extension cố ý không yêu cầu người dùng dán OpenAI API key vào extension. Theo hướng dẫn bảo mật chính thức, API key là bí mật và không được lộ trong mã phía trình duyệt; một tính năng AI phát hành nghiêm túc cần backend kiểm soát quyền, redaction, quota và audit. Khi triển khai, nên dùng [Responses API](https://developers.openai.com/api/docs/guides/migrate-to-responses) cho ứng dụng mới và tuân thủ [production best practices](https://developers.openai.com/api/docs/guides/production-best-practices). Mọi tóm tắt E-HSMT phải là opt-in và dẫn về đúng tệp/trang nguồn.
+4.0.1 cố ý không yêu cầu người dùng dán OpenAI API key vào extension. Theo hướng dẫn bảo mật chính thức, API key là bí mật và không được lộ trong mã phía trình duyệt; một tính năng AI phát hành nghiêm túc cần backend kiểm soát quyền, redaction, quota và audit. Khi triển khai, nên dùng [Responses API](https://developers.openai.com/api/docs/guides/migrate-to-responses) cho ứng dụng mới và tuân thủ [production best practices](https://developers.openai.com/api/docs/guides/production-best-practices). Mọi tóm tắt E-HSMT phải là opt-in và dẫn về đúng tệp/trang nguồn.
 
 ## Tuyên bố sử dụng
 
