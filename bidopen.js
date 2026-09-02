@@ -8,7 +8,7 @@
 
 import { formatMoney, formatDate } from './lib/core.js';
 import { formatDiscount } from './lib/kqlcnt.js';
-import { FIELD_OPTIONS, findBidder } from './lib/bbmt.js';
+import { FIELD_OPTIONS, findBidder, bbmtReadStateOf } from './lib/bbmt.js';
 
 const $ = (id) => document.getElementById(id);
 const send = (type, payload = {}) => chrome.runtime.sendMessage({ type, payload });
@@ -125,6 +125,15 @@ function bidderRow(b, isMe) {
     </tr>`;
 }
 
+/* Bốn kết cục của một lần đọc biên bản. Trước đây chỉ có hai nhãn, nên gói đã
+   đọc xong mà e-GP trả bảng rỗng lại hiện "Chưa đọc" — giống hệt gói còn chưa
+   tới lượt, khiến người dùng tưởng kết quả trả về lộn xộn. */
+const READ_STATE_NOTE = {
+  PENDING: 'Chưa đọc biên bản gói này.',
+  EMPTY: 'Đã đọc xong — biên bản chưa ghi nhận nhà thầu nào dự.',
+  TIMEOUT: 'Hết hạn chờ e-GP trả dữ liệu. Bấm quét lại để đọc nốt gói này.'
+};
+
 function packageCard(p, me) {
   const bidders = p.bidders || [];
   const body = bidders.length
@@ -133,9 +142,7 @@ function packageCard(p, me) {
         <th>Giảm giá</th><th>Sau giảm giá</th><th>So giá gói</th></tr></thead>
         <tbody>${bidders.map((b) => bidderRow(b, me && b === me)).join('')}</tbody>
        </table>`
-    : `<div class="empty-note">${p.bidders === null && p.scannedAt
-        ? 'e-GP không trả dữ liệu nhà thầu cho gói này.'
-        : 'Chưa đọc biên bản gói này.'}</div>`;
+    : `<div class="empty-note">${READ_STATE_NOTE[bbmtReadStateOf(p)]}</div>`;
 
   return `
     <div class="pkg">

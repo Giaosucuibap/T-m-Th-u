@@ -9,6 +9,7 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.MOCK_PORT || 8443);
 
 const SEARCH = '/o/egp-portal-contractor-selection-v2/services/smart/search';
+const LOT_OPEN = '/services/expose/ldtkqmt/bid-notification-p/lotOpenDetail';
 
 const PROVINCES = ['Lâm Đồng', 'Đồng Nai', 'Khánh Hòa', 'Đắk Lắk', 'Gia Lai', 'Quảng Ngãi'];
 const NAMES = [
@@ -50,7 +51,8 @@ function record(i) {
     bidForm: 'DTRR',
     bidMode: 'MTQM',
     processApply: 'MTQM',
-    stepCode: 'notify-contractor-step-1-tbmt',
+    stepCode: i % 3 === 0 ? 'notify-contractor-step-2-kqmt' : 'notify-contractor-step-1-tbmt',
+    publicDateKqmt: pub.toISOString(),
     contractTypeName: 'Trọn gói',
     bidPrice: 1_000_000_000 + (i % 40) * 1_750_000_000,
     publicDate: pub.toISOString(),
@@ -99,7 +101,30 @@ const server = https.createServer(
       return;
     }
 
+    if (url.pathname === LOT_OPEN) {
+      res.writeHead(200, { 'content-type': 'application/json;charset=UTF-8' });
+      res.end(JSON.stringify([
+        { contractorName: 'CÔNG TY TNHH XÂY DỰNG A', taxCode: '3401122219', bidValue: 4683763268 },
+        { contractorName: 'CÔNG TY TNHH XÂY DỰNG B', taxCode: '3401080939', bidValue: 4701963066 }
+      ]));
+      return;
+    }
+
     if (url.pathname.startsWith('/vi/web/guest/') || url.pathname === '/web/guest/home' || url.pathname === '/') {
+      // Trang chi tiết một biên bản. Cứ 2 gói thì 1 gói KHÔNG gọi lotOpenDetail
+      // — đúng tình huống thật, và là chỗ trước đây vòng lặp nằm chết 20 giây.
+      if (url.searchParams.get('step') === 'bbmt' || url.searchParams.get('notifyNo')) {
+        const no = url.searchParams.get('notifyNo') || '';
+        const coDuLieu = (Number(no.replace(/\D/g, '').slice(-1)) % 2) === 0;
+        console.log(`[mock] chi tiết ${no} — ${coDuLieu ? 'CÓ' : 'KHÔNG'} trả nhà thầu`);
+        res.writeHead(200, { 'content-type': 'text/html;charset=UTF-8' });
+        res.end(`<!doctype html><meta charset=utf-8><title>Biên bản ${no}</title>
+          <body><h1>Biên bản mở thầu ${no}</h1>
+          <script>${coDuLieu ? `
+            const x = new XMLHttpRequest();
+            x.open('POST', '${LOT_OPEN}'); x.send('{}');` : ''}</script></body>`);
+        return;
+      }
       res.writeHead(200, { 'content-type': 'text/html;charset=UTF-8' });
       res.end(PAGE_HTML);
       return;

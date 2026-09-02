@@ -19,7 +19,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { buildBbmtQuery, bbmtDateRange, bbmtInDateRange } from '../lib/bbmt.js';
+import { buildBbmtQuery, bbmtDateRange, bbmtInDateRange,
+  bbmtReadState, bbmtReadStateOf, READ_STATE } from '../lib/bbmt.js';
 
 const dateFilters = (q) => q.filters.filter((f) => /^publicDate/.test(f.fieldName));
 
@@ -183,4 +184,39 @@ test('chỉ nhập giá tối thiểu thì trần để rất cao, không bỏ s
 
 test('không nhập giá thì không sinh bộ lọc giá', () => {
   assert.equal(priceFilters(buildBbmtQuery({ days: 15 })).length, 0);
+});
+
+/* --------------------------------------------------------------------------
+ *  5. Bốn kết cục của một lần đọc biên bản
+ *
+ *  Người dùng báo: "có những gói đọc trước rồi nhưng lại không trả kết quả
+ *  liền, có những gói sau nhưng có kết quả". Thực ra thứ tự đọc vẫn đúng — chỉ
+ *  là gói đã đọc xong mà e-GP trả bảng rỗng lại mang nhãn "Chưa đọc", giống
+ *  hệt gói còn chưa tới lượt.
+ * ------------------------------------------------------------------------ */
+
+test('phân biệt được có dữ liệu / rỗng / hết hạn chờ', () => {
+  assert.equal(bbmtReadState([{ taxCode: '3401122219' }]), READ_STATE.OK);
+  assert.equal(bbmtReadState([]), READ_STATE.EMPTY, 'bảng rỗng KHÁC với chưa đọc');
+  assert.equal(bbmtReadState(null), READ_STATE.TIMEOUT);
+  assert.equal(bbmtReadState(undefined), READ_STATE.TIMEOUT);
+});
+
+test('bảng rỗng không bao giờ bị coi là chưa đọc', () => {
+  const daDoc = { scannedAt: '2026-09-02T08:00:00Z', bidders: [], readState: READ_STATE.EMPTY };
+  assert.equal(bbmtReadStateOf(daDoc), READ_STATE.EMPTY);
+  assert.notEqual(bbmtReadStateOf(daDoc), READ_STATE.PENDING);
+});
+
+test('gói chưa tới lượt là PENDING', () => {
+  assert.equal(bbmtReadStateOf({ notifyNo: 'IB2600477094' }), READ_STATE.PENDING);
+  assert.equal(bbmtReadStateOf(null), READ_STATE.PENDING);
+});
+
+test('đọc được dữ liệu lưu từ bản cũ chưa có readState', () => {
+  const at = '2026-09-02T08:00:00Z';
+  assert.equal(bbmtReadStateOf({ scannedAt: at, bidders: [{ a: 1 }] }), READ_STATE.OK);
+  assert.equal(bbmtReadStateOf({ scannedAt: at, bidders: [] }), READ_STATE.EMPTY);
+  assert.equal(bbmtReadStateOf({ scannedAt: at, bidders: null }), READ_STATE.TIMEOUT);
+  assert.equal(bbmtReadStateOf({ bidders: null }), READ_STATE.PENDING, 'chưa scannedAt thì chưa đọc');
 });

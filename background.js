@@ -1,7 +1,7 @@
 import {DEFAULT_SETTINGS,extractCandidateObjects,normalizeCandidate,mergeTender,scoreTender,sanitizeRequestTemplate,extractParticipations,dedupeParticipations,mergeParticipation,formatMoney,formatDate,safeFilename,migrateTenderCodes,canonicalEgpUrl,EGP_SCAN_PAGE,hasContentScript,scanTargetUrl} from './lib/core.js';
 import {buildSafeBackupState,safeRunForBackup} from './lib/backup.js';
 import {EGP_SEARCH_PAGE,PAGE_SIZE,normalizeTaxCodeForEgp,normalizeKqlcntRecord,extractContractorCandidates,dedupeKqlcnt,summarizeWinner,buildKqlcntQuery,buildWardMarketQuery,buildTbmtQuery,tbmtMatchesWard} from './lib/kqlcnt.js';
-import {buildBbmtQuery,bbmtDateRange,bbmtInDateRange,normalizeBbmtPackage,normalizeBidderTable,notifyNoFromUrl,summarizeBidOpenings,STEPS_DECIDED} from './lib/bbmt.js';
+import {buildBbmtQuery,bbmtDateRange,bbmtInDateRange,bbmtReadState,bbmtReadStateOf,READ_STATE,normalizeBbmtPackage,normalizeBidderTable,notifyNoFromUrl,summarizeBidOpenings,STEPS_DECIDED} from './lib/bbmt.js';
 import {normalizeKhlcntPlan,dedupeKhlcnt,summarizeKhlcnt,auditPlans,buildKhlcntQuery,filterPlansByArea} from './lib/khlcnt.js';
 import {fetchAllAreas,currentProvinceNames,wardNamesForProvince,provinceCodesByName,wardCodesByName} from './lib/areas.js';
 import {buildXlsx,xlsxDataUrl,XLSX_MIME} from './lib/xlsx.js';
@@ -936,8 +936,28 @@ async function exportWinnersCsv(){
  *       (đắt, ~3 giây mỗi gói) — nên LUÔN có trần và nút dừng.
  * ======================================================================== */
 
-const BBMT_DETAIL_TIMEOUT=20000;   // hạn chờ một trang biên bản trả bảng nhà thầu
-const BBMT_DETAIL_PAUSE=700;       // nghỉ giữa hai gói
+/* --------------------------------------------------------------------------
+ *  NHỊP ĐỌC BIÊN BẢN — vì sao trước đây rất chậm
+ *
+ *  Vòng lặp chờ MỘT hạn duy nhất 20 giây cho mỗi gói. Gói có dữ liệu trả lời
+ *  sau 2-3 giây nên không sao; nhưng gói mà e-GP KHÔNG phát request nhà thầu
+ *  (khá nhiều) thì vòng lặp nằm chết đủ 20 giây rồi mới sang gói kế.
+ *
+ *  Với 150 gói mà 30 gói không có dữ liệu, riêng phần nằm chờ vô ích đã là
+ *  10 phút. Đó chính là cái chậm người dùng thấy.
+ *
+ *  Nay tách làm hai mốc:
+ *    BBMT_SETTLE_MS  — sau khi TRANG ĐÃ TẢI XONG mới bắt đầu đếm. Request nhà
+ *                      thầu luôn phát trong hoặc ngay sau lúc tải; quá mốc này
+ *                      mà chưa thấy thì kết luận gói không có dữ liệu.
+ *    BBMT_DETAIL_TIMEOUT — trần tuyệt đối, phòng trang không bao giờ tải xong.
+ *
+ *  Đường nhanh giữ nguyên tốc độ; đường chậm rút từ 20 giây xuống còn
+ *  thời gian tải trang cộng 4 giây.
+ * ------------------------------------------------------------------------ */
+const BBMT_DETAIL_TIMEOUT=20000;   // trần tuyệt đối cho một trang biên bản
+const BBMT_SETTLE_MS=4000;         // chờ thêm sau khi trang đã tải xong
+const BBMT_DETAIL_PAUSE=450;       // nghỉ giữa hai gói — vẫn đủ thưa với e-GP
 const BBMT_DETAIL_ALARM_MS=BBMT_DETAIL_TIMEOUT+30000;
 
 // Hàng đợi giai đoạn 2 sống trong bộ nhớ service worker; tiến độ ghi vào storage.
@@ -1157,14 +1177,38 @@ async function startBidOpenDetailPhase(){
   await finalizeBidOpenScan();
 }
 
-/** Mở một trang biên bản và chờ content script gửi về bảng nhà thầu. */
+/**
+ * Mở một trang biên bản và chờ content script gửi về bảng nhà thầu.
+ *
+ * Trả về:
+ *    mảng  — e-GP đã trả bảng nhà thầu (có thể rỗng nếu gói không ai dự)
+ *    null  — hết hạn chờ, KHÔNG kết luận gì về gói này
+ *
+ * Hai mốc thời gian, xem khối ghi chú ở BBMT_SETTLE_MS.
+ */
 function openBbmtDetail(tabId,pkg,scanId){
   return new Promise((resolve,reject)=>{
-    const timer=setTimeout(()=>{bbmtWaiter=null;resolve(null);},BBMT_DETAIL_TIMEOUT);
-    bbmtWaiter={scanId,tabId,notifyNo:pkg.notifyNo,resolve:rows=>{clearTimeout(timer);bbmtWaiter=null;resolve(rows);}};
-    chrome.tabs.update(tabId,{url:pkg.detailUrl}).catch(e=>{
-      clearTimeout(timer);bbmtWaiter=null;reject(e);
-    });
+    let settleTimer=null;
+    const hardTimer=setTimeout(()=>finish(null),BBMT_DETAIL_TIMEOUT);
+
+    // Trang tải xong là lúc bắt đầu đếm ngược ngắn: request nhà thầu luôn phát
+    // trong hoặc ngay sau lúc tải, nên quá mốc này coi như gói không có dữ liệu.
+    function onUpdated(id,info){
+      if(id!==tabId||info.status!=='complete'||settleTimer)return;
+      settleTimer=setTimeout(()=>finish(null),BBMT_SETTLE_MS);
+    }
+    chrome.tabs.onUpdated.addListener(onUpdated);
+
+    function cleanup(){
+      clearTimeout(hardTimer);
+      if(settleTimer)clearTimeout(settleTimer);
+      try{chrome.tabs.onUpdated.removeListener(onUpdated);}catch{}
+      bbmtWaiter=null;
+    }
+    function finish(rows){ cleanup(); resolve(rows); }
+
+    bbmtWaiter={scanId,tabId,notifyNo:pkg.notifyNo,resolve:finish};
+    chrome.tabs.update(tabId,{url:pkg.detailUrl}).catch(e=>{ cleanup(); reject(e); });
   });
 }
 
@@ -1208,13 +1252,32 @@ async function onBbmtBidders(payload={},senderTabId=null){
   return {ok:true};
 }
 
+/**
+ * Ghi kết quả đọc một biên bản.
+ *
+ * BA KẾT CỤC KHÁC NHAU, trước đây bị gộp thành hai nhãn và cả hai đều sai:
+ *
+ *   rows = [x,y]  OK       đọc được bảng nhà thầu
+ *   rows = []     EMPTY    e-GP trả bảng RỖNG — gói này không có nhà thầu nào
+ *   rows = null   TIMEOUT  hết hạn chờ, KHÔNG biết gói này thế nào
+ *
+ * Lỗi cũ: EMPTY rơi vào nhánh mặc định nên hiện "Chưa đọc biên bản gói này" —
+ * y hệt gói còn chưa tới lượt. Người dùng thấy gói số 1 ghi "chưa đọc" trong
+ * khi gói số 3 đã có bảng, nên tưởng phần mềm trả kết quả lộn xộn. Thực ra
+ * đọc đúng thứ tự, chỉ là nhãn nói sai.
+ *
+ * Còn TIMEOUT thì bị ghi thành "e-GP không trả dữ liệu" — một kết luận về
+ * e-GP mà ta không có cơ sở để đưa ra.
+ */
 async function recordBidders(scanId,key,rows,packageBidPrice){
   return withLock(async()=>{
     const s=await getState();
     const scan=s.bidOpenScan;
     if(!scan||scan.id!==scanId)return;
+    const readState=bbmtReadState(rows);
     const packages=(scan.packages||[]).map(p=>p.key!==key?p:({
       ...p,
+      readState,
       bidders:rows===null?null:normalizeBidderTable(rows,packageBidPrice),
       scannedAt:new Date().toISOString()
     }));
@@ -1234,7 +1297,9 @@ async function finalizeBidOpenScan(){
     if(!isLookupActive(lookupKind('bidOpenScan'),scan))return;
     finishedId=scan.id;
     const summary=summarizeBidOpenings(scan.packages,scan.focusTaxCode,scan.contractorQuery);
-    const failed=(scan.packages||[]).filter(p=>p.bidders===null&&p.scannedAt).length;
+    const list0=scan.packages||[];
+    const failed=list0.filter(p=>bbmtReadStateOf(p)===READ_STATE.TIMEOUT).length;
+    const trong=list0.filter(p=>bbmtReadStateOf(p)===READ_STATE.EMPTY).length;
     await save({[KEYS.bidOpenScan]:{...scan,
       status:scan.partial?'PARTIAL':'SUCCESS',finishedAt:new Date().toISOString(),
       cancelled:bbmtCancelled,summary,failedCount:failed,
@@ -1243,7 +1308,9 @@ async function finalizeBidOpenScan(){
         ?`Đã dừng: đọc được ${summary.scanned}/${(scan.packages||[]).length} gói.`
         :scan.partial
           ?`Hoàn tất một phần: danh sách e-GP bị gián đoạn; đã đọc ${summary.scanned} biên bản trong phần dữ liệu nhận được.`
-        :`Xong: đọc ${summary.scanned} biên bản${failed?`, ${failed} gói e-GP không trả dữ liệu`:''}.`
+        :`Xong: đọc ${summary.scanned} biên bản`
+          +(trong?`, ${trong} gói chưa có nhà thầu nào dự`:'')
+          +(failed?`, ${failed} gói hết hạn chờ (bấm quét lại để đọc nốt)`:'')+'.'
     }});
   });
   if(finishedId)await chrome.alarms.clear(TIMEOUT_PREFIX+finishedId).catch(()=>{});

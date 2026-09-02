@@ -2,6 +2,69 @@
 
 Tài liệu này ghi lại các thay đổi quan trọng của Giáo Sư Cùi Bắp. Cấu trúc tham khảo [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) và phiên bản tuân theo cách đánh số ngữ nghĩa ở mức sản phẩm.
 
+## [4.1.1] — 2026-09-02
+
+Tăng tốc đọc biên bản mở thầu và sửa nhãn trạng thái nói sai.
+
+### Sửa lỗi
+
+- **Đọc biên bản rất chậm.** Vòng lặp chờ MỘT hạn duy nhất 20 giây cho mỗi gói.
+  Gói có dữ liệu trả lời sau 2–3 giây nên không sao; nhưng gói mà e-GP **không
+  phát request nhà thầu** thì vòng lặp nằm chết đủ 20 giây rồi mới sang gói kế.
+  Với 150 gói mà 30 gói không có dữ liệu, riêng phần nằm chờ vô ích đã là 10 phút.
+
+  Nay tách làm hai mốc: `BBMT_SETTLE_MS` bắt đầu đếm **sau khi trang đã tải
+  xong** (request nhà thầu luôn phát trong hoặc ngay sau lúc tải), còn hạn 20
+  giây chỉ còn là trần tuyệt đối phòng trang không bao giờ tải xong. Nghỉ giữa
+  hai gói giảm 700 → 450 ms.
+
+  Đo trên e-GP giả lập, 8 gói với 4 gói không trả dữ liệu:
+
+  | | Trước | Sau |
+  |---|---|---|
+  | Tổng thời gian | 86,1 giây | **19,7 giây** |
+  | Trung bình | 10,8 giây/gói | **2,5 giây/gói** |
+
+  Nhanh gấp **4,4 lần**. Ước tính 150 gói: khoảng 27 phút → khoảng 6 phút.
+
+- **Gói đã đọc xong vẫn hiện "Chưa đọc".** Một lần đọc có **ba** kết cục nhưng
+  giao diện chỉ có hai nhãn, và cả hai đều nói sai:
+  - e-GP trả bảng **rỗng** → hiện *"Chưa đọc biên bản gói này"*, y hệt gói còn
+    chưa tới lượt. Đây là lý do người dùng thấy gói số 1 ghi "chưa đọc" trong
+    khi gói số 3 đã có bảng, và tưởng phần mềm trả kết quả lộn xộn — thực ra
+    thứ tự đọc vẫn đúng, chỉ là nhãn nói sai.
+  - **hết hạn chờ** → hiện *"e-GP không trả dữ liệu"*, một kết luận về e-GP mà
+    ta không có cơ sở đưa ra. Hết hạn chờ chỉ có nghĩa là chưa biết.
+
+  Nay tách rõ bốn trạng thái `PENDING` / `OK` / `EMPTY` / `TIMEOUT`, mỗi trạng
+  thái một câu nói đúng việc đã xảy ra. Thông báo kết thúc cũng đếm riêng gói
+  chưa có nhà thầu dự và gói hết hạn chờ, kèm gợi ý quét lại.
+
+### Kiểm thử
+
+- Bổ sung 5 bài cho bốn trạng thái đọc, gồm bài chốt rằng **bảng rỗng không bao
+  giờ bị coi là chưa đọc**, và bài đọc được dữ liệu lưu từ bản cũ chưa có
+  `readState`.
+- `tools/test/speed.mjs` đo thời gian đọc trên e-GP giả lập; máy chủ giả lập
+  nay dựng cả trang chi tiết biên bản, trong đó **một phần gói cố tình không
+  phát request nhà thầu** — đúng tình huống làm bản cũ nằm chết.
+
+### Kết quả
+
+`npm test`: 89/89 → **93/93 đạt**.
+
+### Ghi chú
+
+Không tăng tốc bằng cách mở nhiều tab song song. Toàn bộ thiết kế là chạy bằng
+chính giao diện e-GP ở nhịp một người dùng bấm chuột; bắn song song đổi lấy vài
+phút bằng rủi ro bị khoá truy cập, một cái giá không đáng.
+
+### Hạn chế còn lại
+
+- Lượt quét sau vẫn đọc lại các gói mà lần trước e-GP trả bảng rỗng. Kho quan
+  sát chỉ ghi gói đọc được nhà thầu, nên chưa phân biệt được "đã hỏi rồi, không
+  có ai dự" với "chưa hỏi". Sửa đúng cần thêm một khoá lưu trữ riêng.
+
 ## [4.1.0] — 2026-09-02
 
 Sửa lỗi bộ lọc thời gian ở màn hình **Gói đang chờ kết quả**, và bổ sung chọn

@@ -97,7 +97,21 @@ Chứng thư tự ký này chỉ dùng cho máy chủ giả lập trên `127.0.0
 duyệt kiểm thử được chạy riêng với `--ignore-certificate-errors`. **Không**
 commit thư mục `certs/`.
 
-## 5. Kiểm tra tệp Excel xuất ra
+## 5. Đo tốc độ đọc biên bản
+
+```bash
+# cửa sổ 1
+node tools/test/mock-egp.mjs
+# cửa sổ 2
+node tools/test/speed.mjs
+```
+
+Máy chủ giả lập dựng cả trang chi tiết biên bản, trong đó **một phần gói cố ý
+không phát request nhà thầu** — đúng tình huống làm bản trước nằm chết 20 giây
+mỗi gói. Kết quả mong đợi: khoảng **2,5 giây/gói**. Nếu thấy khoảng 10 giây/gói
+nghĩa là mốc "trang đã tải xong" đã hỏng.
+
+## 6. Kiểm tra tệp Excel xuất ra
 
 ```bash
 node tools/test/xlsx-test.mjs      # ghi /tmp/t1.xlsx và /tmp/t2.xlsx

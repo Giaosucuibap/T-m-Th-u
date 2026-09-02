@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Giáo Sư Cùi Bắp",
   "short_name": "Giáo Sư Cùi Bắp",
-  "version": "4.1.0",
+  "version": "4.1.1",
   "minimum_chrome_version": "111",
   "description": "Trợ lý ra quyết định dự thầu trên e-GP: tìm và chấm điểm gói thầu, Radar thay đổi, pipeline Go/No-Go, hồ sơ nhà thầu/chủ đầu tư, đối thủ, địa bàn và báo cáo Excel.",
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAuHE7yNZhSq3cXTsv7ibZDS8O8FQg2naaTuVvsGWMzhWWm8h3TPlnTps/NGHd6Nk+PKS6g/A/A8lXroLv4nbGpoJLs1OA1+spnQGRImaZGJwfs5+Hc0l7wKL4zcfQVq6Tcf2Jgl+yUXh8pn3B5r3VFJ3ky1RLf2gnRHRGon15QFIBCkrSNc9DAIlEI/37VTm7DBIB37G7SbEuy+7/58ibz70RGvpQXakhSeUtSRGndV2BtmZ+0GOcFHpPi5x/HuuiV/VC0f3TQ9Bj9EpO6Obf9IyLztvyZl7nGnPi4Zb5plctF7AIf1CP7CTiuEhH1MZUxOw06J7FIT4LRf5ncqLe1wIDAQAB",
