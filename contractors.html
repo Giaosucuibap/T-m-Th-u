@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Tra cứu nhà thầu — Giáo Sư Cùi Bắp</title>
+<link rel="stylesheet" href="app.css">
+<style>
+  .badge-win{background:#dcfce7;color:#166534}
+  .badge-join{background:#e0f2fe;color:#075985}
+  .contractor-row{cursor:pointer}
+  .contractor-row:hover{background:#f8fafc}
+  a.link{color:var(--accent);font-weight:800;text-decoration:none}
+  a.link:hover{text-decoration:underline}
+  .metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:14px 0}
+  @media(max-width:850px){.metrics{grid-template-columns:1fr 1fr}}
+  .cname{font-weight:850}
+  .search-row{display:flex;gap:10px;align-items:stretch;flex-wrap:wrap}
+  .search-row input{flex:1;min-width:200px}
+</style>
+</head>
+<body>
+  <header>
+    <b>🏢 Nhà thầu trong dữ liệu đã quét</b>
+    <a href="winners.html">🏆 Tra cứu trúng thầu trên e-GP</a>
+    <a href="dashboard.html">Tổng quan</a>
+    <a href="plans.html">📋 Kế hoạch LCNT</a>
+    <a href="options.html">Cấu hình</a>
+  </header>
+  <main>
+    <div class="card">
+      <label for="q">Nhập <b>Mã số thuế</b> hoặc <b>Tên công ty</b> để xem các gói thầu đã tham gia</label>
+      <div class="search-row">
+        <input id="q" placeholder="VD: 0301234567  hoặc  Công ty TNHH Xây dựng ABC">
+        <button id="btn" class="btn">🔎 Tra cứu</button>
+        <button id="clear" class="btn light" style="width:auto">Xóa</button>
+      </div>
+      <div class="muted small" style="margin-top:8px">Dữ liệu nhà thầu được tổng hợp từ các trang <b>Kết quả mở thầu / KQLCNT</b> mà Giáo Sư Cùi Bắp đã quét. Nếu chưa có dữ liệu, hãy quét mục kết quả trên e-GP trước.</div>
+    </div>
+
+    <div id="summary" class="hidden">
+      <div class="metrics">
+        <div class="card"><div class="muted small">Nhà thầu</div><div id="m-name" class="cname" style="font-size:16px">—</div><div id="m-tax" class="muted small">—</div></div>
+        <div class="card"><div class="muted small">Số gói đã tham gia</div><div id="m-join" class="metric">0</div></div>
+        <div class="card"><div class="muted small">Số gói trúng</div><div id="m-won" class="metric" style="color:#166534">0</div></div>
+        <div class="card"><div class="muted small">Tỉ lệ trúng</div><div id="m-rate" class="metric">0%</div></div>
+      </div>
+    </div>
+
+    <div id="results" class="card hidden" style="padding:0;overflow:auto">
+      <table>
+        <thead><tr><th>Kết quả</th><th>Mã TBMT</th><th>Gói thầu</th><th>Địa bàn</th><th>Giá dự thầu/trúng</th><th>Nguồn</th></tr></thead>
+        <tbody id="rows"></tbody>
+      </table>
+    </div>
+
+    <div class="card" style="margin-top:14px">
+      <div class="row space">
+        <b id="dir-title">Danh bạ nhà thầu đã ghi nhận</b>
+        <span id="dir-count" class="muted small"></span>
+      </div>
+      <div style="overflow:auto;margin-top:8px">
+        <table>
+          <thead><tr><th>Nhà thầu</th><th>Mã số thuế</th><th>Tham gia</th><th>Trúng</th><th>Tỉ lệ</th></tr></thead>
+          <tbody id="dir"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div id="empty" class="notice hidden" style="margin-top:14px">Chưa có dữ liệu nhà thầu. Hãy mở e-GP, vào mục <b>Kết quả mở thầu / Kết quả lựa chọn nhà thầu</b>, tìm kiếm rồi để Giáo Sư Cùi Bắp quét — dữ liệu nhà thầu sẽ tự xuất hiện ở đây.</div>
+  </main>
+  <script type="module" src="contractors.js"></script>
+  <script src="logo.js"></script>
+</body>
+</html>

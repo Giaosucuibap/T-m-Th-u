@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Kế hoạch lựa chọn nhà thầu — Giáo Sư Cùi Bắp</title>
+<link rel="stylesheet" href="app.css">
+<style>
+  .num{font-variant-numeric:tabular-nums;white-space:nowrap}
+  .code{font-family:ui-monospace,Menlo,Consolas,monospace;font-weight:800}
+  a.link{color:var(--accent);font-weight:800;text-decoration:none}
+  a.link:hover{text-decoration:underline}
+  .metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:14px 0}
+  @media(max-width:900px){.metrics{grid-template-columns:1fr 1fr}}
+  .scope{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+  @media(max-width:900px){.scope{grid-template-columns:1fr 1fr}}
+  .spin{display:inline-block;width:13px;height:13px;border:2px solid #cbd5e1;border-top-color:var(--accent);
+        border-radius:50%;animation:sp .8s linear infinite;vertical-align:-2px;margin-right:7px}
+  @keyframes sp{to{transform:rotate(360deg)}}
+  .bar{height:5px;border-radius:999px;background:#e2e8f0;overflow:hidden;margin-top:10px}
+  .bar i{display:block;height:100%;width:38%;background:var(--accent);animation:slide 1.15s infinite ease-in-out}
+  @keyframes slide{0%{margin-left:-38%}100%{margin-left:100%}}
+  .plan{border:1px solid var(--line);border-radius:10px;background:#fff;margin-top:12px;overflow:hidden}
+  .plan>header{background:#f8fafc;padding:11px 13px;display:block;position:static;color:var(--text)}
+  .plan h3{margin:0 0 4px;font-size:15px;line-height:1.35}
+  .plan table{margin:0}
+  .tag{display:inline-block;padding:3px 8px;border-radius:999px;font-size:11px;font-weight:800;background:#e2e8f0;color:#0f172a}
+  .tag-new{background:#dcfce7;color:#166534}
+  .chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+</style>
+</head>
+<body>
+  <header>
+    <b>📋 Kế hoạch lựa chọn nhà thầu</b>
+    <a href="dashboard.html">Bàn điều hành</a>
+    <a href="analytics.html">📊 Phân tích</a>
+    <a href="search.html">🔍 Tìm TBMT</a>
+    <a href="winners.html">🏆 Trúng thầu</a>
+    <a href="bidopen.html">⏳ Chờ kết quả</a>
+    <a href="market.html">🗺️ Soi địa bàn</a>
+    <a href="options.html">Cấu hình</a>
+    <a href="profile.html">🧭 Hồ sơ 360°</a>
+    <a href="investor.html">🏛️ Hồ sơ CĐT</a>
+</header>
+
+  <main>
+    <div class="card">
+      <div class="scope">
+        <div>
+          <label for="investor">Chủ đầu tư (tên hoặc mã định danh)</label>
+          <input id="investor" placeholder="VD: Ban Quản lý dự án đầu tư xây dựng khu vực Hàm Tân">
+        </div>
+        <div>
+          <label for="province">Tỉnh / Thành phố</label>
+          <input id="province" placeholder="VD: Tỉnh Lâm Đồng" list="province-list" autocomplete="off">
+          <datalist id="province-list"></datalist>
+        </div>
+        <div>
+          <label for="ward">Xã / Phường</label>
+          <input id="ward" placeholder="Chọn tỉnh trước để có danh sách" list="ward-list" autocomplete="off">
+          <datalist id="ward-list"></datalist>
+          <small id="ward-hint" class="muted"></small>
+        </div>
+        <div>
+          <label for="keyword">Từ khoá (tuỳ chọn)</label>
+          <input id="keyword" placeholder="VD: kênh mương">
+        </div>
+        <div>
+          <label for="period">Kế hoạch phê duyệt trong</label>
+          <select id="period">
+            <option value="">Không giới hạn thời gian</option>
+            <option value="30">30 ngày gần đây</option>
+            <option value="90" selected>3 tháng gần đây</option>
+            <option value="180">6 tháng gần đây</option>
+            <option value="365">1 năm gần đây</option>
+            <option value="custom">Tự chọn khoảng ngày…</option>
+          </select>
+        </div>
+        <div id="dateRange" class="hidden">
+          <label for="fromDate">Từ ngày</label>
+          <input id="fromDate" type="date">
+        </div>
+        <div id="dateRange2" class="hidden">
+          <label for="toDate">Đến ngày</label>
+          <input id="toDate" type="date">
+          <small class="muted">Bỏ trống ô nào thì bên đó không giới hạn.</small>
+        </div>
+      </div>
+      <div class="row" style="margin-top:12px">
+        <button id="go" class="btn">🔎 Tra cứu trên e-GP</button>
+        <button id="reset" class="btn light" style="width:auto">Xóa</button>
+      </div>
+      <div class="muted small" style="margin-top:10px;line-height:1.6">
+        Cần <b>ít nhất một tiêu chí</b> — và <b>chỉ chọn Tỉnh/Thành phố cũng tra được</b>.
+        Cả bốn ô đều do <b>e-GP lọc sẵn trước khi gửi về</b> nên nhanh; riêng kế hoạch LCNT thì
+        e-GP lọc được cả tỉnh lẫn xã/phường (khác với mục Tìm TBMT).
+        Danh sách xã/phường lấy trực tiếp từ e-GP, gồm cả <b>tên huyện/xã trước sáp nhập</b>,
+        nên không bỏ sót kế hoạch đăng trước 01/7/2025.
+        Nếu <b>chỉ</b> chọn tỉnh, phần mềm lấy 2.000 kế hoạch gần nhất rồi báo lại —
+        thêm Xã/Phường hoặc Chủ đầu tư để lấy đủ.
+      </div>
+    </div>
+
+    <div id="progress" class="notice hidden" style="margin-top:14px">
+      <div class="row space">
+        <div><span class="spin"></span><span id="progress-text">Đang tra cứu…</span></div>
+        <button id="stop" class="btn warn" style="width:auto">⏹ Dừng</button>
+      </div>
+      <div class="bar"><i></i></div>
+      <div class="muted small" style="margin-top:8px">Giáo Sư Cùi Bắp đang thao tác trên tab e-GP. Đừng đóng tab đó.</div>
+    </div>
+
+    <div id="alert" class="notice hidden" style="margin-top:14px"></div>
+
+    <div id="summary" class="hidden">
+      <div class="metrics">
+        <div class="card"><div class="muted small">Số kế hoạch</div><div id="m-plan" class="metric num">0</div>
+          <div id="m-plan-sub" class="muted small">—</div></div>
+        <div class="card"><div class="muted small">Tổng số gói thầu</div><div id="m-pkg" class="metric num">0</div>
+          <div id="m-pkg-sub" class="muted small">—</div></div>
+        <div class="card"><div class="muted small">Tổng giá các gói</div><div id="m-val" class="num" style="font-weight:850;font-size:19px">—</div>
+          <div id="m-invest" class="muted small">—</div></div>
+        <div class="card"><div class="muted small">Còn gói chưa mời thầu</div><div id="m-new" class="metric num" style="color:#166534">0</div>
+          <button id="csv" class="btn light" style="width:auto;margin-top:8px">⬇ Xuất Excel</button></div>
+      </div>
+      <div class="card" style="margin-bottom:4px">
+        <div class="form-grid">
+          <div><div class="muted small">Chủ đầu tư</div><div id="by-investor" class="chips"></div></div>
+          <div><div class="muted small">Xã / Phường</div><div id="by-ward" class="chips"></div></div>
+        </div>
+      </div>
+    </div>
+
+    <label id="only-wrap" class="hidden" style="display:flex;gap:6px;align-items:center;font-weight:600;margin-top:12px">
+      <input type="checkbox" id="only" style="width:auto"> Chỉ hiện kế hoạch còn gói chưa đăng thông báo mời thầu
+    </label>
+
+    <div id="list"></div>
+  </main>
+
+  <script type="module" src="plans.js"></script>
+  <script src="logo.js"></script>
+</body>
+</html>

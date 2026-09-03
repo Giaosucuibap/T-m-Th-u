@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Chính sách bảo mật — Giáo Sư Cùi Bắp</title>
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+  <header><b><img class="brand-icon" src="icons/icon32.png" alt="">Chính sách bảo mật</b><a href="dashboard.html">Tổng quan</a><a href="options.html">Cấu hình</a></header>
+  <main>
+    <div class="card">
+      <p class="muted small">Cập nhật: 2026. Áp dụng cho tiện ích Chrome “Giáo Sư Cùi Bắp”.</p>
+
+      <h3>1. Chúng tôi KHÔNG thu thập gì</h3>
+      <ul>
+        <li>Không yêu cầu, không lưu, không gửi tài khoản/mật khẩu Hệ thống mạng đấu thầu quốc gia (e-GP).</li>
+        <li>Không có máy chủ của nhà phát triển; tiện ích <b>không gửi dữ liệu của bạn về cho chúng tôi</b>.</li>
+        <li>Không theo dõi, không quảng cáo, không phân tích hành vi (analytics).</li>
+      </ul>
+
+      <h3>2. Dữ liệu được lưu ở đâu</h3>
+      <p>Dữ liệu gói thầu, nhà thầu, cấu hình và bộ lọc được lưu <b>cục bộ trên máy của bạn</b> bằng <code>chrome.storage.local</code>. Nút “Xóa danh sách và lịch sử quét” chỉ xóa dữ liệu nghiệp vụ liên quan; nút “Khôi phục mặc định — xóa toàn bộ” xóa cả cấu hình, Bot Token và logo.</p>
+
+      <h3>3. Tiện ích truy cập những gì</h3>
+      <ul>
+        <li><b>muasamcong.mpi.gov.vn</b>: đọc dữ liệu gói thầu <i>công khai</i> mà chính trang e-GP tải, để chuẩn hóa, chống trùng và chấm điểm.</li>
+        <li><b>api.telegram.org</b> (tùy chọn): chỉ khi bạn tự bật và nhập Bot Token/Chat ID của bạn, tiện ích gửi thông báo gói mới tới Telegram của <i>chính bạn</i>. Token được lưu cục bộ trên máy bạn.</li>
+        <li><b>localhost:1234</b>: gọi phần mềm hỗ trợ e-GP đang chạy trên máy bạn để tải hồ sơ mời thầu, khi bạn bấm nút tải E-HSMT.</li>
+      </ul>
+
+      <h3>4. Chia sẻ cho bên thứ ba</h3>
+      <p>Tiện ích không gửi dữ liệu về máy chủ của nhà phát triển. Dữ liệu chỉ rời khỏi máy khi <b>bạn chủ động</b> xuất file hoặc bật gửi Telegram; khi đó nội dung cảnh báo gói thầu được gửi tới Telegram theo cấu hình của bạn.</p>
+
+      <h3>5. Quyền hạn xin cấp và lý do</h3>
+      <ul>
+        <li><code>storage</code>, <code>unlimitedStorage</code>: lưu dữ liệu cục bộ.</li>
+        <li><code>tabs</code>: mở trang e-GP và theo dõi lượt tra cứu đang chạy.</li>
+        <li><code>alarms</code>: chạy quét theo lịch.</li>
+        <li><code>downloads</code>: xuất Excel/báo cáo/backup và tải tệp E-HSMT khi bạn yêu cầu.</li>
+        <li><code>notifications</code>: báo gói mới đạt ngưỡng.</li>
+      </ul>
+
+      <h3>6. Liên hệ</h3>
+      <p class="muted">Mọi câu hỏi về quyền riêng tư, vui lòng liên hệ nhà phát triển/đơn vị cung cấp phần mềm cho bạn.</p>
+    </div>
+  </main>
+  <script src="logo.js"></script>
+</body>
+</html>

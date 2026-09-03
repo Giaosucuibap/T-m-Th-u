@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Gói đang chờ kết quả — Giáo Sư Cùi Bắp</title>
+<link rel="stylesheet" href="app.css">
+<style>
+  .num{font-variant-numeric:tabular-nums;white-space:nowrap}
+  .tbmt{font-family:ui-monospace,Menlo,Consolas,monospace;font-weight:800}
+  a.link{color:var(--accent);font-weight:800;text-decoration:none}
+  a.link:hover{text-decoration:underline}
+  .metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:14px 0}
+  @media(max-width:900px){.metrics{grid-template-columns:1fr 1fr}}
+  .spin{display:inline-block;width:13px;height:13px;border:2px solid #cbd5e1;border-top-color:var(--accent);
+        border-radius:50%;animation:sp .8s linear infinite;vertical-align:-2px;margin-right:7px}
+  @keyframes sp{to{transform:rotate(360deg)}}
+  .bar{height:6px;border-radius:999px;background:#e2e8f0;overflow:hidden;margin-top:10px}
+  .bar i{display:block;height:100%;background:var(--accent);transition:width .3s}
+  .pkg{border:1px solid var(--line);border-radius:10px;background:#fff;margin-top:12px;overflow:hidden}
+  .pkg>header{background:#f8fafc;padding:11px 13px;display:block;position:static;color:var(--text)}
+  .pkg h3{margin:0 0 4px;font-size:15px}
+  .pkg table{margin:0}
+  .me{background:#ecfdf5}
+  .me td{font-weight:750}
+  .rank1{color:#166534;font-weight:900}
+  .disc{font-weight:850;color:#166534}
+  .disc0{color:var(--muted);font-weight:700}
+  .tag{display:inline-block;padding:3px 8px;border-radius:999px;font-size:11px;font-weight:800;background:#e0f2fe;color:#075985}
+  .tag-wait{background:#fef3c7;color:#92400e}
+  .scope{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+  @media(max-width:900px){.scope{grid-template-columns:1fr 1fr}}
+  .empty-note{color:var(--muted);padding:10px 13px;font-size:13px}
+</style>
+</head>
+<body>
+  <header>
+    <b>⏳ Gói đang chờ kết quả</b>
+    <a href="winners.html">🏆 Tra cứu trúng thầu</a>
+    <a href="dashboard.html">Bàn điều hành</a>
+    <a href="plans.html">📋 Kế hoạch LCNT</a>
+    <a href="market.html">🗺️ Soi địa bàn</a>
+    <a href="options.html">Cấu hình</a>
+    <a href="profile.html">🧭 Hồ sơ 360°</a>
+    <a href="investor.html">🏛️ Hồ sơ CĐT</a>
+</header>
+
+  <main>
+    <div class="notice" style="margin-bottom:14px">
+      <b>Cách tính năng này hoạt động — đọc trước khi dùng.</b>
+      <div class="small" style="margin-top:6px;line-height:1.65">
+        Khác với tra cứu trúng thầu, e-GP <b>không cho tìm nhà thầu đang tham dự</b>: danh sách nhà thầu
+        chỉ nằm trong từng <b>Biên bản mở thầu</b> riêng lẻ. Vì vậy Giáo Sư Cùi Bắp phải
+        <b>lọc trước rồi mở lần lượt từng biên bản để đọc</b> — khoảng 3 giây mỗi gói.
+        Hãy khoanh vùng cho hẹp thay vì quét tất cả. <b>Hiệu quả nhất là điền Tỉnh/Thành phố và Chủ đầu tư</b> — hai tiêu chí này được e-GP lọc sẵn trước khi gửi về, nên thu hẹp rất mạnh. Nếu chưa biết nhà thầu hay dự ở đâu, xem <b>Hồ sơ 360°</b> của họ trước.
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="scope">
+        <div>
+          <label for="q">Nhà thầu cần theo dõi (MST hoặc tên)</label>
+          <input id="q" placeholder="VD: 5400512273">
+        </div>
+        <div>
+          <label for="days">Mở thầu trong khoảng</label>
+          <select id="days">
+            <option value="7">7 ngày gần đây</option>
+            <option value="15">15 ngày gần đây</option>
+            <option value="30" selected>30 ngày gần đây</option>
+            <option value="60">60 ngày gần đây</option>
+            <option value="90">90 ngày gần đây</option>
+            <option value="180">6 tháng gần đây</option>
+            <option value="365">1 năm gần đây</option>
+            <option value="custom">Tự chọn khoảng ngày…</option>
+          </select>
+          <div id="dateRange" class="hidden" style="margin-top:8px">
+            <label for="fromDate">Từ ngày</label>
+            <input id="fromDate" type="date">
+            <label for="toDate" style="margin-top:6px">Đến ngày</label>
+            <input id="toDate" type="date">
+            <div class="muted small" style="margin-top:6px">Bỏ trống ô nào thì bên đó không giới hạn.</div>
+          </div>
+        </div>
+        <div>
+          <label for="field">Lĩnh vực</label>
+          <select id="field"></select>
+        </div>
+        <div>
+          <label for="maxPackages">Số gói tối đa sẽ đọc</label>
+          <select id="maxPackages">
+            <option value="50">50 gói (~2 phút)</option>
+            <option value="150" selected>150 gói (~7 phút)</option>
+            <option value="300">300 gói (~15 phút)</option>
+            <option value="600">600 gói (~30 phút)</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="scope" style="margin-top:4px">
+        <div>
+          <label for="province">Tỉnh / Thành phố <b>(nên điền)</b></label>
+          <input id="province" placeholder="VD: Tỉnh Lâm Đồng" list="province-list" autocomplete="off">
+          <datalist id="province-list"></datalist>
+        </div>
+        <div>
+          <label for="investor">Chủ đầu tư (tên hoặc mã)</label>
+          <input id="investor" placeholder="VD: Phòng Kinh tế xã Gia Hiệp">
+        </div>
+        <div>
+          <label for="keyword">Từ khoá tên gói thầu</label>
+          <input id="keyword" placeholder="VD: kênh mương, cầu cống">
+        </div>
+        <div>
+          <label for="minPrice">Giá gói thầu từ (đồng)</label>
+          <input id="minPrice" type="number" min="0" step="1000000000" placeholder="VD: 3000000000">
+        </div>
+        <div>
+          <label for="maxPrice">đến (đồng)</label>
+          <input id="maxPrice" type="number" min="0" step="1000000000" placeholder="Bỏ trống = không giới hạn">
+        </div>
+        <div style="display:flex;align-items:flex-end;gap:8px">
+          <button id="go" class="btn" style="flex:1">🔎 Bắt đầu quét</button>
+        </div>
+      </div>
+
+      <div class="muted small" style="margin-top:10px">
+        Để trống ô nhà thầu nếu bạn muốn xem <b>toàn cảnh</b> ai đang dự thầu và giảm giá bao nhiêu.
+      </div>
+    </div>
+
+    <div id="progress" class="notice hidden" style="margin-top:14px">
+      <div class="row space">
+        <div><span class="spin"></span><span id="progress-text">Đang quét…</span></div>
+        <button id="stop" class="btn warn" style="width:auto">⏹ Dừng</button>
+      </div>
+      <div class="bar"><i id="barfill" style="width:0%"></i></div>
+      <div class="muted small" style="margin-top:8px">
+        Giáo Sư Cùi Bắp đang mở lần lượt các trang biên bản trên tab e-GP. Đừng đóng tab đó.
+        Bấm <b>Dừng</b> bất cứ lúc nào để giữ lại phần đã đọc.
+      </div>
+    </div>
+
+    <div id="alert" class="notice hidden" style="margin-top:14px"></div>
+
+    <div id="summary" class="hidden">
+      <div class="metrics">
+        <div class="card"><div class="muted small">Gói đã đọc biên bản</div><div id="m-scan" class="metric num">0</div>
+          <div id="m-scan-sub" class="muted small">—</div></div>
+        <div class="card"><div class="muted small" id="m-join-label">Gói nhà thầu đang dự</div><div id="m-join" class="metric num" style="color:#166534">0</div>
+          <div id="m-join-sub" class="muted small">—</div></div>
+        <div class="card"><div class="muted small">Giảm giá bình quân</div><div id="m-disc" class="metric num" style="font-size:24px">—</div>
+          <div id="m-disc-sub" class="muted small">—</div></div>
+        <div class="card"><div class="muted small">Tổng giá dự thầu</div><div id="m-val" class="num" style="font-weight:850;font-size:19px">—</div>
+          <button id="csv" class="btn light" style="width:auto;margin-top:8px">⬇ Xuất Excel</button></div>
+      </div>
+    </div>
+
+    <div class="row space" style="margin-top:6px">
+      <b id="list-title" class="hidden">Chi tiết từng gói</b>
+      <label class="hidden" id="only-wrap" style="margin:0;display:flex;gap:6px;align-items:center;font-weight:600">
+        <input type="checkbox" id="only" style="width:auto" checked> Chỉ hiện gói có nhà thầu tôi theo dõi
+      </label>
+    </div>
+    <div id="list"></div>
+  </main>
+
+  <script type="module" src="bidopen.js"></script>
+  <script src="logo.js"></script>
+</body>
+</html>

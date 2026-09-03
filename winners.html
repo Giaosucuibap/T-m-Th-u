@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Tra cứu nhà thầu trúng thầu — Giáo Sư Cùi Bắp</title>
+<link rel="stylesheet" href="app.css">
+<style>
+  .search-row{display:flex;gap:10px;align-items:stretch;flex-wrap:wrap}
+  .search-row input{flex:1;min-width:240px}
+  .search-row .btn{white-space:nowrap}
+  .metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:14px 0}
+  @media(max-width:900px){.metrics{grid-template-columns:1fr 1fr}}
+  .cname{font-weight:850;font-size:17px;line-height:1.3}
+  .badge-solo{background:#dcfce7;color:#166534}
+  .badge-venture{background:#fef3c7;color:#92400e}
+  .badge-run{background:#e0f2fe;color:#075985}
+  a.link{color:var(--accent);font-weight:800;text-decoration:none}
+  a.link:hover{text-decoration:underline}
+  .cand{display:flex;gap:12px;align-items:center;padding:11px 12px;border:1px solid var(--line);
+        border-radius:8px;margin-top:8px;cursor:pointer;background:#fff}
+  .cand:hover{border-color:var(--accent);background:#f0fdfa}
+  .cand .grow{flex:1;min-width:0}
+  .cand .mst{font-family:ui-monospace,Menlo,Consolas,monospace;font-weight:800;color:var(--accent)}
+  .spin{display:inline-block;width:13px;height:13px;border:2px solid #cbd5e1;border-top-color:var(--accent);
+        border-radius:50%;animation:sp .8s linear infinite;vertical-align:-2px;margin-right:7px}
+  @keyframes sp{to{transform:rotate(360deg)}}
+  .bar{height:5px;border-radius:999px;background:#e2e8f0;overflow:hidden;margin-top:10px}
+  .bar i{display:block;height:100%;width:38%;background:var(--accent);animation:slide 1.15s infinite ease-in-out}
+  @keyframes slide{0%{margin-left:-38%}100%{margin-left:100%}}
+  .chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+  .num{font-variant-numeric:tabular-nums;white-space:nowrap}
+  td.wrap{max-width:380px}
+  .disc-down{color:#166534;font-weight:850}
+  .disc-up{color:#b91c1c;font-weight:850}
+  .disc-flat{color:var(--muted);font-weight:700}
+  tbody tr:hover{background:#f8fafc}
+  .tbmt{font-family:ui-monospace,Menlo,Consolas,monospace;font-weight:800}
+  .hist{display:inline-flex;align-items:center;gap:6px;font-size:12px;padding:5px 10px;border-radius:999px;
+        background:#e2e8f0;cursor:pointer;font-weight:700}
+  .hist:hover{background:#cbd5e1}
+</style>
+</head>
+<body>
+  <header>
+    <b>🏆 Tra cứu nhà thầu trúng thầu</b>
+    <a href="bidopen.html">⏳ Gói đang chờ kết quả</a>
+    <a href="dashboard.html">Bàn điều hành</a>
+    <a href="contractors.html">Nhà thầu đã quét</a>
+    <a href="dashboard.html">Tổng quan</a>
+    <a href="plans.html">📋 Kế hoạch LCNT</a>
+    <a href="market.html">🗺️ Soi địa bàn</a>
+    <a href="options.html">Cấu hình</a>
+    <a href="profile.html">🧭 Hồ sơ 360°</a>
+    <a href="investor.html">🏛️ Hồ sơ CĐT</a>
+</header>
+
+  <main>
+    <div class="card">
+      <label for="q">Nhập <b>tên công ty</b> hoặc <b>mã số thuế</b> để xem toàn bộ gói thầu đã trúng trên Hệ thống mạng đấu thầu quốc gia</label>
+      <div class="search-row">
+        <input id="q" placeholder="VD: 5400512273  hoặc  Công ty TNHH Thương mại và Xây lắp An Khang" autofocus>
+        <button id="go" class="btn">🔎 Tra cứu trên e-GP</button>
+        <button id="reset" class="btn light" style="width:auto">Xóa</button>
+      </div>
+      <div class="muted small" style="margin-top:9px">
+        Kết quả được lấy trực tiếp từ mục <b>Kết quả lựa chọn nhà thầu</b> của
+        <b>muasamcong.mpi.gov.vn</b> ngay tại thời điểm bạn bấm tra cứu.
+        Nhập <b>mã số thuế</b> cho kết quả chính xác nhất — e-GP định danh nhà thầu trúng thầu theo mã số thuế,
+        nên cách này lấy được cả những gói trúng theo <b>liên danh</b> (tìm theo tên sẽ bỏ sót).
+      </div>
+      <div id="hist" class="chips"></div>
+    </div>
+
+    <div id="progress" class="notice hidden" style="margin-top:14px">
+      <div class="row space">
+        <div><span class="spin"></span><span id="progress-text">Đang tra cứu…</span></div>
+        <button id="stop" class="btn warn" style="width:auto">⏹ Dừng</button>
+      </div>
+      <div class="bar"><i></i></div>
+      <div class="muted small" style="margin-top:8px">
+        Giáo Sư Cùi Bắp đang thao tác trên tab e-GP đã mở và sẽ lấy <b>hết mọi trang kết quả</b>.
+        Với nhà thầu có nhiều gói, việc này mất vài phút — cứ để tab đó chạy, hoặc bấm <b>Dừng</b>
+        để giữ lại phần đã lấy được.
+      </div>
+    </div>
+
+    <div id="alert" class="notice hidden" style="margin-top:14px"></div>
+
+    <!-- Bước chọn công ty khi người dùng tra theo tên -->
+    <div id="pick" class="card hidden" style="margin-top:14px">
+      <b>Chọn đúng công ty bạn cần</b>
+      <div class="muted small" style="margin-top:4px">
+        e-GP ghi nhận các nhà thầu sau khớp với tên bạn nhập. Bấm vào một dòng để lấy
+        <b>toàn bộ</b> gói thầu công ty đó đã trúng (theo mã số thuế).
+      </div>
+      <div id="cands"></div>
+    </div>
+
+    <!-- Kết quả -->
+    <div id="summary" class="hidden">
+      <div class="metrics">
+        <div class="card">
+          <div class="muted small">Nhà thầu</div>
+          <div id="m-name" class="cname">—</div>
+          <div id="m-tax" class="muted small" style="margin-top:4px">—</div>
+        </div>
+        <div class="card"><div class="muted small">Số gói đã trúng</div><div id="m-total" class="metric num">0</div>
+          <div id="m-split" class="muted small">—</div></div>
+        <div class="card"><div class="muted small">Tổng giá trị trúng thầu</div><div id="m-value" class="metric num" style="font-size:22px;color:#166534">—</div>
+          <div id="m-basis" class="muted small">—</div></div>
+        <div class="card"><div class="muted small">Tỷ lệ giảm giá bình quân</div><div id="m-disc" class="metric num" style="font-size:22px">—</div>
+          <div id="m-disc-sub" class="muted small">—</div></div>
+      </div>
+      <div class="card" style="margin-bottom:14px">
+        <div class="row space">
+          <div><span class="muted small">Gói trúng lớn nhất</span>
+            <div id="m-max-name" style="font-weight:750"></div></div>
+          <div id="m-max" class="num" style="font-weight:850;font-size:18px">—</div>
+        </div>
+      </div>
+
+      <div class="card" style="margin-bottom:14px">
+        <div class="row space">
+          <b>Phân bố</b>
+          <span>
+            <button id="csv" class="btn light" style="width:auto">⬇ Xuất Excel (.xlsx)</button>
+          </span>
+        </div>
+        <div class="form-grid" style="margin-top:10px">
+          <div><div class="muted small">Theo lĩnh vực</div><div id="by-field" class="chips"></div></div>
+          <div><div class="muted small">Theo năm phê duyệt</div><div id="by-year" class="chips"></div></div>
+          <div class="full"><div class="muted small">Chủ đầu tư thường trúng</div><div id="by-investor" class="chips"></div></div>
+        </div>
+      </div>
+    </div>
+
+    <div id="results" class="card hidden" style="padding:0;overflow:auto">
+      <table>
+        <thead><tr>
+          <th>Vai trò</th><th>Mã TBMT</th><th>Gói thầu</th><th>Chủ đầu tư</th>
+          <th>Giá gói thầu<br><span style="text-transform:none;font-weight:400">(hoặc dự toán)</span></th>
+          <th>Giá trúng thầu</th><th>Giảm giá</th><th>Phê duyệt</th>
+        </tr></thead>
+        <tbody id="rows"></tbody>
+      </table>
+    </div>
+
+    <div id="pricenote" class="muted small hidden" style="margin-top:10px;line-height:1.6">
+      <b>Về cột giá:</b> mốc so sánh là con số e-GP công bố kèm kết quả — đó là
+      <b>dự toán gói thầu được duyệt sau khi phê duyệt KHLCNT</b> nếu gói có dự toán,
+      còn lại là <b>giá gói thầu</b>. Đây đúng là mốc trần dùng để đánh giá hồ sơ dự thầu,
+      nên tỷ lệ giảm giá tính trên nó. <b>Giá dự thầu của riêng từng nhà thầu</b>
+      (và giá sau hiệu chỉnh sai lệch) chỉ có trên trang chi tiết từng gói —
+      bấm mã TBMT ở mỗi dòng để xem.
+    </div>
+  </main>
+
+  <script type="module" src="winners.js"></script>
+  <script src="logo.js"></script>
+</body>
+</html>
