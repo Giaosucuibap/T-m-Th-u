@@ -85,12 +85,47 @@ loadProvinceOptions();
 
 /* ------------------------------------------------------------------ */
 
+/* ---------------------------------------------------------------------------
+ *  KHOẢNG THỜI GIAN
+ *
+ *  Người dùng chọn địa bàn rồi vẫn nhận kế hoạch của năm cũ lẫn vào, và mỗi
+ *  lượt tra phải xét hàng trăm kế hoạch mới lấy được phần đầu. Khoanh theo
+ *  ngày vừa cắt đúng thứ cần, vừa giảm hẳn khối lượng phải tải.
+ *
+ *  Mốc đối chiếu là NGÀY PHÊ DUYỆT — đúng ngày hiển thị trên mỗi thẻ kết quả.
+ * ------------------------------------------------------------------------- */
+
+/** Quy lựa chọn trên giao diện thành tiêu chí gửi xuống tầng nền. */
+function dateCriteria() {
+  const v = $('period').value;
+  if (v === 'custom') {
+    return { fromDate: $('fromDate').value, toDate: $('toDate').value, days: 0 };
+  }
+  return { fromDate: '', toDate: '', days: Number(v) || 0 };
+}
+
+/** Hai ô ngày chỉ hiện khi chọn "Tự chọn khoảng ngày". */
+function syncDateRange() {
+  const custom = $('period').value === 'custom';
+  show($('dateRange'), custom);
+  show($('dateRange2'), custom);
+  if (custom && !$('fromDate').value && !$('toDate').value) {
+    const iso = (d) => new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+    const now = new Date();
+    $('toDate').value = iso(now);
+    $('fromDate').value = iso(new Date(now.getTime() - 90 * 86400000));
+  }
+}
+$('period').addEventListener('change', syncDateRange);
+syncDateRange();
+
 async function start() {
   const payload = {
     investor: $('investor').value.trim(),
     province: $('province').value.trim(),
     ward: $('ward').value.trim(),
-    keyword: $('keyword').value.trim()
+    keyword: $('keyword').value.trim(),
+    ...dateCriteria()
   };
   alertBox('', null);
   show($('summary'), false);

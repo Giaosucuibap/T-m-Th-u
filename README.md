@@ -1,4 +1,4 @@
-# Giáo Sư Cùi Bắp 4.1.1
+# Giáo Sư Cùi Bắp 4.2.0
 
 **Trợ lý ra quyết định dự thầu ngay trên nguồn e-GP chính thức.**
 
@@ -115,6 +115,11 @@ Cách làm này giảm phụ thuộc vào URL, header, CAPTCHA hoặc token đã
 
 1. Mở **Cài đặt** và khai báo năng lực, từ khoá, địa bàn, khoảng giá trị và ngưỡng phù hợp.
 2. Mở **Tìm TBMT** hoặc **KHLCNT**, nhập ít nhất một điều kiện rồi chạy tìm kiếm.
+   Ở **KHLCNT**, ô *"Kế hoạch phê duyệt trong"* mặc định lấy **3 tháng gần
+   đây**; chọn *"Tự chọn khoảng ngày"* nếu cần một mốc cụ thể. Mốc đối chiếu
+   là **ngày phê duyệt** in trên mỗi thẻ kết quả, nên bộ lọc khớp với thứ bạn
+   nhìn thấy. Kế hoạch không ghi ngày nào thì vẫn được giữ lại và bạn tự xét —
+   loại bỏ chúng là bịa ra kết luận từ chỗ không có dữ liệu.
 3. Nếu e-GP yêu cầu đăng nhập/CAPTCHA, hoàn tất trực tiếp trên trang chính thức.
 4. Kiểm tra các trường quan trọng và liên kết nguồn trước khi đánh dấu **GO**.
 5. Gán người phụ trách, ghi chú và cập nhật trạng thái pipeline.
@@ -180,7 +185,7 @@ npm test
 
 Bộ hiện tại kiểm tra chuẩn hoá văn bản/tiền/ngày, URL chính thức, request an toàn, safe backup theo danh sách trắng, claim/ACK/lease của tác vụ, pipeline quyết định, xếp hạng, Radar, CSP/manifest, cú pháp/import JavaScript, tài nguyên giao diện, hyperlink Excel và cách tính liên danh.
 
-Kết quả 4.1.1: **93/93 kiểm thử tự động đạt**. Kết quả này chỉ là bằng chứng hồi quy cục bộ, không thay thế kiểm thử trực tiếp trên e-GP, kiểm thử hiệu năng, rà soát Chrome Web Store hoặc kiểm toán bảo mật độc lập.
+Kết quả 4.2.0: **113/113 kiểm thử tự động đạt**. Kết quả này chỉ là bằng chứng hồi quy cục bộ, không thay thế kiểm thử trực tiếp trên e-GP, kiểm thử hiệu năng, rà soát Chrome Web Store hoặc kiểm toán bảo mật độc lập.
 
 ### Kiểm thử trong trình duyệt thật
 

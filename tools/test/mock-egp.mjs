@@ -65,6 +65,45 @@ function record(i) {
 
 const ALL = Array.from({ length: 137 }, (_, i) => record(i));
 
+/** Một bản ghi KHLCNT (`es-plan-project-p`). Một nửa là kế hoạch năm cũ —
+ *  đúng thứ người dùng than phiền là bị lẫn vào kết quả. */
+function plan(i) {
+  // "Cũ hay mới" phải ĐỘC LẬP với tỉnh, nếu không thì bộ lọc địa bàn đã loại
+  // sạch kế hoạch năm cũ trước khi bộ lọc ngày kịp làm gì — phép thử sẽ xanh
+  // mà chẳng chứng minh được điều gì.
+  const cu = Math.floor(i / PROVINCES.length) % 2 === 1;
+  const duyet = cu
+    ? new Date(2025, 10, 20, 10, 0, 0)             // 20/11/2025
+    : new Date(Date.now() - (i % 60) * 86400000);  // trong vòng 60 ngày
+  return {
+    id: String(900000 + i),
+    planNo: cu ? `PL${2500319000 + i}` : `PL${2600286000 + i}`,
+    planName: 'Kế hoạch lựa chọn nhà thầu ' + NAMES[i % NAMES.length],
+    projectName: 'Dự án ' + NAMES[(i + 3) % NAMES.length],
+    investorName: INVESTORS[i % INVESTORS.length],
+    decisionNo: `${100 + i}/QĐ-UBND`,
+    decisionDate: duyet.toISOString(),
+    publicDate: new Date(duyet.getTime() + 3 * 86400000).toISOString(),
+    bidName: [NAMES[i % NAMES.length] + ' (gói 1)', NAMES[(i + 1) % NAMES.length] + ' (gói 2)'],
+    bidPrice: [1_200_000_000 + (i % 20) * 450_000_000, 800_000_000 + (i % 15) * 320_000_000],
+    totalPlanPrice: 2_000_000_000 + (i % 25) * 900_000_000,
+    locations: [{ provName: PROVINCES[i % PROVINCES.length], districtName: 'Xã Đơn Dương', provCode: '68' }]
+  };
+}
+
+const PLANS = Array.from({ length: 60 }, (_, i) => plan(i));
+
+/** e-GP thật BỎ QUA LẶNG LẼ bộ lọc nó không hiểu — không báo lỗi, trả về tất.
+ *  Máy chủ giả lập cố tình cư xử y hệt: chỉ tách theo `type`, mặc kệ khoảng
+ *  thời gian. Nhờ vậy phép thử chứng minh được rằng thứ bảo đảm kết quả là
+ *  lớp lọc lại TẠI CHỖ, chứ không phải bộ lọc gửi lên máy chủ. */
+function datasetFor(env) {
+  const filters = env?.query?.[0]?.filters || [];
+  const type = filters.find((f) => f.fieldName === 'type');
+  const values = [].concat(type?.fieldValues || []).join(',');
+  return values.includes('es-plan-project-p') ? PLANS : ALL;
+}
+
 const PAGE_HTML = fs.readFileSync(path.join(HERE, 'mock-page.html'), 'utf8');
 
 const server = https.createServer(
@@ -84,15 +123,16 @@ const server = https.createServer(
         const size = Number(env.pageSize || 10);
         const page = Number(env.pageNumber ?? env.pageNo ?? env.page ?? 0);
         const start = page * size;
-        const content = ALL.slice(start, start + size);
-        console.log(`[mock] SEARCH page=${page} size=${size} -> ${content.length} bản ghi` +
+        const data = datasetFor(env);
+        const content = data.slice(start, start + size);
+        console.log(`[mock] SEARCH page=${page} size=${size} -> ${content.length}/${data.length} bản ghi` +
           (env.query ? ` | query.filters=${(env.query[0]?.filters || []).map((f) => f.fieldName).join(',')}` : ''));
         res.writeHead(200, { 'content-type': 'application/json;charset=UTF-8' });
         res.end(JSON.stringify({
           page: {
             content,
-            totalPages: Math.ceil(ALL.length / size),
-            totalElements: ALL.length,
+            totalPages: Math.ceil(data.length / size),
+            totalElements: data.length,
             currentPage: page,
             pageSize: size
           }

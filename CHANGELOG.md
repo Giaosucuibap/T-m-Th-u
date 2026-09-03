@@ -2,6 +2,71 @@
 
 Tài liệu này ghi lại các thay đổi quan trọng của Giáo Sư Cùi Bắp. Cấu trúc tham khảo [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) và phiên bản tuân theo cách đánh số ngữ nghĩa ở mức sản phẩm.
 
+## [4.2.0] — 2026-09-03
+
+Lọc theo ngày cho màn hình **Kế hoạch lựa chọn nhà thầu**.
+
+### Tính năng mới
+
+- **Chọn khoảng thời gian khi tra KHLCNT.** Trước đây màn hình này tra không
+  giới hạn thời gian, nên kế hoạch phê duyệt từ **2025** nằm lẫn với kế hoạch
+  2026 — người dùng phải tự nhặt bằng mắt. Nay có ô *"Kế hoạch phê duyệt
+  trong"*: 30 ngày / **3 tháng (mặc định)** / 6 tháng / 12 tháng / không giới
+  hạn / **tự chọn Từ ngày – Đến ngày**.
+
+  Mốc đối chiếu là **ngày phê duyệt** (`decisionDate`), đúng ngày in trên mỗi
+  thẻ kết quả, chứ không phải ngày đăng tải. Kế hoạch không có ngày phê duyệt
+  thì lùi về ngày đăng tải; kế hoạch **không có mốc nào thì được giữ lại** —
+  loại bỏ là bịa ra kết luận từ chỗ không có dữ liệu.
+
+  Lọc theo ngày còn thu hẹp phạm vi rất nhiều: cùng một lần tra Lâm Đồng, mốc
+  3 tháng cắt bớt một nửa số kế hoạch phải xét, nên ít chạm trần 40 trang hơn.
+
+### Chi tiết kỹ thuật
+
+- Lọc **hai lớp**, đúng cách đã dùng ở màn hình mở thầu:
+  1. **Máy chủ** — filter `range` trên `publicDate`, **đã nới biên 30 ngày**.
+     Nới biên là bắt buộc: máy chủ soi ngày *đăng tải*, lớp tại chỗ soi ngày
+     *phê duyệt*, hai mốc lệch nhau vài ngày. Không nới thì máy chủ cắt mất
+     kế hoạch mà lớp tại chỗ lẽ ra giữ — tức là **bỏ sót**.
+  2. **Tại chỗ** — `khlcntInDateRange()`. Đây mới là thứ quyết định. Chưa có
+     phép đo nào chứng minh e-GP lọc được `range` trên bản ghi
+     `es-plan-project-p`; nếu nó bỏ qua lặng lẽ như vẫn thường thế, kết quả
+     vẫn đúng.
+- Gom `parseDayMs` / `dateRangeFrom` / `firstStampMs` / `padRange` về
+  `lib/core.js` để hai màn hình dùng chung một chỗ, không lệch nhau được nữa.
+
+### Sửa lỗi
+
+- **`fromDate is not defined` — bộ lọc ngày làm chết cả lượt tra.**
+  `startPlanLookup()` đọc `fromDate`/`toDate` mà quên khai báo. Bắt được nhờ
+  chạy thật trên Chromium; phép thử đơn vị không đụng tới `background.js` nên
+  không thấy.
+- **Mốc sẵn (30/90/180/365 ngày) không lọc gì cả.** Giao diện gửi `days` lên
+  nhưng tầng nền không nhận, không một lời báo lỗi — chọn "3 tháng gần đây"
+  mà vẫn ra kế hoạch 2025.
+
+### Kiểm thử
+
+- `tests/khlcnt-date-range.test.js` — 15 bài, dùng đúng hai kế hoạch trong ảnh
+  người dùng gửi (`PL2500319720` phải bị loại, `PL2600286616` phải được giữ),
+  cùng các bài cho nới biên máy chủ và cho `parseDayMs` từ chối ngày không tồn
+  tại thay vì để JavaScript cuộn sang ngày khác.
+- `tests/ui-payload-contract.test.js` — 5 bài đối chiếu **trang giao diện gửi
+  gì** với **tầng nền đọc gì**. Chặn đúng hai lỗi ở trên mà không cần Chromium.
+  Đã thử bỏ `days` đi để chắc chắn phép thử báo đỏ thật.
+- `tools/test/plans-e2e.mjs` — chạy toàn trình trên e-GP giả lập. Máy chủ giả
+  lập **cố tình bỏ qua** bộ lọc thời gian, đúng như e-GP thật bỏ qua lặng lẽ
+  filter nó không hiểu; nhờ vậy phép thử chứng minh được công đầu thuộc về lớp
+  lọc tại chỗ. Kết quả: không lọc → 5 kế hoạch 2025 lẫn vào; lọc → **0**.
+- `tools/test/plans-ui.mjs` — kiểm khối ngày trên `plans.html` bằng Chromium.
+- Tổng: **93 → 113 bài, đạt hết**.
+
+### Còn chưa làm được
+
+- Chưa xác nhận được trên e-GP **thật** rằng máy chủ có lọc `range` trên
+  `es-plan-project-p` hay không. Chỉ ảnh hưởng tốc độ, không ảnh hưởng kết quả.
+
 ## [4.1.1] — 2026-09-02
 
 Tăng tốc đọc biên bản mở thầu và sửa nhãn trạng thái nói sai.

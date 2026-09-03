@@ -65,6 +65,26 @@
           <label for="keyword">Từ khoá (tuỳ chọn)</label>
           <input id="keyword" placeholder="VD: kênh mương">
         </div>
+        <div>
+          <label for="period">Kế hoạch phê duyệt trong</label>
+          <select id="period">
+            <option value="">Không giới hạn thời gian</option>
+            <option value="30">30 ngày gần đây</option>
+            <option value="90" selected>3 tháng gần đây</option>
+            <option value="180">6 tháng gần đây</option>
+            <option value="365">1 năm gần đây</option>
+            <option value="custom">Tự chọn khoảng ngày…</option>
+          </select>
+        </div>
+        <div id="dateRange" class="hidden">
+          <label for="fromDate">Từ ngày</label>
+          <input id="fromDate" type="date">
+        </div>
+        <div id="dateRange2" class="hidden">
+          <label for="toDate">Đến ngày</label>
+          <input id="toDate" type="date">
+          <small class="muted">Bỏ trống ô nào thì bên đó không giới hạn.</small>
+        </div>
       </div>
       <div class="row" style="margin-top:12px">
         <button id="go" class="btn">🔎 Tra cứu trên e-GP</button>

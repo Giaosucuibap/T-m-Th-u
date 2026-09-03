@@ -1,6 +1,9 @@
 # Bộ kiểm thử
 
-Ba bài kiểm tra, chạy được trên máy thường mà **không đụng vào máy chủ e-GP thật**.
+Các bài kiểm tra chạy bằng Chromium thật, trên máy thường, mà **không đụng vào
+máy chủ e-GP thật**. Chúng bù cho chỗ `npm test` không với tới: `npm test` chỉ
+chạy logic thuần trong `lib/`, không nạp `background.js`, nên những lỗi kiểu
+"biến chưa khai báo" hay "giao diện gửi thứ tầng nền không nhận" chỉ lộ ra ở đây.
 
 ## Chuẩn bị (làm một lần)
 
@@ -131,3 +134,36 @@ print('hyperlinks', [(c.coordinate, c.hyperlink.target) for r in ws.iter_rows() 
 Kết quả mong đợi: mở được, số tiền là **số thật** (không phải chữ), phần trăm
 lưu dạng phân số (2,76% → `0.0276`), và cột *Link e-GP* có **siêu liên kết
 bấm được**.
+
+## 7. Lọc theo ngày ở màn hình Kế hoạch lựa chọn nhà thầu
+
+```bash
+# cửa sổ 1
+node tools/test/mock-egp.mjs
+# cửa sổ 2
+node tools/test/plans-e2e.mjs
+```
+
+Máy chủ giả lập trả 60 kế hoạch `es-plan-project-p`, một nửa phê duyệt
+**20/11/2025** — đúng thứ lẫn vào kết quả mà người dùng than phiền. Quan trọng:
+máy chủ giả lập **cố tình bỏ qua** bộ lọc thời gian, đúng như e-GP thật bỏ qua
+lặng lẽ filter nó không hiểu. Nhờ vậy bài này chứng minh được thứ bảo đảm kết
+quả là lớp lọc lại **tại chỗ**, chứ không phải bộ lọc gửi lên máy chủ.
+
+Kết quả mong đợi: cả 5 dòng soát lại đều `ĐẠT` — không lọc thì có kế hoạch
+2025 lẫn vào, lọc rồi thì `theo năm` chỉ còn `2026`, và có đếm số kế hoạch bị
+loại vì ngày.
+
+Đây là bài bắt được `fromDate is not defined` (bộ lọc làm chết cả lượt tra) và
+lỗi `days` bị rơi lặng lẽ khiến mốc "3 tháng gần đây" không lọc gì cả.
+
+## 8. Khối chọn ngày trên giao diện
+
+```bash
+node tools/test/bidopen-ui.mjs   # trang Gói đang chờ kết quả
+node tools/test/plans-ui.mjs     # trang Kế hoạch lựa chọn nhà thầu
+```
+
+Không cần máy chủ giả lập. Kiểm rằng hai ô *Từ ngày / Đến ngày* chỉ hiện khi
+chọn *"Tự chọn khoảng ngày"*, tự điền sẵn giá trị hợp lý, và payload gửi đi
+đúng khoá. Kết quả mong đợi: `LỖI (0)`.

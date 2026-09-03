@@ -2,7 +2,7 @@ import {DEFAULT_SETTINGS,extractCandidateObjects,normalizeCandidate,mergeTender,
 import {buildSafeBackupState,safeRunForBackup} from './lib/backup.js';
 import {EGP_SEARCH_PAGE,PAGE_SIZE,normalizeTaxCodeForEgp,normalizeKqlcntRecord,extractContractorCandidates,dedupeKqlcnt,summarizeWinner,buildKqlcntQuery,buildWardMarketQuery,buildTbmtQuery,tbmtMatchesWard} from './lib/kqlcnt.js';
 import {buildBbmtQuery,bbmtDateRange,bbmtInDateRange,bbmtReadState,bbmtReadStateOf,READ_STATE,normalizeBbmtPackage,normalizeBidderTable,notifyNoFromUrl,summarizeBidOpenings,STEPS_DECIDED} from './lib/bbmt.js';
-import {normalizeKhlcntPlan,dedupeKhlcnt,summarizeKhlcnt,auditPlans,buildKhlcntQuery,filterPlansByArea} from './lib/khlcnt.js';
+import {normalizeKhlcntPlan,dedupeKhlcnt,summarizeKhlcnt,auditPlans,buildKhlcntQuery,filterPlansByArea,khlcntDateRange,khlcntInDateRange} from './lib/khlcnt.js';
 import {fetchAllAreas,currentProvinceNames,wardNamesForProvince,provinceCodesByName,wardCodesByName} from './lib/areas.js';
 import {buildXlsx,xlsxDataUrl,XLSX_MIME} from './lib/xlsx.js';
 import {summarizeArea,AREA_DISCLAIMER,AREA_SCOPE_NOTE} from './lib/localmarket.js';
@@ -1811,6 +1811,10 @@ async function provinceCodesFor(name){
 async function startInvestorScan(payload={}){
   const mode=payload.codes&&payload.codes.length?'profile':'discover';
   const keyword=String(payload.keyword||'').trim();
+  // Khoảng ngày do người dùng chọn. Bộ lọc gửi lên máy chủ được nới biên; ranh
+  // giới chính xác do khlcntInDateRange() quyết định lúc nhận dữ liệu về.
+  const fromDate=String(payload.fromDate||'').trim();
+  const toDate=String(payload.toDate||'').trim();
   const province=String(payload.province||'').trim();
   const codes=(payload.codes||[]).map(c=>String(c||'').trim()).filter(Boolean);
 
@@ -2274,6 +2278,9 @@ async function startPlanLookup(payload={}){
   const province=String(payload.province||'').trim();
   const ward=String(payload.ward||'').trim();
   const keyword=String(payload.keyword||'').trim();
+  const fromDate=String(payload.fromDate||'').trim();
+  const toDate=String(payload.toDate||'').trim();
+  const days=Number(payload.days)||0;
   /* Với bản ghi KHLCNT, e-GP lọc được CẢ địa bàn ở phía máy chủ — đã đo:
      locations.provCode cho đúng Lâm Đồng, locations.districtCode cho 108 kế
      hoạch của Xã Hàm Thạnh. Nên chỉ chọn tỉnh cũng tra được, không còn bắt
@@ -2307,10 +2314,10 @@ async function startPlanLookup(payload={}){
     .filter(Boolean).join(' · ')||`từ khoá "${keyword}"`;
 
   const lookup={
-    id,criteria:{investor,province,ward,keyword,provinces,wards},label,
+    id,criteria:{investor,province,ward,keyword,provinces,wards,fromDate,toDate,days},label,
     status:'RUNNING',message:'Đang hỏi e-GP các kế hoạch của chủ đầu tư này...',
     startedAt:new Date().toISOString(),finishedAt:null,
-    plans:[],totalElements:0,serverCount:0,areaDropped:0,
+    plans:[],totalElements:0,serverCount:0,areaDropped:0,dateDropped:0,
     cancelled:false,applied:null,mismatched:[]
   };
   const claimed=await claimLookupJob('planLookup',lookup);
@@ -2323,7 +2330,7 @@ async function startPlanLookup(payload={}){
       id,mode:'khlcnt',label,
       // Tự dựng truy vấn, KHÔNG chạm vào biểu mẫu e-GP nữa. Tỉnh và xã/phường
       // được lọc tại chỗ ở ingestPlanPage.
-      query:buildKhlcntQuery({investor,keyword,provinces,wards}),
+      query:buildKhlcntQuery({investor,keyword,provinces,wards,fromDate,toDate,days}),
       pageSize:PAGE_SIZE,
       /* Có chủ đầu tư / từ khoá / xã thì phạm vi đã hẹp -> lấy hết.
          CHỈ lọc tỉnh thì có thể hơn 10.000 kế hoạch, tải hết sẽ rất lâu, nên
@@ -2350,12 +2357,23 @@ async function ingestPlanPage(payload={}){
     // Lọc tỉnh/xã ngay tại đây thay vì nhờ biểu mẫu e-GP. `dropped` được đếm
     // để giao diện nói rõ đã bỏ bao nhiêu bản ghi lệch địa bàn.
     const {kept,dropped}=filterPlansByArea(all,lookup.criteria||{});
+
+    /* LỌC NGÀY TẠI CHỖ — lớp bảo đảm.
+     *
+     * Bộ lọc gửi lên máy chủ soi `publicDate` và đã được nới biên, nên nó chỉ
+     * thu hẹp cho nhanh. Ranh giới chính xác nằm ở đây, đối chiếu NGÀY PHÊ
+     * DUYỆT — đúng cái ngày người dùng nhìn thấy trên thẻ kết quả. */
+    const range=khlcntDateRange(lookup.criteria||{});
+    const inRange=kept.filter(p=>khlcntInDateRange(p,range));
+    const dateDropped=Number(lookup.dateDropped||0)+(kept.length-inRange.length);
+
     const next={...lookup,
-      plans:dedupeKhlcnt([...(lookup.plans||[]),...kept]),
+      plans:dedupeKhlcnt([...(lookup.plans||[]),...inRange]),
       serverCount:Number(lookup.serverCount||0)+all.length,
       areaDropped:Number(lookup.areaDropped||0)+dropped.length,
+      dateDropped,
       totalElements:Number(payload.totalElements||lookup.totalElements||0)};
-    next.message=`Đã xét ${next.serverCount}/${next.totalElements||next.serverCount} kế hoạch, khớp địa bàn ${next.plans.length}...`;
+    next.message=`Đã xét ${next.serverCount}/${next.totalElements||next.serverCount} kế hoạch, khớp ${next.plans.length}...`;
 
     if(payload.done){
       next.status='SUCCESS';
@@ -2365,7 +2383,10 @@ async function ingestPlanPage(payload={}){
       next.summary=summarizeKhlcnt(next.plans);
       // Soát lại: bản ghi nào e-GP trả về mà lệch tiêu chí thì nêu rõ.
       next.mismatched=auditPlans(next.plans,lookup.criteria).map(p=>p.planNoStand);
-      const dropNote=next.areaDropped?` (đã bỏ ${next.areaDropped} kế hoạch lệch địa bàn)`:'';
+      const drops=[];
+      if(next.areaDropped)drops.push(`${next.areaDropped} lệch địa bàn`);
+      if(next.dateDropped)drops.push(`${next.dateDropped} ngoài khoảng ngày`);
+      const dropNote=drops.length?` (đã bỏ ${drops.join(', ')})`:'';
       const c2=next.criteria||{};
       const broad=!c2.investor&&!c2.keyword&&!(c2.wards&&c2.wards.length);
       const capNote=(broad&&next.serverCount>=2000)
