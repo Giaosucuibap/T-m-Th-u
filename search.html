@@ -1,208 +1,52 @@
 <!doctype html>
-<html lang="vi"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Tìm thông báo mời thầu</title>
-<link rel="stylesheet" href="app.css">
-<style>
- .num{font-variant-numeric:tabular-nums;white-space:nowrap}
- .code{font-family:ui-monospace,Menlo,Consolas,monospace;font-weight:800}
- a.link{color:var(--accent);font-weight:800;text-decoration:none}
- a.link:hover{text-decoration:underline}
- .scope{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
- @media(max-width:980px){.scope{grid-template-columns:1fr 1fr}}
- .metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:14px 0}
- @media(max-width:900px){.metrics{grid-template-columns:1fr 1fr}}
- .metrics .card{padding:13px}
- .insights{display:grid;grid-template-columns:1.15fr 1fr 1fr;gap:10px;margin:0 0 12px}
- .insight{border:1px solid var(--line);border-left:4px solid #0f766e;border-radius:8px;background:#fff;padding:11px 12px;min-height:72px}
- .insight.warn{border-left-color:#b45309}.insight.danger{border-left-color:#b91c1c}
- .insight b{display:block;margin-bottom:4px}
- .result-tools{display:grid;grid-template-columns:minmax(220px,1.7fr) minmax(145px,.8fr) minmax(130px,.7fr) minmax(180px,.9fr) auto;gap:10px;align-items:end;border:1px solid var(--line);border-radius:8px;background:#fff;padding:12px;margin:12px 0}
- .result-tools label{margin:0 0 5px}
- .checkline{display:flex!important;gap:7px;align-items:center;margin:0!important;font-weight:750;white-space:nowrap}
- .checkline input{width:auto}
- .result-head{margin-top:8px}
- .result-count{font-weight:700}
- @media(max-width:1050px){.result-tools{grid-template-columns:1fr 1fr}.insights{grid-template-columns:1fr}}
- @media(max-width:620px){.scope,.metrics,.result-tools{grid-template-columns:1fr}.checkline{white-space:normal}}
- .spin{display:inline-block;width:13px;height:13px;border:2px solid #cbd5e1;border-top-color:var(--accent);
-       border-radius:50%;animation:sp .8s linear infinite;vertical-align:-2px;margin-right:7px}
- @keyframes sp{to{transform:rotate(360deg)}}
- .bar{height:5px;border-radius:999px;background:#e2e8f0;overflow:hidden;margin-top:10px}
- .bar i{display:block;height:100%;width:38%;background:var(--accent);animation:slide 1.15s infinite ease-in-out}
- @keyframes slide{0%{margin-left:-38%}100%{margin-left:100%}}
- .result-card{border:1px solid var(--line);border-left:5px solid #cbd5e1;border-radius:8px;background:#fff;margin-top:10px;overflow:hidden}
- .result-card.priority{border-left-color:#15803d}.result-card.watch{border-left-color:#b45309}
- .result-card.closed{opacity:.78}
- .result-main{display:grid;grid-template-columns:72px minmax(0,1fr) 188px;gap:13px;padding:13px}
- .scorebox{height:68px;border-radius:8px;display:flex;flex-direction:column;align-items:center;justify-content:center;font-weight:900;color:#fff;line-height:1}
- .scorebox small{font-size:10px;opacity:.9;margin-top:3px}
- .s-hi{background:#15803d}.s-mid{background:#0f766e}.s-lo{background:#64748b}
- .result-body h3{margin:0 0 6px;font-size:16px;line-height:1.35}
- .result-meta{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:5px 14px;margin-top:8px}
- .result-meta div{min-width:0}
- .reasons{display:flex;flex-wrap:wrap;gap:6px;margin-top:9px}
- .tag{display:inline-flex;align-items:center;border-radius:8px;padding:4px 8px;font-size:11px;font-weight:800;background:#e2e8f0;color:#334155}
- .tag.good{background:#dcfce7;color:#166534}.tag.warn{background:#fef3c7;color:#92400e}.tag.bad{background:#fee2e2;color:#991b1b}
- .result-action{border-left:1px solid #eef2f7;padding-left:12px;display:flex;flex-direction:column;gap:8px;align-items:flex-start}
- .action-pill{display:inline-flex;border-radius:8px;padding:6px 9px;font-size:12px;font-weight:900;background:#e2e8f0;color:#0f172a}
- .action-pill.go{background:#dcfce7;color:#166534}.action-pill.watch{background:#fef3c7;color:#92400e}.action-pill.stop{background:#fee2e2;color:#991b1b}
- .result-actions{display:flex;flex-wrap:wrap;gap:7px;margin-top:auto}
- .result-actions .btn{width:auto;padding:6px 9px;font-size:12px}
- @media(max-width:820px){
-   .result-main{grid-template-columns:62px minmax(0,1fr)}
-   .result-action{grid-column:1/-1;border-left:0;border-top:1px solid #eef2f7;padding:10px 0 0}
-   .scorebox{height:62px}
- }
- .grp{font-size:12px;font-weight:800;padding:7px 11px;border-radius:9px;margin:16px 0 4px;color:#fff}
- .g-open{background:#15803d}.g-plan{background:#b45309}.g-unknown{background:#64748b}
- .g-closed{background:#e2e8f0;color:#64748b}
- .price{display:flex;gap:8px}.price input{flex:1}
- .quick{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
- .quick button{background:#e2e8f0;color:#0f172a;border:0;border-radius:999px;padding:5px 11px;
-               font-size:12px;font-weight:700;cursor:pointer;width:auto}
- .quick button:hover{background:#cbd5e1}
-</style></head>
-<body>
-  <header>
-    <b>🔍 Tìm thông báo mời thầu</b>
-    <a href="dashboard.html">Bàn điều hành</a>
-    <a href="analytics.html">📊 Phân tích</a>
-    <a href="winners.html">🏆 Trúng thầu</a>
-    <a href="bidopen.html">⏳ Chờ kết quả</a>
-    <a href="plans.html">📋 Kế hoạch LCNT</a>
-    <a href="market.html">🗺️ Soi địa bàn</a>
-    <a href="options.html">Cấu hình</a>
-    <a href="profile.html">🧭 Hồ sơ 360°</a>
-    <a href="investor.html">🏛️ Hồ sơ CĐT</a>
-</header>
-
-  <main>
-    <div class="card">
-      <div class="scope">
-        <div>
-          <label for="investor">Chủ đầu tư <span class="muted small">(tên hoặc mã định danh)</span></label>
-          <input id="investor" placeholder="VD: Ban Quản lý dự án đầu tư xây dựng khu vực Hàm Tân">
-        </div>
-        <div>
-          <label for="province">Tỉnh / Thành phố</label>
-          <input id="province" placeholder="VD: Tỉnh Lâm Đồng" list="province-list">
-          <datalist id="province-list"></datalist>
-        </div>
-        <div>
-          <label for="ward">Xã / Phường</label>
-          <input id="ward" placeholder="Chọn tỉnh trước để có danh sách" list="ward-list" autocomplete="off">
-          <datalist id="ward-list"></datalist>
-          <small id="ward-hint" class="muted"></small>
-        </div>
-        <div>
-          <label for="keyword">Từ khoá <span class="muted small">(tuỳ chọn)</span></label>
-          <input id="keyword" placeholder="VD: kênh mương, cầu cống">
-        </div>
+<html lang="vi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Tìm thông báo mời thầu · Giáo Sư Cùi Bắp</title>
+<link rel="icon" href="icons/icon32.png"><link rel="stylesheet" href="app.css"><link rel="stylesheet" href="workspace.css">
+</head><body class="workspace">
+<aside id="workspace-nav" class="ws-sidebar"></aside>
+<main id="main">
+  <div class="ws-topbar"><div class="breadcrumb"><span>Không gian làm việc</span><span data-icon="chevron"></span><b>Tìm thầu</b></div><a class="source-link" href="https://muasamcong.mpi.gov.vn" target="_blank" rel="noopener"><i></i>Nguồn: Hệ thống mạng đấu thầu quốc gia <span data-icon="external"></span></a></div>
+  <section class="ws-intro"><div><div class="ws-kicker"><i></i> TỪ THÔNG TIN ĐẾN QUYẾT ĐỊNH</div><h1>Tìm đúng gói thầu.<br><em>Chọn đúng cơ hội.</em></h1><p>Tra cứu, sàng lọc và so sánh cơ hội từ e-GP.<br>Mọi quyết định bắt đầu từ dữ liệu có thể kiểm chứng.</p></div><img class="ws-intro-art" src="icons/radar-scene.svg" alt="Minh họa radar tìm kiếm cơ hội"></section>
+  <section class="card search-panel" aria-labelledby="criteria-title">
+    <div class="section-label"><span class="label-icon" data-icon="filter"></span><h2 id="criteria-title">Bạn đang tìm gói thầu nào?</h2><span class="right">Tìm kiếm trên e-GP</span></div>
+    <form id="search-form" novalidate>
+      <label class="search-field-main" for="keyword"><span class="sr-only">Từ khóa tìm kiếm trên e-GP</span><input id="keyword" placeholder="Tên gói thầu hoặc từ khóa, ví dụ: xây dựng trường học" maxlength="500" autocomplete="off"></label>
+      <div class="search-grid has-category">
+        <div><label for="investor">CHỦ ĐẦU TƯ</label><input id="investor" placeholder="Tên hoặc mã định danh chủ đầu tư" maxlength="500"></div>
+        <div><label for="category">Loại gói thầu</label><select id="category" aria-describedby="category-hint"></select></div>
+        <div><label for="province">TỈNH / THÀNH PHỐ</label><input id="province" placeholder="Nhiều tỉnh: Lâm Đồng, Đắk Lắk" list="province-list" autocomplete="off"><datalist id="province-list"></datalist></div>
+        <div><label for="ward">XÃ / PHƯỜNG</label><input id="ward" placeholder="Tên xã / phường (tùy chọn)" list="ward-list" autocomplete="off"><datalist id="ward-list"></datalist></div>
+        <div><label for="mustKeywords">TỪ KHÓA BẮT BUỘC</label><input id="mustKeywords" placeholder="Phải có, ví dụ: thủy lợi kênh" maxlength="500"></div>
+        <div><label for="excludeKeywords">KHÔNG CHỨA TỪ</label><input id="excludeKeywords" placeholder="Loại, ví dụ: nội thất phần mềm" maxlength="500"></div>
       </div>
-
-      <div class="scope" style="margin-top:4px">
-        <div style="grid-column:span 2">
-          <label>Giá gói thầu (đồng)</label>
-          <div class="price">
-            <input id="minPrice" inputmode="numeric" placeholder="Từ">
-            <input id="maxPrice" inputmode="numeric" placeholder="Đến">
-          </div>
-          <div class="quick">
-            <button data-min="1000000000" data-max="">≥ 1 tỷ</button>
-            <button data-min="3000000000" data-max="">≥ 3 tỷ</button>
-            <button data-min="3000000000" data-max="20000000000">3 – 20 tỷ</button>
-            <button data-min="20000000000" data-max="100000000000">20 – 100 tỷ</button>
-            <button data-min="" data-max="">Xoá giá</button>
-          </div>
-        </div>
-        <div style="display:flex;align-items:flex-end">
-          <button id="go" class="btn" style="width:100%">🔎 Tra cứu trên e-GP</button>
-        </div>
-        <div style="display:flex;align-items:flex-end;gap:8px">
-          <button id="useSettings" class="btn light" style="width:100%">Lấy từ Cấu hình</button>
-          <button id="reset" class="btn light" style="width:auto">Xoá</button>
-        </div>
-      </div>
-
-      <div class="muted small" style="margin-top:10px;line-height:1.6">
-        Để trống ô nào thì không lọc theo ô đó. <b>Chỉ chọn Tỉnh cũng tra được</b> — không bắt buộc nhập chủ đầu tư hay xã/phường.
-        Tỉnh, giá gói thầu, chủ đầu tư và từ khoá đều do <b>e-GP lọc sẵn trước khi gửi về</b> nên nhanh; riêng <b>Xã/Phường</b> lọc trên kết quả đã tải, vì e-GP không lọc được theo mã xã.
-        Tên tỉnh phải <b>đúng như e-GP ghi</b> (có chữ "Tỉnh", "Thành phố") — chọn từ danh sách gợi ý cho chắc.
-        Kết quả được chấm điểm theo Cấu hình của bạn và lưu chung vào kho gói thầu.
-      </div>
-    </div>
-
-    <div id="progress" class="notice hidden" style="margin-top:14px">
-      <div class="row space">
-        <div><span class="spin"></span><span id="progress-text">Đang tra cứu…</span></div>
-        <button id="stop" class="btn warn" style="width:auto">⏹ Dừng</button>
-      </div>
-      <div class="bar"><i></i></div>
-      <div class="muted small" style="margin-top:8px">Giáo Sư Cùi Bắp đang thao tác trên tab e-GP. Đừng đóng tab đó.</div>
-    </div>
-
-    <div id="alert" class="notice hidden" style="margin-top:14px"></div>
-
-    <div id="summary" class="hidden">
-      <div class="metrics">
-        <div class="card"><div class="muted small">Gói tìm được</div><div id="m-total" class="metric num">0</div>
-          <div id="m-total-sub" class="muted small">—</div></div>
-        <div class="card"><div class="muted small">Đạt ngưỡng điểm</div><div id="m-match" class="metric num" style="color:#166534">0</div>
-          <div id="m-match-sub" class="muted small">—</div></div>
-        <div class="card"><div class="muted small">Còn nộp được</div><div id="m-open" class="metric num">0</div>
-          <div class="muted small">đang mở thầu</div></div>
-        <div class="card"><div class="muted small">Tổng giá các gói</div><div id="m-val" class="num" style="font-weight:850;font-size:18px">—</div>
-          <button id="csv" class="btn light" style="width:auto;margin-top:8px">⬇ Xuất Excel</button></div>
-      </div>
-      <div id="result-insights" class="insights"></div>
-    </div>
-
-    <div id="result-tools" class="result-tools hidden">
-      <div>
-        <label for="result-q">Lọc nhanh trong kết quả</label>
-        <input id="result-q" placeholder="Tên gói, mã, chủ đầu tư, địa điểm, lý do chấm điểm">
-      </div>
-      <div>
-        <label for="statusFilter">Trạng thái</label>
-        <select id="statusFilter">
-          <option value="">Tất cả</option>
-          <option value="OPEN">Đang mở thầu</option>
-          <option value="PLAN">Chưa có TBMT</option>
-          <option value="UNKNOWN">Chưa rõ hạn</option>
-          <option value="CLOSED">Đã đóng thầu</option>
-        </select>
-      </div>
-      <div>
-        <label for="minScoreFilter">Điểm tối thiểu</label>
-        <select id="minScoreFilter">
-          <option value="0">Tất cả điểm</option>
-          <option value="55">≥ 55</option>
-          <option value="70">≥ 70</option>
-          <option value="85">≥ 85</option>
-        </select>
-      </div>
-      <div>
-        <label for="sortBy">Sắp xếp</label>
-        <select id="sortBy">
-          <option value="decision">Ưu tiên xử lý</option>
-          <option value="score">Điểm cao trước</option>
-          <option value="deadline">Sắp đóng thầu trước</option>
-          <option value="price">Giá lớn trước</option>
-        </select>
-      </div>
-      <label id="only-wrap" class="checkline hidden">
-        <input type="checkbox" id="only"> Chỉ gói đạt ngưỡng
-      </label>
-    </div>
-
-    <div class="row space result-head">
-      <b id="list-title" class="hidden">Kết quả</b>
-      <span id="list-count" class="muted small result-count hidden"></span>
-    </div>
-    <div id="list"></div>
-  </main>
-
-  <script type="module" src="search.js"></script>
-  <script src="logo.js"></script>
+      <div class="price-row"><div><label for="minPrice">KHOẢNG GIÁ GÓI THẦU · ĐỒNG</label><div class="price"><input id="minPrice" placeholder="Từ · ví dụ 3 tỷ" aria-label="Giá từ"><span>–</span><input id="maxPrice" placeholder="Đến · ví dụ 20 tỷ" aria-label="Giá đến"></div><div class="quick"><button type="button" data-min="0" data-max="3000000000">Đến 3 tỷ</button><button type="button" data-min="3000000000" data-max="20000000000">3 – 20 tỷ</button><button type="button" data-min="20000000000" data-max="100000000000">20 – 100 tỷ</button><button type="button" data-min="" data-max="">Mọi mức giá</button></div></div><div class="search-actions"><button id="go" class="btn" type="submit"><span data-icon="search"></span>Tìm gói thầu</button><button id="useSettings" class="btn light" type="button">Lấy từ cấu hình</button><button id="reset" class="icon-button" type="button" title="Xóa tiêu chí" aria-label="Xóa tiêu chí"><span data-icon="refresh"></span></button></div></div>
+    </form>
+    <p class="search-hint"><b>Để trống để tìm rộng hơn.</b> Nhiều tỉnh cách nhau bằng dấu phẩy. Từ khóa bắt buộc / loại từ lọc tại máy trên dữ liệu đã tải. Giá nhận cả “3,5 tỷ”. <span id="category-hint">Các nhóm tư vấn thiết kế, giám sát… nhận diện theo tên gói; nhận cả viết tắt TVGS, TVTK, QLDA.</span> <span id="ward-hint"></span></p>
+    <details class="search-details"><summary>Cách tìm và phạm vi dữ liệu</summary><p>Chủ đầu tư, tỉnh, lĩnh vực và giá gửi đến bộ tìm kiếm e-GP. Các chuyên môn tư vấn lọc tiếp theo tên gói trong dữ liệu đã tải. Từ khóa gửi đến e-GP khi không nhập chủ đầu tư; khi dùng cả hai, từ khóa lọc trong dữ liệu đã tải theo chủ đầu tư. Xã/phường cũng lọc tại máy. Danh mục tỉnh lấy từ e-GP; tên cũ có thể còn trong hồ sơ. Số trang giới hạn theo Cấu hình. Tìm kiếm đã lưu ghi nhớ cả loại gói và chỉ điền lại tiêu chí; lịch quét tự động dùng bộ lọc e-GP ở bàn điều hành.</p></details>
+  </section>
+  <div class="presets-row"><span data-icon="bookmark"></span><span>Tìm kiếm đã lưu</span><div id="saved-searches" class="saved-search-list"></div><button id="save-search" class="btn ghost" type="button"><span data-icon="plus"></span>Lưu tiêu chí</button></div>
+  <div id="alert" class="notice hidden" role="alert"></div>
+  <div id="progress" class="notice hidden" role="status"><div class="progress-row"><div><span class="run-spinner"></span><span id="progress-text">Đang tìm…</span></div><button id="stop" class="btn warn" type="button"><span data-icon="stop"></span>Dừng lượt này</button></div><p class="small">Giữ tab e-GP mở trong khi tra cứu. CAPTCHA, nếu có, cần xử lý trực tiếp trên e-GP.</p></div>
+  <div id="run-scope" class="run-strip hidden"></div>
+  <section id="summary" class="ws-metrics hidden" aria-label="Tổng quan lượt tìm">
+    <div class="ws-metric"><small>GÓI TÌM ĐƯỢC <span data-icon="plan"></span></small><div id="m-total" class="value">0</div><div id="m-total-sub" class="sub">Trong lượt tìm đã chọn</div></div>
+    <div class="ws-metric accent"><small>ĐẠT NGƯỠNG ĐIỂM <span data-icon="check"></span></small><div id="m-match" class="value">0</div><div class="sub">Theo cấu hình của bạn</div></div>
+    <div class="ws-metric"><small>ĐANG NHẬN HỒ SƠ <span data-icon="clock"></span></small><div id="m-open" class="value">0</div><div class="sub">Theo hạn nộp đã ghi nhận</div></div>
+    <div class="ws-metric"><small>TỔNG GIÁ ĐÃ BIẾT <span data-icon="chart"></span></small><div id="m-val" class="value money">—</div><div id="m-val-sub" class="sub">Không tính gói thiếu giá</div></div>
+  </section>
+  <section id="results-section" class="hidden" aria-labelledby="results-title">
+    <div class="results-heading"><h2 id="results-title">Cơ hội dành cho bạn <span id="result-count" class="count-pill">0</span></h2><div class="results-actions"><button id="calendar" class="btn light" type="button"><span data-icon="calendar"></span>Lịch đóng thầu</button><button id="csv" class="btn light" type="button"><span data-icon="download"></span>Xuất Excel</button></div></div>
+    <div class="results-toolbar"><input id="result-q" type="search" placeholder="Lọc nhanh trong kết quả…" aria-label="Lọc nhanh trong kết quả"><select id="statusFilter" aria-label="Trạng thái gói thầu"><option value="">Mọi trạng thái</option><option value="OPEN">Đang nhận hồ sơ</option><option value="PLAN">Mới ở kế hoạch</option><option value="UNKNOWN">Chưa rõ hạn</option><option value="CLOSED">Đã đóng thầu</option></select><select id="sortBy" aria-label="Sắp xếp"><option value="decision">Ưu tiên xử lý</option><option value="deadline">Sát hạn trước</option><option value="score">Điểm cao trước</option><option value="price">Giá lớn trước</option></select><select id="minScoreFilter" aria-label="Điểm tối thiểu"><option value="0">Mọi điểm</option><option value="55">Từ 55 điểm</option><option value="70">Từ 70 điểm</option><option value="85">Từ 85 điểm</option></select></div>
+    <div class="view-toggles"><label><input id="only" type="checkbox">Đạt ngưỡng</label><label><input id="only-watch" type="checkbox">Đang theo dõi</label><span class="view-help">Không dấu · “cụm từ” · -loại · phím /</span></div>
+    <div class="results-meta"><span id="list-count" aria-live="polite"></span><span>Chọn 2–4 gói để so sánh</span></div>
+    <div id="list"></div><div id="pagination" class="pagination hidden"><button id="prev-page" class="btn light" type="button">← Trước</button><span id="page-label"></span><button id="next-page" class="btn light" type="button">Tiếp →</button></div>
+  </section>
+  <div id="empty-state" class="empty-state"><img src="icons/radar-scene.svg" alt=""><h3>Cơ hội tiếp theo bắt đầu từ đây.</h3><p>Nhập địa bàn, lĩnh vực hoặc chủ đầu tư bạn quan tâm.<br>Nhấn <kbd>/</kbd> để bắt đầu nhập · <kbd>Ctrl Enter</kbd> để tìm.</p></div>
+  <footer class="ws-footer"><span>GIÁO SƯ CÙI BẮP <span data-version></span> · Công cụ hỗ trợ sàng lọc cơ hội</span><span>Điểm phù hợp không phải xác suất trúng thầu. Đối chiếu hồ sơ gốc trước khi quyết định.</span></footer>
+</main>
+<div id="compare-tray" class="compare-tray hidden"><span><b id="selected-count">0</b> gói đã chọn</span><button id="compare" class="btn" type="button"><span data-icon="compare"></span>So sánh</button><button id="clear-selection" class="clear" type="button">Bỏ chọn</button></div>
+<dialog id="compare-dialog" aria-labelledby="compare-title"><div class="dialog-heading"><h2 id="compare-title">So sánh cơ hội</h2><button class="close-dialog" data-close="compare-dialog" aria-label="Đóng so sánh"><span data-icon="close"></span></button></div><p>Đối chiếu cùng một tiêu chí. Ô “Chưa xác định” là dữ liệu còn thiếu, không có nghĩa là bằng 0.</p><div id="compare-content" class="dialog-scroll"></div></dialog>
+<dialog id="save-dialog" class="save-dialog" aria-labelledby="save-title"><form id="save-form"><div class="dialog-heading"><h2 id="save-title">Lưu bộ tìm kiếm</h2><button class="close-dialog" type="button" data-close="save-dialog" aria-label="Đóng lưu tiêu chí"><span data-icon="close"></span></button></div><p>Đặt tên để điền lại tiêu chí trong một lần bấm.</p><label for="saved-name">Tên bộ tìm kiếm</label><input id="saved-name" maxlength="70" required placeholder="Ví dụ: Hạ tầng Lâm Đồng · 3–20 tỷ"><div class="dialog-actions"><button type="button" data-close="save-dialog" class="btn light">Để sau</button><button type="submit" class="btn">Lưu tìm kiếm</button></div></form></dialog>
+<div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
+<script type="module" src="shell.js"></script><script type="module" src="search.js"></script>
 </body></html>

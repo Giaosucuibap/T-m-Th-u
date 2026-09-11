@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="vi"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Năng lực công ty — Giáo Sư Cùi Bắp</title>
+<link rel="stylesheet" href="app.css"><link rel="stylesheet" href="workspace.css">
+<link rel="icon" href="icons/icon32.png">
+</head>
+<body class="workspace">
+<aside id="workspace-nav" class="ws-sidebar"></aside>
+<main id="main">
+  <div class="ws-topbar"><div class="breadcrumb"><span>Không gian</span><b>Năng lực</b></div></div>
+  <section class="ws-intro"><div><div class="ws-kicker">4.5</div><h1>Hồ sơ năng lực<br><em>để chấm Go/No-Go.</em></h1><p>Nghề, thiết bị, nhân sự, trần giá và tỉnh không nhận việc. Điểm gói sẽ cộng/trừ theo hồ sơ này. Không thay thế HSDT trên e-GP.</p></div></section>
+  <div id="alert" class="notice hidden"></div>
+  <form id="form" class="card">
+    <label>Nghề / loại việc (mỗi dòng một mục)</label>
+    <textarea id="trades" rows="5" placeholder="thủy lợi&#10;kênh mương&#10;đường giao thông nông thôn"></textarea>
+    <label>Thiết bị chủ lực</label>
+    <textarea id="equipment" rows="3" placeholder="máy đào&#10;lu rung"></textarea>
+    <label>Nhân sự chủ chốt (ghi chú nội bộ)</label>
+    <textarea id="staff" rows="3"></textarea>
+    <label>Tỉnh / địa bàn đang tránh</label>
+    <textarea id="avoidProvinces" rows="2" placeholder="Không nhận việc tại…"></textarea>
+    <label>Trần giá tự tin (đồng, 0 = không dùng)</label>
+    <input id="maxComfortPrice" inputmode="numeric" placeholder="20000000000">
+    <label>Ghi chú</label>
+    <textarea id="notes" rows="3"></textarea>
+    <p><button class="btn" type="submit">Lưu hồ sơ và chấm lại kho gói</button></p>
+  </form>
+</main>
+<script type="module" src="shell.js"></script>
+<script type="module" src="capability-page.js"></script>
+</body></html>

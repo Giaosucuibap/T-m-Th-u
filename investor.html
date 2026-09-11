@@ -40,7 +40,7 @@
   .pick:hover{border-color:var(--accent);background:#f8fafc}
   .pick b{font-size:14px}
 </style>
-</head>
+<link rel="stylesheet" href="workspace.css"><link rel="icon" href="icons/icon32.png"></head>
 <body>
   <header>
     <b>🏛️ Hồ sơ chủ đầu tư</b>
@@ -104,6 +104,7 @@
           <div>
             <div id="p-name" style="font-weight:900;font-size:19px">—</div>
             <div class="muted small">Mã định danh <span id="p-code" class="code">—</span></div>
+            <p style="margin:8px 0 0"><button type="button" class="btn" id="watch-investor">Theo dõi đơn vị này</button></p>
           </div>
           <div style="display:flex;gap:8px;align-items:center">
             <span id="p-years" class="muted small"></span>
@@ -154,5 +155,5 @@
 
   <script type="module" src="investor.js"></script>
   <script src="logo.js"></script>
-</body>
+<script type="module" src="shell.js"></script></body>
 </html>

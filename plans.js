@@ -1,27 +1,34 @@
 /* Giáo Sư Cùi Bắp — plans.js
  * Tra cứu KẾ HOẠCH LỰA CHỌN NHÀ THẦU theo chủ đầu tư / tỉnh / xã · phường.
  *
- * Tiện ích TỰ DỰNG truy vấn (xem lib/khlcnt.js). Cả bốn tiêu chí — chủ đầu tư,
- * từ khoá, tỉnh và xã/phường — đều được e-GP lọc ở phía máy chủ, nên chỉ chọn
- * tỉnh cũng tra được và kết quả về rất nhanh.
+ * Tiêu chí địa bàn/chủ đầu tư gửi đến e-GP; loại gói thầu đối chiếu từng
+ * gói trong kế hoạch. Nhóm tư vấn chuyên môn được nhận diện từ tên gói.
  */
 
 import { formatMoney, formatDate } from './lib/core.js';
+import { TENDER_CATEGORIES, normalizeCategory, categoryLabel } from './lib/tender-categories.js';
 
 const $ = (id) => document.getElementById(id);
 const send = (type, payload = {}) => chrome.runtime.sendMessage({ type, payload });
 
 let POLL = null;
 let LOOKUP = null;
+let criteriaRestored = false;
+const dirtyCriteria = new Set();
+const planCriteriaFields = ['investor', 'province', 'ward', 'keyword', 'category', 'period', 'fromDate', 'toDate'];
 
 function esc(x) {
   return String(x ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 function show(el, on) { el.classList.toggle('hidden', !on); }
+$('category').innerHTML = TENDER_CATEGORIES.map((c) => `<option value="${esc(c.value)}">${esc(c.label)}</option>`).join('');
+for (const key of planCriteriaFields) {
+  for (const event of ['input', 'change']) $(key).addEventListener(event, () => dirtyCriteria.add(key));
+}
 function alertBox(html, kind) {
   const box = $('alert');
   box.className = `notice ${kind === 'error' ? 'error' : kind === 'ok' ? 'ok' : ''}`;
-  box.innerHTML = html;
+  box.textContent = String(html || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
   show(box, Boolean(html));
 }
 
@@ -125,6 +132,7 @@ async function start() {
     province: $('province').value.trim(),
     ward: $('ward').value.trim(),
     keyword: $('keyword').value.trim(),
+    category: normalizeCategory($('category').value),
     ...dateCriteria()
   };
   alertBox('', null);
@@ -132,7 +140,7 @@ async function start() {
   $('list').innerHTML = '';
   show($('only-wrap'), false);
   show($('progress'), true);
-  $('progress-text').textContent = 'Đang hỏi e-GP các kế hoạch của chủ đầu tư này…';
+  $('progress-text').textContent = 'Đang tra cứu kế hoạch trên e-GP theo tiêu chí đã chọn…';
 
   const res = await send('PLAN_LOOKUP', payload);
   if (!res || res.ok === false) {
@@ -151,10 +159,21 @@ async function refresh() {
   if (!state || !state.ok) return;
   LOOKUP = state.lookup;
   if (!LOOKUP) { show($('progress'), false); return; }
-  // Mo lai trang thi dien lai tieu chi da tra — neu khong nguoi dung thay o trong
-  // ma ket qua van hien, rat de hieu nham la da tra voi tieu chi rong.
-  const c = LOOKUP.criteria || {};
-  ['investor', 'province', 'ward', 'keyword'].forEach((k) => { if (c[k] && !$(k).value) $(k).value = c[k]; });
+  // Restore once on reopening. Polling must not undo edits or refill a cleared selector.
+  if (!criteriaRestored) {
+    criteriaRestored = true;
+    const c = LOOKUP.criteria || {};
+    for (const key of ['investor', 'province', 'ward', 'keyword', 'category']) {
+      if (!dirtyCriteria.has(key)) $(key).value = key === 'category' ? normalizeCategory(c[key]) : (c[key] || '');
+    }
+    if (!['period', 'fromDate', 'toDate'].some((key) => dirtyCriteria.has(key))) {
+      $('period').value = c.fromDate || c.toDate ? 'custom' : String(c.days || '');
+      $('fromDate').value = c.fromDate || '';
+      $('toDate').value = c.toDate || '';
+      syncDateRange();
+    }
+    if ($('province').value) loadWardOptions();
+  }
 
   const running = LOOKUP.status === 'RUNNING';
   show($('progress'), running);
@@ -177,9 +196,14 @@ async function refresh() {
 
 function planCard(p) {
   const pkgs = p.packages || [];
+  const matchedOnly = Boolean(p.categoryFiltered);
+  const totalPackages = Number(p.originalPackageCount ?? p.packageCount ?? pkgs.length);
+  const packageSummary = matchedOnly
+    ? `${pkgs.length}/${totalPackages} gói khớp · giá các gói khớp ${esc(formatMoney(p.totalPackagePrice))}`
+    : `${p.packageCount} gói · tổng ${esc(formatMoney(p.totalPackagePrice))}`;
   const table = pkgs.length
     ? `<table>
-        <thead><tr><th style="width:44px">STT</th><th>Gói thầu trong kế hoạch</th><th style="width:170px">Giá gói thầu</th></tr></thead>
+        <thead><tr><th style="width:44px">STT</th><th>${matchedOnly ? 'Gói thầu khớp loại đã chọn' : 'Gói thầu trong kế hoạch'}</th><th style="width:170px">Giá gói thầu</th></tr></thead>
         <tbody>${pkgs.map((g, i) => `
           <tr><td class="num">${i + 1}</td><td>${esc(g.name)}</td>
           <td class="num">${esc(formatMoney(g.price))}</td></tr>`).join('')}</tbody>
@@ -194,7 +218,7 @@ function planCard(p) {
           <span class="code">${esc(p.planNoStand)}</span>
           ${p.hasUnannounced ? ' · <span class="tag tag-new">Còn gói chưa mời thầu</span>' : ''}
           ${p.planTypeLabel ? ` · ${esc(p.planTypeLabel)}` : ''}
-          ${p.fields.length ? ` · ${esc(p.fields.join(', '))}` : ''}
+          ${p.fields?.length ? ` · ${esc(p.fields.join(', '))}` : ''}
         </div>
         <div class="muted small" style="margin-top:3px">
           🏛 ${esc(p.investorName || '—')}${p.investorCode ? ` (${esc(p.investorCode)})` : ''}
@@ -202,7 +226,7 @@ function planCard(p) {
         <div class="muted small">📍 ${esc(p.location || '—')}</div>
         ${p.projectName ? `<div class="muted small">📁 Dự án: ${esc(p.projectName)}</div>` : ''}
         <div class="muted small" style="margin-top:3px">
-          ${p.packageCount} gói · tổng ${esc(formatMoney(p.totalPackagePrice))}
+          ${packageSummary}
           ${p.investTotal ? ` · TMĐT ${esc(formatMoney(p.investTotal))}` : ''}
           · phê duyệt ${esc(formatDate(p.decisionDate))}
         </div>
@@ -215,13 +239,19 @@ function render() {
   const plans = LOOKUP.plans || [];
   const s = LOOKUP.summary;
   const incomplete = isIncomplete(LOOKUP);
+  const category = normalizeCategory(LOOKUP.criteria?.category);
+  const matchedOnly = Boolean(category);
+  const unknownCategoryNote = matchedOnly && LOOKUP.categoryUnknownPackages
+    ? `${LOOKUP.categoryUnknownPackages} gói chưa đủ thông tin để xác định loại, chưa được tính vào kết quả lọc.`
+    : '';
 
   if (LOOKUP.status === 'SUCCESS' && !plans.length) {
     show($('summary'), false);
     alertBox(
       `Không có kế hoạch nào khớp <b>${esc(LOOKUP.label)}</b>.<br>
        <span class="small">Kiểm tra lại tên tỉnh/xã có đúng như e-GP ghi không (có chữ "Tỉnh", "Xã", "Phường"),
-       hoặc thử rút ngắn tên chủ đầu tư.</span>`, 'error');
+       hoặc thử rút ngắn tên chủ đầu tư${matchedOnly ? ', chọn nhóm rộng hơn hoặc Tất cả loại gói thầu' : ''}.</span>
+       ${unknownCategoryNote ? `<br><span class="small">${esc(unknownCategoryNote)}</span>` : ''}`, 'error');
     return;
   }
   if (!plans.length) {
@@ -235,6 +265,7 @@ function render() {
      điều khiển biểu mẫu e-GP; nay mọi tiêu chí đều đi thẳng vào truy vấn nên
      `applied` luôn rỗng — giữ lại sẽ báo lỗi giả với MỌI lượt tra cứu. */
   const warnings = [];
+  if (unknownCategoryNote) warnings.push(esc(unknownCategoryNote));
   if (incomplete) {
     const detail = isCapped(LOOKUP)
       ? `Mới nhận ${LOOKUP.serverCount || plans.length}/${LOOKUP.totalElements || '?'} kế hoạch do đã chạm giới hạn trang.`
@@ -254,11 +285,15 @@ function render() {
   if (s) {
     show($('summary'), true);
     $('m-plan').textContent = s.planCount;
-    $('m-plan-sub').textContent = LOOKUP.totalElements ? `e-GP báo ${LOOKUP.totalElements} kết quả` : '';
+    $('m-plan-sub').textContent = [matchedOnly ? categoryLabel(category) : '', LOOKUP.totalElements ? `e-GP báo ${LOOKUP.totalElements} kế hoạch${matchedOnly ? ' trước lọc loại' : ''}` : ''].filter(Boolean).join(' · ');
+    $('m-pkg-title').textContent = matchedOnly ? 'Số gói khớp loại đã chọn' : 'Tổng số gói thầu';
+    $('m-val-title').textContent = matchedOnly ? 'Tổng giá các gói khớp' : 'Tổng giá các gói';
     $('m-pkg').textContent = s.packageCount;
-    $('m-pkg-sub').textContent = s.planCount ? `trung bình ${(s.packageCount / s.planCount).toFixed(1)} gói/kế hoạch` : '';
+    $('m-pkg-sub').textContent = matchedOnly
+      ? `Trong ${plans.reduce((sum, p) => sum + Number(p.originalPackageCount ?? p.packageCount ?? 0), 0)} gói của các kế hoạch đang khớp`
+      : (s.planCount ? `trung bình ${(s.packageCount / s.planCount).toFixed(1)} gói/kế hoạch` : '');
     $('m-val').textContent = formatMoney(s.totalValue);
-    $('m-invest').textContent = s.investTotal ? `Tổng mức đầu tư ${formatMoney(s.investTotal)}` : '';
+    $('m-invest').textContent = s.investTotal ? `TMĐT toàn bộ dự án trong các kế hoạch này: ${formatMoney(s.investTotal)}` : '';
     $('m-new').textContent = s.withUnannounced;
 
     const chips = (items) => (items || []).map((x) => `<span class="pill">${esc(x.name)} (${x.count})</span>`).join('') || '<span class="muted small">—</span>';
@@ -283,7 +318,10 @@ $('stop').addEventListener('click', async () => {
   await send('CANCEL_PLAN_LOOKUP');
 });
 $('reset').addEventListener('click', async () => {
-  ['investor', 'province', 'ward', 'keyword'].forEach((id) => { $(id).value = ''; });
+  criteriaRestored = true;
+  ['investor', 'province', 'ward', 'keyword', 'category'].forEach((id) => { $(id).value = ''; dirtyCriteria.add(id); });
+  fillDatalist('ward-list', []);
+  $('ward-hint').textContent = 'Chọn tỉnh trước để hiện danh sách xã/phường.';
   stopPolling();
   await send('CANCEL_PLAN_LOOKUP');
   await send('CLEAR_PLAN_LOOKUP');
@@ -297,7 +335,7 @@ $('csv').addEventListener('click', async () => {
   const r = await send('EXPORT_PLANS_CSV');
   if (r && r.ok === false) alertBox(esc(r.message || 'Không xuất được CSV.'), 'error');
 });
-['investor', 'province', 'ward', 'keyword'].forEach((id) => {
+['investor', 'province', 'ward', 'keyword', 'category'].forEach((id) => {
   $(id).addEventListener('keydown', (e) => { if (e.key === 'Enter') start(); });
 });
 

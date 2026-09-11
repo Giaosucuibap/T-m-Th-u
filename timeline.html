@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="vi"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Nhật ký điều chỉnh — Giáo Sư Cùi Bắp</title>
+<link rel="stylesheet" href="app.css"><link rel="stylesheet" href="workspace.css"><link rel="icon" href="icons/icon32.png">
+</head>
+<body class="workspace">
+<aside id="workspace-nav" class="ws-sidebar"></aside>
+<main id="main">
+  <div class="ws-topbar"><div class="breadcrumb"><span>Không gian</span><b>Nhật ký điều chỉnh</b></div></div>
+  <section class="ws-intro"><div><h1>Gia hạn và<br><em>điều chỉnh TBMT.</em></h1><p>Chỉ ghi các gói đang theo dõi khi hạn nộp, phiên bản hoặc tên gói đổi.</p></div></section>
+  <p><button class="btn" id="xlsx" type="button">Xuất điều chỉnh</button>
+     <button class="btn light" id="dom" type="button">Đối chiếu DOM e-GP</button>
+     <button class="btn light" id="audit" type="button">Xuất nhật ký nội bộ</button>
+     <button class="btn light" id="pack" type="button">Xuất JSON đồng bộ</button>
+     <label class="btn light">Nhập JSON<input type="file" id="pack-file" accept="application/json" hidden></label></p>
+  <div id="alert" class="notice hidden"></div>
+  <div id="dom-box" class="muted small"></div>
+  <div id="diff-box" class="card muted small"></div>
+  <div class="card search-grid"><div><label>Lọc người</label><input id="audit-who"></div><div><label>Từ ngày</label><input id="audit-from" type="date"></div><div><label>Đến ngày</label><input id="audit-to" type="date"></div><div><label>Mã TBMT</label><input id="audit-key"></div></div>
+  <div id="audit-list"></div>
+  <div id="list"></div>
+</main>
+<script type="module" src="shell.js"></script>
+<script type="module" src="timeline.js"></script>
+</body></html>

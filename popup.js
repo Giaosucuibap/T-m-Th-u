@@ -1,3 +1,5 @@
+import {deadlineInfo, safeSource, matchesQuery} from './lib/workspace.js';
+import { statusOf } from './lib/decision.js';
 /* Giáo Sư Cùi Bắp — popup.js : bảng điều khiển một-cú-click.
  * Hiển thị kết quả đã chấm điểm, lọc chi tiết ngay tại chỗ, kèm link mở từng gói
  * và theo dõi tiến độ lượt quét theo thời gian thực. */
@@ -28,7 +30,7 @@ function daysToClose(iso) {
  * Gói đã quét từ bản cũ có thể chưa có sẵn trường `status`, nên tính lại ở đây. */
 const STATUS_ORDER = ['OPEN', 'PLAN', 'UNKNOWN', 'CLOSED'];
 const STATUS_TEXT = {
-  OPEN: 'Đang mở thầu',
+  OPEN: 'Đang nhận hồ sơ',
   PLAN: 'Chưa có TBMT · mới trong KHLCNT',
   UNKNOWN: 'Chưa rõ thời điểm đóng thầu',
   CLOSED: 'Đã đóng thầu'
@@ -41,13 +43,6 @@ const RUN_TEXT = {
   CANCELLED: 'Đã dừng',
   PARTIAL: 'Hoàn tất một phần'
 };
-function statusOf(t) {
-  if (t && t.status && STATUS_TEXT[t.status]) return t.status;
-  if (!t || !String(t.notifyNo || '').trim()) return 'PLAN';
-  const d = daysToClose(t.closeDate);
-  if (d === null) return 'UNKNOWN';
-  return d >= 0 ? 'OPEN' : 'CLOSED';
-}
 // Mã hiển thị: gói chưa có TBMT thì mã là BP…, phải ghi rõ kẻo nhầm với mã TBMT.
 function codeOf(t) {
   if (t.displayCode) return { code: t.displayCode, label: t.codeLabel || 'Mã TBMT' };
@@ -134,7 +129,7 @@ function applyFilters(list) {
     if (filters.open && statusOf(t) !== 'OPEN') return false;
     if (q) {
       const hay = fold([t.bidName, t.notifyNo, t.bidNo, t.location, t.investorName, t.procuringEntityName, t.projectName, t.fieldRaw].join(' '));
-      if (!hay.includes(q)) return false;
+      if (!matchesQuery(hay,q)) return false;
     }
     return true;
   }).sort((a, b) => {
@@ -148,13 +143,9 @@ function applyFilters(list) {
 function tenderCard(t) {
   const st = statusOf(t);
   const d = daysToClose(t.closeDate);
-  const closeTxt = st === 'OPEN'
-    ? (d === 0 ? '🔥 đóng thầu hôm nay' : `⏳ còn ${d} ngày`)
-    : st === 'CLOSED' ? '⛔ đã đóng thầu'
-    : st === 'PLAN' ? '📋 chưa mời thầu'
-    : '❔ chưa rõ hạn nộp';
+  const closeTxt = esc(deadlineInfo(t).label);
   const loc = t.location || 'Chưa xác định địa điểm';
-  const link = t.detailUrl || t.sourcePageUrl || 'https://muasamcong.mpi.gov.vn/';
+  const link = safeSource(t.detailUrl) || safeSource(t.sourcePageUrl) || 'https://muasamcong.mpi.gov.vn/';
   const { code, label } = codeOf(t);
   return `
   <div class="tender" data-key="${esc(t.key)}">
@@ -183,10 +174,11 @@ function tenderCard(t) {
 }
 
 function render() {
-  const list = applyFilters(STATE.tenders || []);
+  const filteredList = applyFilters(STATE.tenders || []);
+  const list=filteredList.slice(0,60);
   const total = (STATE.tenders || []).length;
   $('count').textContent = total
-    ? `Hiển thị ${list.length}/${total} gói` + (list.length !== total ? ' (đang lọc)' : '')
+    ? `Hiển thị ${list.length}/${filteredList.length} gói sau lọc · kho ${total} gói` + (list.length !== total ? ' (đang lọc)' : '')
     : '';
   const box = $('list');
   if (!total) {
@@ -249,6 +241,8 @@ function bindFilterChip(chip) {
 }
 
 function init() {
+  $('launch-search').addEventListener('click',()=>send('OPEN_SEARCH'));
+
   $('scan').addEventListener('click', async () => {
     const r = await send('START_SCAN', { mode: 'manual' });
     if (r && r.ok === false) alert(r.message || 'Không bắt đầu được lượt quét.');

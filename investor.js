@@ -30,7 +30,7 @@ function pct(v) {
 function alertBox(html, kind) {
   const box = $('alert');
   box.className = `notice ${kind === 'error' ? 'error' : kind === 'ok' ? 'ok' : ''}`;
-  box.innerHTML = html;
+  box.textContent = String(html || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
   show(box, Boolean(html));
 }
 
@@ -172,6 +172,16 @@ function renderProfile(scan) {
 
   $('p-name').textContent = scan.criteria.name || '(không rõ tên)';
   $('p-code').textContent = (scan.criteria.codes || []).join(', ') || '—';
+  const watchBtn = $('watch-investor');
+  if (watchBtn) {
+    watchBtn.onclick = async () => {
+      const r = await send('SAVE_WATCH', {
+        name: scan.criteria.name,
+        taxCode: (scan.criteria.codes || [])[0]
+      });
+      alertBox(r?.ok ? 'Đã thêm vào danh sách theo dõi. Gói mới của đơn vị này sẽ được gắn theo dõi khi quét.' : (r?.message || 'Không lưu được.'), r?.ok ? 'ok' : 'error');
+    };
+  }
   $('p-years').textContent = s.years.length
     ? `Hoạt động ${s.years[0]} – ${s.years[s.years.length - 1]}` : '';
 

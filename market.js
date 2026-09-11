@@ -30,7 +30,7 @@ function pct(v) {
 function alertBox(html, kind) {
   const box = $('alert');
   box.className = `notice ${kind === 'error' ? 'error' : kind === 'ok' ? 'ok' : ''}`;
-  box.innerHTML = html;
+  box.textContent = String(html || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
   show(box, Boolean(html));
 }
 
@@ -538,10 +538,35 @@ $('clear').addEventListener('click', clearFilters);
 /* Khi mở trang: DỌN các lượt còn kẹt "đang chạy" từ phiên trước rồi mới đọc
    trạng thái. Không dọn thì trang vẽ lại thanh tiến trình của một lượt đã
    chết từ đời nào — trông như phần mềm tự động chạy. */
+async function renderHeat() {
+  try {
+    const { districtHeat, heatBar } = await import('./lib/heatmap.js');
+    const s = await send('GET_STATE');
+    const rows = districtHeat(s.tenders || [], s.areas || []).slice(0, 20);
+    const box = $('heat-list');
+    if (!box) return;
+    box.innerHTML = rows.map((r) => `<div style="margin:6px 0"><b>${esc(r.label)}</b> · ${r.count} gói · ${money(r.value)}<div class="bar"><i style="width:${Math.round(r.heat*100)}%;animation:none;margin:0"></i></div></div>`).join('') || 'Kho gói còn trống.';
+    if (window.L && $('heat-map') && rows.length) {
+      const map = window.L.map('heat-map').setView([12.2, 108.4], 6);
+      window.L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OSM', maxZoom: 12 }).addTo(map);
+      for (const r of rows) {
+        if (!r.lat) continue;
+        const marker = window.L.circleMarker([r.lat, r.lng], { radius: 6 + r.heat * 10, color: '#0f766e', fillOpacity: 0.5 });
+        marker.on('click', () => {
+          $('heat-detail').innerHTML = `<b>${esc(r.label)}</b><br>` + (r.tenders || []).map((t) => `${esc(t.notifyNo || '')} · ${esc(t.bidName || '')}`).join('<br>');
+        });
+        marker.bindTooltip(`${r.label} · ${r.count} gói`);
+        marker.addTo(map);
+      }
+    }
+  } catch {}
+}
+
 (async () => {
   fillYears();
   refreshFilterNote();
   loadProvinces();
   await send('RECONCILE_LOOKUPS');
   await refresh();
+  await renderHeat();
 })();

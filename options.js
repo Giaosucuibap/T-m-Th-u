@@ -1,11 +1,13 @@
+import {validateCriteria} from './lib/workspace.js';
 /* Giáo Sư Cùi Bắp — options.js : trang Cấu hình. */
 
 const ids = ['minPrice', 'maxPrice', 'minDaysToClose', 'reportMinScore', 'maxPagesHint', 'dailyTime',
   'maxStoredTenders', 'scanTimeoutSeconds', 'alertMinScore', 'telegramMinScore'];
 const checks = ['requireConstruction', 'autoScan', 'scanOnStartup', 'openScheduledTabActive',
-  'autoExportMobileReport', 'telegramEnabled', 'telegramDailySummary'];
+  'autoExportMobileReport', 'telegramEnabled', 'telegramDailySummary', 'readOnlyMode'];
 const lines = ['provinces', 'positiveKeywords', 'requiredKeywords', 'negativeKeywords'];
-const texts = ['requirementText', 'telegramBotToken', 'telegramChatId'];
+const texts = ['requirementText', 'telegramBotToken', 'telegramChatId', 'notifyEmail', 'notifyWebhook', 'webhookSecret', 'operatorName'];
+const selects = ['approvalSteps'];
 
 const $ = (id) => document.getElementById(id);
 const msg = (type, payload = {}) => chrome.runtime.sendMessage({ type, payload });
@@ -15,11 +17,13 @@ function esc(x) {
 }
 
 async function load() {
-  const s = (await msg('GET_STATE')).settings;
+  const priv = await msg('GET_PRIVATE_SETTINGS');
+  const s = (priv?.ok && priv.settings) ? priv.settings : (await msg('GET_STATE')).settings;
   ids.forEach((id) => { $(id).value = s[id] ?? ''; });
   checks.forEach((id) => { $(id).checked = Boolean(s[id]); });
   lines.forEach((id) => { $(id).value = (s[id] || []).join('\n'); });
   texts.forEach((id) => { $(id).value = s[id] || ''; });
+  selects.forEach((id) => { if ($(id)) $(id).value = String(s[id] || '3'); });
   loadLog();
 }
 
@@ -30,7 +34,13 @@ $('form').onsubmit = async (e) => {
   checks.forEach((id) => { p[id] = $(id).checked; });
   lines.forEach((id) => { p[id] = $(id).value.split(/\r?\n/).map((x) => x.trim()).filter(Boolean); });
   texts.forEach((id) => { p[id] = $(id).value.trim(); });
-  await msg('UPDATE_SETTINGS', p);
+  selects.forEach((id) => { if ($(id)) p[id] = $(id).value; });
+  const prices=validateCriteria({keyword:'settings',minPrice:$('minPrice').value,maxPrice:$('maxPrice').value});
+  if(!prices.ok){$('saved').textContent=prices.message;$('saved').className='notice error';$(prices.field).focus();return;}
+  p.minPrice=prices.criteria.minPrice;p.maxPrice=prices.criteria.maxPrice;
+  const response=await msg('UPDATE_SETTINGS', p);
+  if(!response?.ok){$('saved').textContent=response?.message||'Chưa lưu được cấu hình.';$('saved').className='notice error';return;}
+  $('saved').textContent='Đã lưu cấu hình và chấm lại dữ liệu hiện có.';$('saved').className='notice ok';
   $('saved').classList.remove('hidden');
   setTimeout(() => $('saved').classList.add('hidden'), 2500);
 };

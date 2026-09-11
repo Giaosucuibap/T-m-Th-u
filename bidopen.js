@@ -1,268 +1,144 @@
-/* Giáo Sư Cùi Bắp — bidopen.js
- * Giao diện "Gói đang chờ kết quả": xem nhà thầu nào đang dự thầu và
- * tỷ lệ giảm giá của từng nhà thầu, ở những gói ĐÃ MỞ THẦU nhưng CHƯA có KQLCNT.
- *
- * Vì e-GP không lập chỉ mục nhà thầu tham dự (xem lib/bbmt.js), tính năng chạy
- * theo kiểu quét có trần: lọc trước trên máy chủ, rồi đọc lần lượt từng biên bản.
- */
+import { formatDate } from './lib/core.js';
+import { formatOpeningMoney as formatMoney } from './lib/bbmt.js';
+import { formatDiscount, priceFacts } from './lib/kqlcnt.js';
+import { FIELD_OPTIONS, findBidder, bbmtReadStateOf, summarizeBidOpenings } from './lib/bbmt.js';
+import { safeSource } from './lib/workspace.js';
+import { openingTimeNotes } from './lib/bbmt-labels.js';
 
-import { formatMoney, formatDate } from './lib/core.js';
-import { formatDiscount } from './lib/kqlcnt.js';
-import { FIELD_OPTIONS, findBidder, bbmtReadStateOf } from './lib/bbmt.js';
-
-const $ = (id) => document.getElementById(id);
+const $ = id => document.getElementById(id);
 const send = (type, payload = {}) => chrome.runtime.sendMessage({ type, payload });
-
-let POLL = null;
-let SCAN = null;
-
-function esc(x) {
-  return String(x ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const esc = x => String(x ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const show = (el, on) => el.classList.toggle('hidden', !on);
+let SCAN=null, POLL=null, loading=false, refreshAgain=false, starting=false, listHtml='',formRestored=false;
+const running = () => ['LISTING','SCANNING','RUNNING'].includes(SCAN?.status);
+function alertBox(text, error=false) {
+  $('alert').textContent=text; $('alert').className='notice'+(error?' error':''); show($('alert'),Boolean(text));
 }
-function show(el, on) { el.classList.toggle('hidden', !on); }
-function alertBox(html, kind) {
-  const box = $('alert');
-  box.className = `notice ${kind === 'error' ? 'error' : kind === 'ok' ? 'ok' : ''}`;
-  box.innerHTML = html;
-  show(box, Boolean(html));
-}
-
-$('field').innerHTML = FIELD_OPTIONS.map((o) => `<option value="${esc(o.value)}">${esc(o.label)}</option>`).join('');
-
-/* Khối "Từ ngày / Đến ngày" chỉ hiện khi người dùng chọn "Tự chọn khoảng ngày".
-   Mặc định gợi ý 30 ngày gần đây để không phải gõ từ số không. */
-function syncDateRange() {
-  const custom = $('days').value === 'custom';
-  show($('dateRange'), custom);
-  if (custom && !$('fromDate').value && !$('toDate').value) {
-    const iso = (d) => new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
-    const now = new Date();
-    $('toDate').value = iso(now);
-    $('fromDate').value = iso(new Date(now.getTime() - 30 * 86400000));
+$('field').innerHTML=FIELD_OPTIONS.map(o=>`<option value="${esc(o.value)}">${esc(o.label)}</option>`).join('');
+function syncDateRange(){
+  const custom=$('days').value==='custom';show($('dateRange'),custom);
+  if(custom&&!$('fromDate').value&&!$('toDate').value){
+    const iso=d=>new Date(d.getTime()-d.getTimezoneOffset()*60000).toISOString().slice(0,10);
+    $('toDate').value=iso(new Date());$('fromDate').value=iso(new Date(Date.now()-30*86400000));
   }
 }
-$('days').addEventListener('change', syncDateRange);
-syncDateRange();
-
-/* ------------------------------------------------------------------ */
-
-async function start() {
-  const payload = {
-    query: $('q').value.trim(),
-    taxCode: $('q').value.trim(),
-    // 'custom' = người dùng tự chọn khoảng ngày; khi đó bỏ hẳn "N ngày gần đây"
-    // để hai cách chọn không chồng nhau (bbmtDateRange ưu tiên khoảng ngày).
-    days: $('days').value === 'custom' ? 0 : Number($('days').value),
-    fromDate: $('days').value === 'custom' ? $('fromDate').value : '',
-    toDate: $('days').value === 'custom' ? $('toDate').value : '',
-    field: $('field').value,
-    province: $('province') ? $('province').value.trim() : '',
-    investor: $('investor') ? $('investor').value.trim() : '',
-    keyword: $('keyword').value.trim(),
-    minPrice: Number($('minPrice').value) || 0,
-    maxPrice: Number($('maxPrice').value) || 0,
-    maxPackages: Number($('maxPackages').value)
-  };
-  alertBox('', null);
-  show($('summary'), false);
-  $('list').innerHTML = '';
-  show($('progress'), true);
-  $('progress-text').textContent = 'Đang mở e-GP và lấy danh sách…';
-
-  const res = await send('BID_OPEN_SCAN', payload);
-  if (!res || res.ok === false) {
-    show($('progress'), false);
-    alertBox(esc((res && res.message) || 'Không bắt đầu được lượt quét.'), 'error');
-    return;
-  }
-  startPolling();
+$('days').addEventListener('change',syncDateRange);
+async function start(){
+  if(starting||running())return;
+  if(!$('minPrice').checkValidity()||!$('maxPrice').checkValidity())return alertBox('Nhập giá không âm bằng đồng.',true);
+  const custom=$('days').value==='custom';
+  if(custom&&$('fromDate').value&&$('toDate').value&&$('fromDate').value>$('toDate').value)return alertBox('Ngày kết thúc phải từ ngày bắt đầu trở đi.',true);
+  const payload={query:$('q').value.trim(),taxCode:$('q').value.trim(),days:custom?0:Number($('days').value),
+    fromDate:custom?$('fromDate').value:'',toDate:custom?$('toDate').value:'',field:$('field').value,
+    province:$('province').value.trim(),investor:$('investor').value.trim(),keyword:$('keyword').value.trim(),
+    minPrice:Number($('minPrice').value)||0,maxPrice:Number($('maxPrice').value)||0,
+    maxPackages:Number($('maxPackages').value),focusTab:false};
+  if(payload.maxPrice&&payload.minPrice>payload.maxPrice)return alertBox('Giá đến phải lớn hơn hoặc bằng giá từ.',true);
+  starting=true;$('go').disabled=true;alertBox('Đang lấy danh sách gói và chuẩn bị đọc biên bản…');
+  try {const r=await send('BID_OPEN_SCAN',payload);if(!r?.ok)alertBox(r?.message||'Không bắt đầu được lượt quét.',true);else alertBox('');}
+  catch(e){alertBox(e.message,true);}finally{starting=false;await refresh();}
 }
-
-function startPolling() { if (POLL) clearInterval(POLL); POLL = setInterval(refresh, 1000); refresh(); }
-function stopPolling() { if (POLL) clearInterval(POLL); POLL = null; }
-
-async function refresh() {
-  const state = await send('GET_BID_OPEN_STATE');
-  if (!state || !state.ok) return;
-  SCAN = state.scan;
-  if (!SCAN) { show($('progress'), false); return; }
-
-  const running = SCAN.status === 'LISTING' || SCAN.status === 'SCANNING';
-  show($('progress'), running);
-  if (running) {
-    $('progress-text').textContent = SCAN.message || 'Đang quét…';
-    const total = (SCAN.packages || []).length || 1;
-    const pct = SCAN.status === 'LISTING' ? 0 : Math.round((Number(SCAN.scannedCount || 0) / total) * 100);
-    $('barfill').style.width = `${Math.max(2, Math.min(100, pct))}%`;
-  } else {
-    stopPolling();
-    $('stop').disabled = false;
-    $('stop').textContent = '⏹ Dừng';
-  }
-
-  if (SCAN.status === 'ERROR') {
-    alertBox(`<b>Không quét được.</b> ${esc(SCAN.message || '')}`, 'error');
-    return;
-  }
-  render();
+// Storage events publish each completed package. Polling is a fallback and is
+// restarted when the page is reopened in the middle of an active scan.
+async function refresh(){
+  if(loading){refreshAgain=true;return;}loading=true;
+  try{
+    const r=await send('GET_BID_OPEN_STATE');if(!r?.ok)return;SCAN=r.scan;
+    if(running()&&!POLL)POLL=setInterval(refresh,1500);
+    if(!running()&&POLL){clearInterval(POLL);POLL=null;}
+    $('go').disabled=starting||running();show($('progress'),running());
+    if(!SCAN){show($('summary'),false);show($('list-title'),false);$('list').innerHTML='';listHtml='';return;}
+    if(!formRestored){
+      formRestored=true;const c=SCAN.scope||{};
+      for(const key of ['field','province','investor','keyword','minPrice','maxPrice'])$(key).value=c[key]||'';
+      $('q').value=SCAN.contractorQuery||'';$('maxPackages').value=String(SCAN.maxPackages||150);
+      $('days').value=c.fromDate||c.toDate?'custom':String(c.days||30);
+      $('fromDate').value=c.fromDate||'';$('toDate').value=c.toDate||'';syncDateRange();
+    }
+    $('progress-text').textContent=SCAN.message||'Đang đọc…';
+    const pkgs=SCAN.packages||[];
+    const attempted=pkgs.filter(p=>['OK','EMPTY','PARTIAL','TIMEOUT'].includes(bbmtReadStateOf(p))).length;
+    $('barfill').style.width=`${pkgs.length?Math.max(2,attempted/pkgs.length*100):2}%`;
+    $('stop').disabled=false;
+    render();
+  }catch(e){alertBox('Không cập nhật được tiến độ: '+e.message,true);}
+  finally{loading=false;if(refreshAgain){refreshAgain=false;void refresh();}}
 }
-
-/* ------------------------------------------------------------------ */
-
-function bidderRow(b, isMe) {
-  const disc = b.discountPercent
-    ? `<span class="disc">${esc(formatDiscount(b.discountPercent))}</span>`
-    : '<span class="disc0">không giảm</span>';
-  return `
-    <tr class="${isMe ? 'me' : ''}">
-      <td class="num ${b.priceRank === 1 ? 'rank1' : ''}">${b.priceRank}</td>
-      <td>${isMe ? '👉 ' : ''}${esc(b.name)}${b.ventureName ? `<div class="muted small">Liên danh: ${esc(b.ventureName)}</div>` : ''}</td>
-      <td class="num">${esc(b.taxCode || '—')}</td>
-      <td class="num">${esc(formatMoney(b.bidPrice))}</td>
-      <td class="num">${disc}</td>
-      <td class="num" style="font-weight:800">${esc(formatMoney(b.finalPrice))}</td>
-      <td class="num">${b.vsPackageRate === null || b.vsPackageRate === undefined ? '—' : esc(formatDiscount(b.vsPackageRate))}</td>
-    </tr>`;
+const notes={PENDING:'Đang chờ đến lượt đọc biên bản.',READING:'Đang lấy bảng nhà thầu từ e-GP…',
+  EMPTY:'Biên bản đã trả bảng rỗng; chưa ghi nhận nhà thầu trong dữ liệu này.',
+  TIMEOUT:'Chưa nhận được bảng nhà thầu trong thời gian chờ. Có thể đọc lại riêng gói này.',
+  PARTIAL:'Số nhà thầu đọc được còn ít hơn số e-GP công bố. Bảng dưới đây chưa đầy đủ.'};
+function bidderRow(b,me,basis){
+  const facts=b.multiLot||b.comparisonPending?{}:priceFacts(basis,b.finalPrice);
+  const amount=facts.savedAmount,rate=facts.discountRate;
+  const comparison=amount==null?'Chưa đủ dữ liệu':`${amount<0?'Vượt':amount>0?'Giảm':'Bằng mốc'} ${esc(formatMoney(Math.abs(amount)))}`;
+  const percentage=rate==null?'—':`${Math.abs(rate).toLocaleString('vi-VN',{minimumFractionDigits:2,maximumFractionDigits:2})}%`;
+  return `<tr class="${me?'me':''}"><td class="num">${b.priceRank??'—'}</td>
+    <td class="bidder-name"><strong>${esc(b.name)}</strong>${me?'<span class="tag">Theo dõi</span>':''}
+    <div class="muted small">MST: ${esc(b.taxCode||'Chưa có')}</div>
+    ${b.ventureName?`<div class="muted small">Liên danh: ${esc(b.ventureName)}</div>`:''}
+    ${b.lotName||b.lotCode?`<div class="small">Phần/lô: ${esc(b.lotName||b.lotCode)}</div>`:''}</td>
+    <td class="num">${esc(formatMoney(b.bidPrice))}</td>
+    <td class="num muted">${b.discountPercent==null?'Chưa công bố':esc(formatDiscount(b.discountPercent))}</td>
+    <td class="num final-price">${esc(formatMoney(b.finalPrice))}${b.finalPriceDerived?'<div class="small muted">Tính từ tỷ lệ giảm</div>':''}</td>
+    <td class="num ${amount<0?'over-price':'saving'}">${comparison}<div>${percentage}</div>${b.multiLot?'<div class="small muted">Gói có nhiều phần/lô</div>':''}</td></tr>`;
 }
-
-/* Bốn kết cục của một lần đọc biên bản. Trước đây chỉ có hai nhãn, nên gói đã
-   đọc xong mà e-GP trả bảng rỗng lại hiện "Chưa đọc" — giống hệt gói còn chưa
-   tới lượt, khiến người dùng tưởng kết quả trả về lộn xộn. */
-const READ_STATE_NOTE = {
-  PENDING: 'Chưa đọc biên bản gói này.',
-  EMPTY: 'Đã đọc xong — biên bản chưa ghi nhận nhà thầu nào dự.',
-  TIMEOUT: 'Hết hạn chờ e-GP trả dữ liệu. Bấm quét lại để đọc nốt gói này.'
-};
-
-function packageCard(p, me) {
-  const bidders = p.bidders || [];
-  const body = bidders.length
-    ? `<table>
-        <thead><tr><th>Hạng</th><th>Nhà thầu</th><th>MST</th><th>Giá dự thầu</th>
-        <th>Giảm giá</th><th>Sau giảm giá</th><th>So giá gói</th></tr></thead>
-        <tbody>${bidders.map((b) => bidderRow(b, me && b === me)).join('')}</tbody>
-       </table>`
-    : `<div class="empty-note">${READ_STATE_NOTE[bbmtReadStateOf(p)]}</div>`;
-
-  return `
-    <div class="pkg">
-      <header>
-        <h3><a class="link" href="${esc(p.detailUrl)}" target="_blank" rel="noopener">${esc(p.bidName)} ↗</a></h3>
-        <div class="muted small">
-          <span class="tbmt">${esc(p.notifyNoStand)}</span> ·
-          <span class="tag tag-wait">${esc(p.stageLabel)}</span> ·
-          Giá gói thầu <b>${esc(formatMoney(p.bidPrice))}</b> ·
-          Mở thầu ${esc(formatDate(p.bidRealityOpenDate || p.publicDateKqmt))} ·
-          ${bidders.length || p.numBidderJoin} nhà thầu
-        </div>
-        <div class="muted small">${esc(p.investorName || '')}${p.location ? ` · ${esc(p.location)}` : ''}</div>
-      </header>
-      ${body}
-    </div>`;
+function packageCard(p,me){
+  const bidders=p.bidders||[], state=bbmtReadStateOf(p), basis=p.priceBasis??p.bidPrice;
+  const bidderCount=new Set(bidders.map(b=>b.taxCode||b.nameFold||b.name)).size;
+  const basisLabel=(p.priceBasisLabel||'Giá gói thầu (e-GP)')+(p.comparisonPending?' · Chưa đủ căn cứ đối chiếu':'');
+  const source=safeSource(p.detailUrl);
+  const timeNotes=openingTimeNotes(p,state);
+  return `<article class="pkg" data-key="${esc(p.key)}">
+    <div class="pkg-heading"><div class="pkg-topline"><span class="tbmt">${esc(p.notifyNoStand)}</span><span class="tag tag-wait">${esc(p.stageLabel||'Đang xét thầu')}</span></div>
+    <h3>${source?`<a class="link" href="${esc(source)}" target="_blank" rel="noopener">${esc(p.bidName)} ↗</a>`:esc(p.bidName)}</h3>
+    <div class="small muted">${esc(p.investorName)}${p.location?` · ${esc(p.location)}`:''}</div>
+    <div class="pkg-facts"><div><span>${esc(basisLabel)}</span><b>${esc(formatMoney(basis))}</b></div>
+      <div><span>Mở thầu</span><b>${esc(formatDate(p.bidRealityOpenDate||p.publicDateKqmt))}</b></div>
+      <div><span>Nhà thầu đã đọc / e-GP công bố</span><b>${bidderCount} / ${p.numBidderJoin??'—'}</b></div></div></div>
+    ${notes[state]?`<div class="empty-note ${state==='READING'?'reading':''}">${state==='READING'?'<span class="spin"></span>':''}${esc(state==='READING'?notes[state]:p.readIssue||notes[state])}${p.attempt>1&&state==='READING'?' (thử lại lần 2)':''}</div>`:''}
+    ${bidders.length?`<div class="bidder-scroll" tabindex="0" role="region" aria-label="Bảng nhà thầu ${esc(p.notifyNoStand)}">
+      <table><thead><tr><th>Hạng giá</th><th>Nhà thầu tham dự</th><th>Giá dự thầu</th><th>Giảm trên giá dự thầu</th><th>Giá sau giảm</th><th>Chênh lệch so mốc giá</th></tr></thead>
+      <tbody>${bidders.map(b=>bidderRow(b,b===me,basis)).join('')}</tbody></table></div>`:''}
+    <div class="pkg-footer"><span class="small muted">${timeNotes.length?timeNotes.map(n=>`${esc(n.label)} · ${esc(formatDate(n.at))}`).join('<br>'):'Bảng sẽ hiện ngay khi nhận được dữ liệu.'}</span>
+      <button class="btn light retry-one" data-retry="${esc(p.key)}" ${running()?'disabled':''}>${bidders.length?'Cập nhật biên bản':'Đọc lại gói này'}</button></div></article>`;
 }
-
-function render() {
-  const packages = SCAN.packages || [];
-  const s = SCAN.summary;
-  const watching = Boolean(SCAN.focusTaxCode || SCAN.contractorQuery);
-
-  if (SCAN.status === 'SUCCESS' && !packages.length) {
-    alertBox('Không có gói nào khớp bộ lọc. Hãy nới rộng số ngày hoặc bỏ bớt điều kiện.', 'error');
-    return;
-  }
-  if (!packages.length) return;
-
-  if (s) {
-    show($('summary'), true);
-    $('m-scan').textContent = s.scanned;
-    // Nói rõ ĐỘ PHỦ. Đọc 148 gói trong 3.000 gói khớp tiêu chí thì xác suất
-    // gặp đúng nhà thầu mình tìm là rất thấp — người dùng phải biết điều đó,
-    // nếu không họ sẽ kết luận "nhà thầu không dự gói nào".
-    const total = Number(SCAN.totalCandidates) || s.candidates || 0;
-    const pctRead = total ? Math.round((s.scanned / total) * 100) : 100;
-    $('m-scan-sub').innerHTML = total > s.candidates
-      ? `trên <b>${total.toLocaleString('vi-VN')}</b> gói khớp tiêu chí — mới đọc <b>${pctRead}%</b>`
-        + `${SCAN.failedCount ? ` · ${SCAN.failedCount} gói lỗi` : ''}`
-      : `trên ${s.candidates} gói ứng viên${SCAN.failedCount ? ` · ${SCAN.failedCount} gói lỗi` : ''}`;
-    $('m-join-label').textContent = watching ? 'Gói nhà thầu đang dự' : 'Tổng lượt dự thầu';
-    $('m-join').textContent = watching
-      ? s.joinedCount
-      : packages.reduce((n, p) => n + ((p.bidders || []).length), 0);
-    $('m-join-sub').textContent = watching
-      ? (s.joinedCount ? `${s.cheapestCount} gói đang có giá thấp nhất` : 'Không thấy nhà thầu này trong phạm vi đã quét')
-      : 'trong phạm vi đã quét';
-    $('m-disc').textContent = watching ? (s.avgDiscount === null ? '—' : formatDiscount(s.avgDiscount)) : '—';
-    $('m-disc-sub').textContent = watching && s.bestDiscount !== null
-      ? `Cao nhất ${formatDiscount(s.bestDiscount)}`
-      : (watching ? 'Chưa có dữ liệu' : 'Chỉ tính khi có nhà thầu theo dõi');
-    $('m-val').textContent = watching && s.totalBidValue ? formatMoney(s.totalBidValue) : '—';
-  }
-
-  show($('list-title'), true);
-  show($('only-wrap'), watching);
-
-  // Khớp gần đúng theo tên không vào số liệu — nói rõ thay vì trộn lẫn.
-  if (s && s.ambiguity && s.ambiguityNote) {
-    alertBox(`<b>Có kết quả chỉ là gợi ý.</b> ${esc(s.ambiguityNote)}`, null);
-  }
-
-  const onlyMine = watching && $('only').checked;
-  const rows = [];
-  for (const p of packages) {
-    const me = watching ? findBidder(p.bidders, SCAN.focusTaxCode, SCAN.contractorQuery) : null;
-    if (onlyMine && !me) continue;
-    rows.push(packageCard(p, me));
-  }
-
-  $('list').innerHTML = rows.length
-    ? rows.join('')
-    : (() => {
-        const read = SCAN.summary ? SCAN.summary.scanned : 0;
-        const total = Number(SCAN.totalCandidates) || 0;
-        const missed = total > read;
-        return `<div class="notice" style="margin-top:12px">
-          <b>Chưa thấy nhà thầu này trong ${read} biên bản đã đọc.</b>
-          ${missed ? `Nhưng có <b>${total.toLocaleString('vi-VN')}</b> gói khớp tiêu chí —
-            mới đọc được ${Math.round((read / total) * 100)}%, nên <b>rất có thể đã bỏ sót</b>.` : ''}
-          <div style="margin-top:8px">Cách chắc ăn: điền <b>Tỉnh/Thành phố</b> nơi nhà thầu hay dự,
-          hoặc điền <b>Chủ đầu tư</b> mà họ hay trúng — cả hai đều được e-GP lọc sẵn nên
-          thu hẹp rất mạnh. Xem "Hồ sơ 360°" của nhà thầu để biết họ hay dự ở đâu.</div>
-          <div style="margin-top:6px" class="muted small">Bỏ tick ở trên để xem toàn bộ biên bản đã đọc.</div>
-        </div>`;
-      })();
-
-  if (SCAN.status === 'SUCCESS' && SCAN.cancelled) {
-    alertBox(`<b>Đã dừng giữa chừng.</b> ${esc(SCAN.message || '')}`, null);
-  }
+function render(){
+  if(!SCAN)return;
+  const packages=SCAN.packages||[],s=summarizeBidOpenings(packages,SCAN.focusTaxCode,SCAN.contractorQuery);
+  const complete=packages.filter(p=>['OK','EMPTY'].includes(bbmtReadStateOf(p))).length;
+  const missing=packages.length-complete,watching=Boolean(SCAN.focusTaxCode||SCAN.contractorQuery);
+  show($('summary'),packages.length>0);show($('list-title'),packages.length>0);show($('only-wrap'),watching);
+  $('m-scan').textContent=complete;
+  $('m-scan-sub').textContent=`trên ${packages.length} gói · ${missing} gói chưa đủ dữ liệu`+(SCAN.cachedCount?` · ${SCAN.cachedCount} bản lưu`:'');
+  $('m-join-label').textContent=watching?'Gói khớp MST theo dõi':'Lượt nhà thầu đã đọc';
+  $('m-join').textContent=watching?s.joinedCount:packages.reduce((n,p)=>n+(p.bidders?.length||0),0);
+  $('m-join-sub').textContent=watching?`${s.cheapestCount} gói có giá thấp nhất trong bảng đã đọc`:'Hiển thị trực tiếp dưới từng gói';
+  $('m-disc').textContent=watching?formatDiscount(s.avgDiscount):'—';
+  $('m-disc-sub').textContent=watching?'Tỷ lệ giảm trên giá dự thầu của nhà thầu':'Mức giảm so mốc giá ở bảng từng gói';
+  $('m-val').textContent=watching?formatMoney(s.totalBidValue):'—';
+  $('csv').disabled=!packages.some(p=>p.bidders?.length);
+  show($('retry-missing'),!running()&&missing>0);
+  $('retry-missing').textContent=`Đọc tiếp ${missing} gói chưa đủ dữ liệu`;
+  $('result-status').textContent=running()?`Đang cập nhật từng gói · ${complete}/${packages.length} bảng đã đọc đủ`:SCAN.message||'';
+  const only=watching&&$('only').checked;
+  const cards=packages.flatMap(p=>{const me=watching?findBidder(p.bidders,SCAN.focusTaxCode,SCAN.contractorQuery):null;return only&&!me?[]:[packageCard(p,me)];});
+  const html=cards.join('')||(packages.length?'<div class="notice">Chưa thấy nhà thầu theo dõi trong các bảng đã đọc. Bỏ chọn bộ lọc để xem tiến độ của toàn bộ gói.</div>':'');
+  if(html!==listHtml){$('list').innerHTML=html;listHtml=html;}
+  if(!running())alertBox([['ERROR','PARTIAL'].includes(SCAN.status)?SCAN.message:'',s.ambiguityNote].filter(Boolean).join(' '),SCAN.status==='ERROR');
 }
-
-/* ------------------------------------------------------------------ */
-
-$('go').addEventListener('click', start);
-$('only').addEventListener('change', render);
-$('stop').addEventListener('click', async () => {
-  $('stop').disabled = true;
-  $('stop').textContent = '⏳ Đang dừng…';
-  await send('CANCEL_BID_OPEN_SCAN');
-});
-$('csv').addEventListener('click', async () => {
-  const r = await send('EXPORT_BID_OPEN_CSV');
-  if (r && r.ok === false) alertBox(esc(r.message || 'Không xuất được CSV.'), 'error');
-});
-
-refresh();
-
-/* Danh sách tỉnh cho ô chọn — lấy từ e-GP rồi ghi nhớ (xem lib/areas.js). */
-(async () => {
-  const el = $('province-list');
-  if (!el) return;
-  const res = await send('AREA_OPTIONS', {});
-  if (res && res.ok !== false) {
-    el.innerHTML = (res.provinces || []).map((n) => `<option value="${esc(n)}">`).join('');
-  }
-})();
-
-/* Dọn các lượt còn kẹt "đang chạy" từ phiên trước trước khi vẽ trạng thái.
-   Không dọn thì trang hiện thanh tiến trình của một lượt đã chết —
-   trông như phần mềm tự động chạy (xem reconcileStaleLookups). */
-send('RECONCILE_LOOKUPS').then(() => refresh()).catch(() => refresh());
+async function retry(key){
+  if(starting||running())return;starting=true;$('retry-missing').disabled=true;
+  try{const r=await send('RETRY_BID_OPEN',key?{key}:{});if(!r?.ok)alertBox(r?.message||'Không đọc lại được.',true);else alertBox('');}
+  catch(e){alertBox(e.message,true);}finally{starting=false;$('retry-missing').disabled=false;await refresh();}
+}
+$('go').addEventListener('click',start);
+$('only').addEventListener('change',render);
+$('retry-missing').addEventListener('click',()=>retry());
+$('list').addEventListener('click',e=>{const b=e.target.closest('[data-retry]');if(b)void retry(b.dataset.retry);});
+$('stop').addEventListener('click',async()=>{$('stop').disabled=true;await send('CANCEL_BID_OPEN_SCAN');await refresh();});
+$('csv').addEventListener('click',async()=>{try{const r=await send('EXPORT_BID_OPEN_CSV');if(!r?.ok)alertBox(r?.message||'Không xuất được Excel.',true);}catch(e){alertBox(e.message,true);}});
+chrome.storage.onChanged.addListener((changes,area)=>{if(area==='local'&&changes.bidOpenScan)void refresh();});
+window.addEventListener('pagehide',()=>{if(POLL)clearInterval(POLL);});
+void send('RECONCILE_LOOKUPS').then(refresh).catch(refresh);
+void send('AREA_OPTIONS',{provincesOnly:true}).then(r=>{if(r?.ok)$('province-list').innerHTML=(r.provinces||[]).map(n=>`<option value="${esc(n)}">`).join('');}).catch(()=>{});

@@ -149,8 +149,10 @@ test('padRange nới đều hai đầu và bỏ qua khoảng rỗng', () => {
 });
 
 test('firstStampMs lấy trường đầu tiên đọc được, bỏ qua trường rỗng', () => {
+  // Mốc so sánh phải là 00:00 GIỜ VIỆT NAM, không phải `new Date(...)` — chuỗi
+  // e-GP không kèm múi giờ, mà new Date() lại hiểu nó theo giờ máy.
   assert.equal(firstStampMs({ a: null, b: '2026-03-01T00:00:00' }, ['a', 'b']),
-    new Date('2026-03-01T00:00:00').getTime());
+    Date.parse('2026-03-01T00:00:00+07:00'));
   assert.equal(firstStampMs({ a: 'không phải ngày' }, ['a']), null);
   assert.equal(firstStampMs({}, ['a', 'b']), null);
   assert.equal(firstStampMs(null, ['a']), null);
@@ -158,6 +160,9 @@ test('firstStampMs lấy trường đầu tiên đọc được, bỏ qua trư�
 
 test('dateRangeFrom giữ đúng thứ tự ưu tiên cho cả hai màn hình', () => {
   const r = dateRangeFrom({ fromDate: '2026-02-01', toDate: '2026-02-28', fromYear: 2020, days: 7 });
-  assert.equal(new Date(r.from).getFullYear(), 2026, 'khoảng ngày phải thắng khoảng năm và N ngày');
-  assert.equal(new Date(r.to).getDate(), 28);
+  // So bằng chuỗi ISO tuyệt đối: getFullYear()/getDate() đọc theo giờ máy nên
+  // ở múi giờ khác sẽ cho ngày khác, và bài kiểm thử tự sinh ra lỗi giả.
+  assert.equal(new Date(r.from).toISOString(), '2026-01-31T17:00:00.000Z',
+    'khoảng ngày phải thắng khoảng năm và N ngày');
+  assert.equal(new Date(r.to).toISOString(), '2026-02-28T16:59:59.999Z');
 });

@@ -51,9 +51,32 @@ test('manifest is MV3, version-aligned, and all declared local resources exist',
   assert.equal(manifest.manifest_version, 3);
   assert.equal(manifest.version, packageJson.version);
   assert.equal(manifest.background?.type, 'module');
-  assert.equal(manifest.content_security_policy?.extension_pages.includes("'unsafe-eval'"), false);
-  assert.equal(manifest.content_security_policy?.extension_pages.includes('http:'), false);
-  assert.equal(manifest.content_security_policy?.extension_pages.includes('https:'), false);
+  /* CSP: chặn nguồn ngoài ở những chỉ thị THỰC SỰ nguy hiểm, không chặn theo
+     kiểu tìm chuỗi trên cả dòng.
+
+     Bản trước cấm chuỗi 'https:' ở bất kỳ đâu trong CSP. Quá thô: 4.8.0 cần
+     `img-src ... https:` để tải ảnh bản đồ, mà đó là chỉ thị vô hại nhất —
+     ảnh không chạy được mã. Cấm cả dòng thì hoặc là chặn oan, hoặc (tệ hơn)
+     người sau sẽ xoá phép thử đi cho xong.
+
+     Thứ phải giữ bằng mọi giá là script-src: cho phép nguồn ngoài ở đó nghĩa
+     là bất kỳ ai chiếm được một host nào đó cũng chạy được mã trong tiện ích,
+     với toàn bộ quyền truy cập kho dữ liệu thầu. */
+  const csp = manifest.content_security_policy?.extension_pages || '';
+  assert.equal(csp.includes("'unsafe-eval'"), false, 'CSP không được cho phép unsafe-eval');
+  assert.equal(csp.includes('http:'), false, 'CSP không được cho phép nguồn http: không mã hoá');
+
+  const directives = Object.fromEntries(
+    csp.split(';').map((d) => d.trim()).filter(Boolean)
+      .map((d) => { const [name, ...vals] = d.split(/\s+/); return [name, vals]; })
+  );
+  assert.deepEqual(directives['script-src'], ["'self'"], 'script chỉ được nạp từ chính tiện ích');
+  assert.deepEqual(directives['object-src'], ["'none'"]);
+  for (const [name, vals] of Object.entries(directives)) {
+    if (name === 'img-src') continue;   // ảnh không chạy được mã
+    assert.equal(vals.includes('https:'), false,
+      `${name} không được mở cho nguồn https: bất kỳ`);
+  }
 
   assertLocalFile(manifest.background?.service_worker, 'background.service_worker');
   assertLocalFile(manifest.action?.default_popup, 'action.default_popup');

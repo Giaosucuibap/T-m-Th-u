@@ -12,9 +12,13 @@
  *  buildWardMarketQuery) là `searchType:'range'` với from/to là SỐ epoch ms.
  *
  *  Vì máy chủ nuốt lỗi thay vì báo, bộ lọc phía máy chủ KHÔNG bao giờ đủ để
- *  tin. Nên hai lớp phải cùng đúng, và cả hai đều được chốt ở đây:
- *      1. truy vấn gửi lên đúng định dạng e-GP hiểu
- *      2. dữ liệu tải về được lọc LẠI tại chỗ, bất kể máy chủ làm gì
+ *  tin. Lớp quyết định phải nằm tại chỗ.
+ *
+ *  CẬP NHẬT 4.9.0: bộ lọc ngày gửi lên máy chủ đã được BỎ HẲN ở màn hình này,
+ *  không phải sửa lại định dạng. Lý do nằm trong bài đầu tiên dưới đây: trường
+ *  duy nhất máy chủ lọc được là ngày ĐĂNG biên bản, không phải ngày MỞ thầu,
+ *  nên lọc bằng nó là tự cắt mất gói vừa mở. Giữ lại một lớp duy nhất mà đúng,
+ *  hơn là hai lớp trong đó một lớp nói sai chuyện.
  * ========================================================================== */
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -28,16 +32,30 @@ const dateFilters = (q) => q.filters.filter((f) => /^publicDate/.test(f.fieldNam
  *  1. Định dạng bộ lọc gửi lên máy chủ
  * ------------------------------------------------------------------------ */
 
-test('bộ lọc thời gian dùng range + epoch mili-giây, không phải chuỗi ISO', () => {
-  const q = buildBbmtQuery({ days: 15 });
-  const ranges = dateFilters(q).filter((f) => f.searchType === 'range');
-  assert.equal(ranges.length, 1, 'phải có đúng một bộ lọc khoảng thời gian');
+test('KHÔNG gửi bộ lọc ngày lên máy chủ cho màn hình mở thầu', () => {
+  /* Bài này trước đây đòi ngược lại: bắt buộc phải có một filter `range` trên
+     publicDateKqmt. Đã đổi vì có bằng chứng từ dữ liệu thật.
 
-  const [f] = ranges;
-  assert.equal(typeof f.from, 'number', '`from` phải là SỐ epoch ms');
-  assert.equal(typeof f.to, 'number', '`to` phải là SỐ epoch ms');
-  assert.ok(f.from < f.to);
-  assert.equal(f.fieldValues, undefined, 'range không dùng fieldValues');
+     publicDateKqmt là ngày ĐĂNG biên bản, không phải ngày MỞ thầu. Gói
+     IB2600486024 đăng 26/8/2026 nhưng bidRealityOpenDate là 5/9/2026. Người
+     dùng hỏi "mở thầu trong khoảng nào", nên lọc máy chủ theo ngày đăng sẽ cắt
+     mất gói vừa mở — BỎ SÓT, đúng thứ tệ nhất với người đi tìm việc.
+
+     Nên máy chủ chỉ lọc những trường đã kiểm chứng (trạng thái, lĩnh vực, địa
+     bàn, giá), còn khoảng ngày do bbmtInDateRange() đối chiếu tại chỗ trên
+     bidRealityOpenDate. Chậm hơn một chút, đổi lấy không bỏ sót. */
+  for (const scope of [{ days: 15 }, { fromDate: '2026-06-01', toDate: '2026-09-02' }]) {
+    assert.equal(dateFilters(buildBbmtQuery(scope)).filter((f) => f.searchType === 'range').length, 0,
+      `${JSON.stringify(scope)} không được sinh filter ngày gửi lên máy chủ`);
+  }
+});
+
+test('bù lại: lớp tại chỗ soi NGÀY MỞ THẦU THỰC TẾ trước ngày đăng', () => {
+  const r = bbmtDateRange({ fromDate: '2026-09-01', toDate: '2026-09-30' });
+  // Đúng gói IB2600486024: đăng 26/8 (ngoài khoảng), mở thật 5/9 (trong khoảng).
+  assert.equal(bbmtInDateRange(
+    { publicDateKqmt: '2026-08-26T09:00:00+07:00', bidRealityOpenDate: '2026-09-05T09:00:00+07:00' }, r),
+    true, 'gói mở 5/9 phải được giữ, dù đăng biên bản từ 26/8');
 });
 
 test('không còn dùng greater_equal/less_equal cho ngày — e-GP bỏ qua lặng lẽ', () => {
@@ -50,12 +68,18 @@ test('không còn dùng greater_equal/less_equal cho ngày — e-GP bỏ qua l�
   }
 });
 
-test('chỉ có MỘT bộ lọc khoảng thời gian, không chồng hai cái lên một trường', () => {
+test('nhiều cách chọn thời gian cùng lúc vẫn chỉ ra MỘT khoảng', () => {
   // Trước đây `days` và `fromYear/toYear` cùng đẩy filter lên publicDateKqmt,
-  // nên máy chủ nhận hai điều kiện chồng nhau trên cùng một trường.
-  const q = buildBbmtQuery({ days: 15, fromYear: 2023, toYear: 2024, fromDate: '2026-01-01' });
-  const ranges = dateFilters(q).filter((f) => f.searchType === 'range');
-  assert.equal(ranges.length, 1);
+  // nên máy chủ nhận hai điều kiện chồng nhau trên cùng một trường. Nay không
+  // gửi lên máy chủ nữa, nhưng bất biến "một khoảng duy nhất" vẫn phải giữ ở
+  // lớp tại chỗ, nếu không thì hai tiêu chí sẽ đá nhau.
+  const r = bbmtDateRange({ days: 15, fromYear: 2023, toYear: 2024, fromDate: '2026-01-01', toDate: '2026-03-31' });
+  assert.ok(r && typeof r.from === 'number' && typeof r.to === 'number');
+  assert.ok(r.from < r.to);
+  // 00:00 ngày 01/01/2026 giờ Việt Nam = 17:00 ngày 31/12/2025 UTC — nên KHÔNG
+  // được đọc bằng getUTCFullYear() rồi mong thấy 2026. So chuỗi cho khỏi nhầm.
+  assert.equal(new Date(r.from).toISOString(), '2025-12-31T17:00:00.000Z',
+    'khoảng ngày phải thắng khoảng năm và "N ngày gần đây"');
 });
 
 test('vẫn giữ bộ lọc not_null để chỉ lấy gói đã đăng biên bản mở thầu', () => {
@@ -73,20 +97,23 @@ test('không chọn thời gian thì không sinh bộ lọc khoảng', () => {
  * ------------------------------------------------------------------------ */
 
 test('khoảng ngày tự chọn được ưu tiên hơn khoảng năm và "N ngày gần đây"', () => {
+  // Đọc biên bằng getUTC*, KHÔNG bằng getFullYear/getDate: biên được neo vào
+  // nửa đêm GIỜ VIỆT NAM, nên đọc bằng giờ máy sẽ ra ngày khác ở múi giờ khác
+  // và bài kiểm thử lại tự tạo ra đúng loại lỗi nó đang đi tìm.
   const r = bbmtDateRange({ fromDate: '2026-02-01', toDate: '2026-02-28', fromYear: 2020, days: 7 });
-  assert.equal(new Date(r.from).getFullYear(), 2026);
-  assert.equal(new Date(r.from).getMonth(), 1);
-  assert.equal(new Date(r.from).getDate(), 1);
-  assert.equal(new Date(r.to).getDate(), 28);
+  assert.equal(new Date(r.from).toISOString(), '2026-01-31T17:00:00.000Z',
+    '00:00 ngày 01/02 giờ Việt Nam');
+  assert.equal(new Date(r.to).toISOString(), '2026-02-28T16:59:59.999Z',
+    '23:59:59.999 ngày 28/02 giờ Việt Nam');
 });
 
 test('"đến ngày" bao trọn cả ngày đó, không cắt lúc 00:00', () => {
   const r = bbmtDateRange({ fromDate: '2026-03-01', toDate: '2026-03-01' });
-  const to = new Date(r.to);
-  assert.equal(to.getHours(), 23);
-  assert.equal(to.getMinutes(), 59);
-  // Gói mở thầu lúc 14:30 đúng ngày đó phải nằm trong khoảng.
-  assert.ok(new Date(2026, 2, 1, 14, 30).getTime() <= r.to);
+  // Gói mở thầu lúc 14:30 và lúc 23:45 GIỜ VIỆT NAM cùng ngày đều phải lọt.
+  assert.equal(bbmtInDateRange({ bidRealityOpenDate: '2026-03-01T14:30:00+07:00' }, r), true);
+  assert.equal(bbmtInDateRange({ bidRealityOpenDate: '2026-03-01T23:45:00+07:00' }, r), true);
+  // Nửa đêm sang ngày hôm sau thì hết.
+  assert.equal(bbmtInDateRange({ bidRealityOpenDate: '2026-03-02T00:15:00+07:00' }, r), false);
 });
 
 test('chọn ngược từ/đến thì tự hoán đổi thay vì trả khoảng rỗng', () => {
@@ -99,7 +126,7 @@ test('bỏ trống một đầu thì đầu đó không giới hạn', () => {
   assert.ok(chiTuNgay.to >= Date.now() - 1000, 'thiếu "đến ngày" thì lấy tới hiện tại');
 
   const chiDenNgay = bbmtDateRange({ toDate: '2026-01-31' });
-  assert.ok(new Date(chiDenNgay.from).getFullYear() <= 2000, 'thiếu "từ ngày" thì lấy từ rất xa');
+  assert.ok(new Date(chiDenNgay.from).getUTCFullYear() <= 2000, 'thiếu "từ ngày" thì lấy từ rất xa');
 });
 
 test('"N ngày gần đây" cho khoảng đúng bằng N ngày', () => {

@@ -14,6 +14,8 @@
   @media(max-width:900px){.metrics{grid-template-columns:1fr 1fr}}
   .scope{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
   @media(max-width:900px){.scope{grid-template-columns:1fr 1fr}}
+  .scope>div{min-width:0}
+  @media(max-width:540px){.scope{grid-template-columns:1fr}.plan table{font-size:12px}.plan th:last-child{width:auto!important}}
   .spin{display:inline-block;width:13px;height:13px;border:2px solid #cbd5e1;border-top-color:var(--accent);
         border-radius:50%;animation:sp .8s linear infinite;vertical-align:-2px;margin-right:7px}
   @keyframes sp{to{transform:rotate(360deg)}}
@@ -28,7 +30,7 @@
   .tag-new{background:#dcfce7;color:#166534}
   .chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
 </style>
-</head>
+<link rel="stylesheet" href="workspace.css"><link rel="icon" href="icons/icon32.png"></head>
 <body>
   <header>
     <b>📋 Kế hoạch lựa chọn nhà thầu</b>
@@ -66,6 +68,11 @@
           <input id="keyword" placeholder="VD: kênh mương">
         </div>
         <div>
+          <label for="category">Loại gói thầu</label>
+          <select id="category" aria-describedby="category-hint"></select>
+          <small id="category-hint" class="muted">Chọn nhóm hoặc chuyên môn tư vấn cần tìm.</small>
+        </div>
+        <div>
           <label for="period">Kế hoạch phê duyệt trong</label>
           <select id="period">
             <option value="">Không giới hạn thời gian</option>
@@ -91,9 +98,10 @@
         <button id="reset" class="btn light" style="width:auto">Xóa</button>
       </div>
       <div class="muted small" style="margin-top:10px;line-height:1.6">
-        Cần <b>ít nhất một tiêu chí</b> — và <b>chỉ chọn Tỉnh/Thành phố cũng tra được</b>.
-        Cả bốn ô đều do <b>e-GP lọc sẵn trước khi gửi về</b> nên nhanh; riêng kế hoạch LCNT thì
-        e-GP lọc được cả tỉnh lẫn xã/phường (khác với mục Tìm TBMT).
+        Cần <b>ít nhất một tiêu chí</b> — có thể chọn Loại gói thầu hoặc Tỉnh/Thành phố để tra cứu.
+        Chủ đầu tư, từ khóa, tỉnh và xã/phường gửi đến bộ tìm kiếm e-GP.
+        Loại gói thầu đối chiếu từng gói trong kế hoạch; các nhóm tư vấn thiết kế, giám sát… nhận diện theo tên gói.
+        Khi chọn loại, bảng và tổng giá chỉ tính <b>các gói khớp</b> trong những kế hoạch đã tải.
         Danh sách xã/phường lấy trực tiếp từ e-GP, gồm cả <b>tên huyện/xã trước sáp nhập</b>,
         nên không bỏ sót kế hoạch đăng trước 01/7/2025.
         Nếu <b>chỉ</b> chọn tỉnh, phần mềm lấy 2.000 kế hoạch gần nhất rồi báo lại —
@@ -116,9 +124,9 @@
       <div class="metrics">
         <div class="card"><div class="muted small">Số kế hoạch</div><div id="m-plan" class="metric num">0</div>
           <div id="m-plan-sub" class="muted small">—</div></div>
-        <div class="card"><div class="muted small">Tổng số gói thầu</div><div id="m-pkg" class="metric num">0</div>
+        <div class="card"><div id="m-pkg-title" class="muted small">Tổng số gói thầu</div><div id="m-pkg" class="metric num">0</div>
           <div id="m-pkg-sub" class="muted small">—</div></div>
-        <div class="card"><div class="muted small">Tổng giá các gói</div><div id="m-val" class="num" style="font-weight:850;font-size:19px">—</div>
+        <div class="card"><div id="m-val-title" class="muted small">Tổng giá các gói</div><div id="m-val" class="num" style="font-weight:850;font-size:19px">—</div>
           <div id="m-invest" class="muted small">—</div></div>
         <div class="card"><div class="muted small">Còn gói chưa mời thầu</div><div id="m-new" class="metric num" style="color:#166534">0</div>
           <button id="csv" class="btn light" style="width:auto;margin-top:8px">⬇ Xuất Excel</button></div>
@@ -140,5 +148,5 @@
 
   <script type="module" src="plans.js"></script>
   <script src="logo.js"></script>
-</body>
+<script type="module" src="shell.js"></script></body>
 </html>

@@ -2,6 +2,98 @@
 
 Tài liệu này ghi lại các thay đổi quan trọng của Giáo Sư Cùi Bắp. Cấu trúc tham khảo [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) và phiên bản tuân theo cách đánh số ngữ nghĩa ở mức sản phẩm.
 
+## [4.9.0] — 2026-09-11
+
+Hợp nhất bản 4.8.0 của tác giả vào nhánh này, và sửa hai lỗi lọc ngày mà bản
+4.8.0 mang theo — cả hai đều **vô hình trên máy đặt giờ Việt Nam**.
+
+### Nhận từ 4.8.0
+
+Bản 4.8.0 được xây trên chính mã 4.2.0 của nhánh này và là một bản mở rộng
+thật, không phải nhánh song song. Đã chạy lại toàn bộ kịch bản hồi quy của
+nhánh này trên nó: **đạt hết**. Những chỗ 4.8.0 làm tốt hơn, giữ nguyên:
+
+- **Đọc biên bản mở thầu** viết lại tốt hơn bản 4.2.0 ở bốn điểm:
+  ba đồng hồ độc lập (tải trang 45 giây / chờ dữ liệu 25 giây, tự gia hạn mỗi
+  lần e-GP trả lời / trần tuyệt đối 90 giây không gia hạn được); đọc hai gói
+  song song thay vì tuần tự; **chứng thực bảng trước khi nhận** — phải biết
+  loại biên bản, đã xác minh mốc giá, và số nhà thầu đọc được khớp số e-GP công
+  bố, nếu không thì ghi rõ là chưa đủ; và quan trọng nhất, dùng `chrome.alarms`
+  làm chốt canh. Bản 4.2.0 chỉ dùng `setTimeout`, thứ **chết theo service
+  worker** khi Chrome cho worker ngủ — một lỗi MV3 thật của bản 4.2.0.
+- **Bỏ bộ lọc ngày gửi lên máy chủ ở màn hình mở thầu.** Bản 4.2.0 gửi range
+  trên `publicDateKqmt`. Nhưng đó là ngày ĐĂNG biên bản: gói IB2600486024 đăng
+  26/8/2026 mà mở thật 5/9/2026. Lọc máy chủ bằng ngày đăng là cắt mất gói vừa
+  mở — bỏ sót, thứ tệ nhất. 4.8.0 bỏ hẳn lớp đó và đối chiếu
+  `bidRealityOpenDate` tại chỗ. Một lớp đúng hơn hai lớp có một lớp nói sai.
+- **`statusOf()` tính lại vòng đời mỗi lần đọc** thay vì tin trường `status` đã
+  lưu. Trường đó không bao giờ là tín hiệu riêng từ e-GP — chính phần mềm gán
+  nó lúc quét — nên "ưu tiên giá trị đã lưu" chỉ có tác dụng đóng băng một kết
+  quả cũ: gói quét tuần trước vẫn hiện ĐANG MỞ dù đã hết hạn từ lâu.
+- **Nhãn độ đầy đủ dữ liệu nói đúng việc hơn**: "Đủ trường chính" thay cho "Dữ
+  liệu tốt". Phần mềm đếm được trường nào có nguồn, nó không phán xét được dữ
+  liệu tốt hay xấu.
+- Mười vòng tính năng 4.3–4.8: chọn loại gói thầu, bộ săn tự động theo giờ,
+  theo dõi chủ đầu tư, năng lực công ty, checklist HSDT, hợp đồng tương tự,
+  ma trận HĐ×HSMT, đối thủ địa bàn, bản đồ Leaflet, nhật ký điều chỉnh, duyệt
+  Go nhiều bước, đồng bộ JSON qua USB có HMAC, và chế độ chỉ xem.
+
+### Sửa lỗi
+
+- **Bộ lọc ngày loại oan bản ghi, không báo gì.** `parseDate()` neo mốc e-GP
+  vào giờ Việt Nam (đúng), nhưng `parseDayMs()` lại dựng biên khoảng bằng **giờ
+  máy**. Hai cách neo khác nhau cho cùng khái niệm "ngày", lệch nhau đúng 7
+  tiếng:
+
+  > Kế hoạch phê duyệt 01/06/2026 lúc 05:00 giờ Việt Nam → `2026-05-31T22:00Z`.
+  > Biên dưới của "từ ngày 01/06" trên máy UTC → `2026-06-01T00:00Z`.
+  > 22:00 ngày 31/05 < 00:00 ngày 01/06 → **kế hoạch biến mất khỏi kết quả.**
+
+- **`firstStampMs()` ném đi toàn bộ việc neo giờ** — nó dùng thẳng
+  `new Date(raw)` thay vì `parseDate()`, đúng tại chỗ mọi bộ lọc khoảng ngày so
+  sánh. e-GP thường trả chuỗi không kèm múi giờ (`'2026-03-31T23:59:00'`), mà
+  `new Date()` hiểu chuỗi đó theo giờ máy. Gói mở thầu tối muộn ngày cuối khoảng
+  rơi ra ngoài.
+
+  Cả hai nay dùng chung hằng số `VN_UTC_OFFSET_HOURS` khai báo một chỗ duy nhất.
+
+- **Cảnh báo "Đã quá hạn" không đời nào chạy được.** Điều kiện sinh ra nó đòi
+  gói đang MỞ và số ngày còn lại < 0 — nhưng ngày còn lại < 0 thì vòng đời đã
+  là ĐÃ ĐÓNG. Bỏ hẳn nhánh chết thay vì để đó.
+- **Bản ghi rỗng được cộng 16 điểm tin cậy.** `bidStatus()` trả `PLAN` cho mọi
+  bản ghi thiếu mã TBMT, kể cả bản ghi trống trơn, rồi `dataConfidence()` miễn
+  cho "kế hoạch" khoản thiếu hạn nộp. Nay phải **có mã kế hoạch** mới được miễn.
+- Bỏ ba tham chiếu ảnh trong `vendor/leaflet.css` trỏ tới tệp không có trong
+  gói. Bản đồ chỉ dùng `circleMarker`, không dùng `L.marker` hay
+  `control.layers`, nên ba ảnh đó vĩnh viễn không hiển thị — giữ lại chỉ là
+  ship sẵn ba yêu cầu tải hỏng.
+
+### Kiểm thử
+
+Bản 4.8.0 gửi kèm 3 tệp kiểm thử và **không có** bộ chạy trong trình duyệt.
+Nhánh này khôi phục lại toàn bộ: **144 bài**, gồm cả 21 bài của 4.8.0 và bộ
+kịch bản Chromium + máy chủ e-GP giả lập ở `tools/`.
+
+- `tests/timezone.test.js` — chạy lại đúng kịch bản đã làm lộ hai lỗi trên.
+- `npm run test:tz` chạy toàn bộ ở **bốn múi giờ**. Đây không phải cẩn thận
+  thừa: bản lỗi **đạt hết 5/5** khi chạy ở giờ Việt Nam. Chạy một múi giờ là tự
+  bịt mắt trước cả một lớp lỗi im lặng.
+- Bài kiểm thử múi giờ đầu tiên tôi viết **cũng bỏ sót** lỗi `firstStampMs`, vì
+  nó dựng dữ liệu mẫu bằng `parseDate()` nên chuỗi nào cũng có hậu tố `Z` — mà
+  `Z` thì `new Date()` cũng hiểu đúng. Đã viết lại bằng nguyên dạng chuỗi e-GP
+  trả về.
+- Mọi bài sửa đều đã thử phá lại mã nguồn để chắc chắn nó báo đỏ thật.
+
+### Còn chưa xác nhận được
+
+- Mọi phép đo vẫn trên **e-GP giả lập**. Chưa có lượt canary trên máy chủ thật.
+- Không kiểm chứng được con số "161/161 đạt" trong báo cáo 4.8.0: gói không kèm
+  bộ kiểm thử tương ứng.
+- `market.html` tải ảnh bản đồ từ `tile.openstreetmap.org`. Mỗi lần mở **Soi
+  địa bàn**, trình duyệt để lộ cho bên thứ ba biết đang xem vùng bản đồ nào.
+  Không nghiêm trọng, nhưng ngược với tinh thần "dữ liệu nằm tại máy" của phần
+  còn lại, và người dùng nên biết.
+
 ## [4.2.0] — 2026-09-03
 
 Lọc theo ngày cho màn hình **Kế hoạch lựa chọn nhà thầu**.

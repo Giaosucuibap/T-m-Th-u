@@ -29,21 +29,40 @@ function dateAt(dayOffset) {
   return new Date(FIXED_NOW + dayOffset * DAY).toISOString();
 }
 
+/**
+ * Vòng đời KHÔNG còn đọc từ trường `status` — `statusOf()` tính lại từ dữ liệu
+ * mỗi lần đọc, vì trạng thái lưu lúc quét có thể đã cũ (xem bài "statusOf tính
+ * lại từ hạn thực tế"). Nên muốn dựng một gói ở vòng đời nào thì phải dựng ĐÚNG
+ * hình dạng dữ liệu sinh ra vòng đời đó, chứ không phải dán nhãn lên.
+ *
+ * Viết `tender({ status: 'PLAN' })` vẫn đọc được như cũ; hàm này quy nhãn ra
+ * hình dạng, để tám bài kiểm thử phía dưới không phải sửa từng cái.
+ */
+function shapeFor(status) {
+  switch (status) {
+    // Chưa có mã TBMT = chưa mời thầu, bất kể ngày tháng.
+    case 'PLAN':    return { notifyNo: '', bidNo: 'BP2600000001', closeDate: dateAt(10) };
+    // Có mã TBMT nhưng không có hạn = chưa biết, không đoán.
+    case 'UNKNOWN': return { notifyNo: 'IB2600000001', bidNo: '', closeDate: null };
+    case 'CLOSED':  return { notifyNo: 'IB2600000001', bidNo: '', closeDate: dateAt(-1) };
+    default:        return { notifyNo: 'IB2600000001', bidNo: '', closeDate: dateAt(10) };
+  }
+}
+
 function tender(overrides = {}) {
+  const { status, ...rest } = overrides;
   return {
-    notifyNo: 'IB2600000001',
     bidName: 'Xây dựng kênh thủy lợi',
     price: 5_000_000_000,
-    closeDate: dateAt(10),
     location: 'Đắk Lắk',
     investorName: 'Ban quản lý dự án',
     detailUrl: 'https://muasamcong.mpi.gov.vn/web/guest/contractor-selection?x=1',
-    status: 'OPEN',
     score: 0,
     matched: false,
     reasons: [],
     negHits: [],
-    ...overrides
+    ...shapeFor(status),
+    ...rest
   };
 }
 
@@ -69,34 +88,61 @@ test('decision states expose the workflow and normalize stored values safely', (
   assert.equal(normalizeDecisionState(null), 'NEW');
 });
 
-test('statusOf prefers an explicit status and otherwise derives the lifecycle', () => {
-  assert.equal(statusOf(tender({ status: 'CLOSED', closeDate: dateAt(10) })), 'CLOSED');
-  assert.equal(statusOf({ bidNo: 'BP2600000001', closeDate: dateAt(10) }), 'PLAN');
-  assert.equal(statusOf({ notifyNo: 'IB2600000001', closeDate: null }), 'UNKNOWN');
-  assert.equal(statusOf({ notifyNo: 'IB2600000001', closeDate: dateAt(0) }), 'OPEN');
-  assert.equal(statusOf({ notifyNo: 'IB2600000001', closeDate: dateAt(-1) }), 'CLOSED');
+test('statusOf tính lại từ hạn thực tế, KHÔNG tin trạng thái đã lưu', () => {
+  /* Bài này trước đây đòi ngược lại: `status` lưu sẵn phải thắng. Đã đổi, và
+     đây là sửa lỗi chứ không phải nhượng bộ.
+
+     `t.status` không bao giờ là tín hiệu riêng từ e-GP — chính normalizeTender()
+     gán nó bằng bidStatus() lúc quét. Nên "ưu tiên trạng thái đã lưu" chỉ có
+     một tác dụng duy nhất: ĐÓNG BĂNG một kết quả đã cũ. Gói quét tuần trước
+     còn OPEN thì tuần này vẫn hiện OPEN, nằm nguyên ở đầu danh sách ưu tiên
+     dù đã hết hạn nộp từ lâu. Tính lại mỗi lần đọc mới là đúng. */
+  assert.equal(statusOf({ notifyNo: 'IB2600000001', status: 'CLOSED', closeDate: dateAt(10) }), 'OPEN',
+    'hạn còn 10 ngày thì là ĐANG MỞ, bất kể nhãn cũ ghi gì');
+  assert.equal(statusOf({ notifyNo: 'IB2600000001', status: 'OPEN', closeDate: dateAt(-1) }), 'CLOSED',
+    'nhãn OPEN cũ không được giữ gói đã quá hạn ở lại');
+
+  assert.equal(statusOf({ bidNo: 'BP2600000001', closeDate: dateAt(10) }), 'PLAN',
+    'chưa có mã TBMT thì vẫn là kế hoạch, dù có ngày tháng gì');
+  assert.equal(statusOf({ notifyNo: 'IB2600000001', closeDate: null }), 'UNKNOWN',
+    'không có hạn thì nói CHƯA BIẾT, không đoán');
+
+  // Biên: ĐÚNG khoảnh khắc hết hạn được tính là ĐÃ ĐÓNG. Hết giờ là hết giờ —
+  // để nó còn "đang mở" thì phần mềm đang mời người ta nộp một hồ sơ vô hiệu.
+  assert.equal(statusOf({ notifyNo: 'IB2600000001', closeDate: dateAt(0) }), 'CLOSED');
+  assert.equal(statusOf({ notifyNo: 'IB2600000001', closeDate: dateAt(0.001) }), 'OPEN',
+    'còn một chút thời gian thì vẫn là đang mở');
 });
 
-test('decisionRank keeps every open tender ahead of the documented plan maximum', () => {
-  const lowestOpen = tender({ score: 0, matched: false, closeDate: null });
-  const highestPlan = tender({ status: 'PLAN', score: 100, matched: true, closeDate: null });
+test('decisionRank giữ mọi gói đang mở trên mọi gói kế hoạch', () => {
+  // Bất biến: gói ĐANG MỞ chấm 0 điểm vẫn phải đứng trên gói KẾ HOẠCH hoàn hảo.
+  // Gói kế hoạch chưa nộp được; xếp nó lên đầu là mời người ta phí thời gian.
+  const lowestOpen = { notifyNo: 'IB2600000001', closeDate: dateAt(60), score: 0, matched: false };
+  const highestPlan = { bidNo: 'BP2600000001', closeDate: null, score: 100, matched: true };
 
   assert.equal(decisionRank(lowestOpen), 400);
   assert.equal(decisionRank(highestPlan), 375);
-  assert.ok(decisionRank(lowestOpen) > decisionRank(highestPlan));
+  assert.ok(decisionRank(lowestOpen) > decisionRank(highestPlan),
+    'bất biến gãy: một gói kế hoạch đã vượt được gói đang mở');
 });
 
-test('decisionRank adds urgency only to open tenders and caps it at 45 points', () => {
-  assert.equal(decisionRank(tender({ closeDate: dateAt(0) })), 445);
-  assert.equal(decisionRank(tender({ closeDate: dateAt(30) })), 415);
-  assert.equal(decisionRank(tender({ closeDate: dateAt(60) })), 400);
-  assert.equal(decisionRank(tender({ status: 'PLAN', closeDate: dateAt(0) })), 240);
-  assert.equal(decisionRank(tender({ status: 'OPEN', score: '70', matched: true, closeDate: dateAt(3) })), 547);
+test('decisionRank chỉ cộng điểm gấp cho gói đang mở, trần 45 điểm', () => {
+  const open = (days, extra = {}) => ({ notifyNo: 'IB2600000001', closeDate: dateAt(days), score: 0, matched: false, ...extra });
+  assert.equal(decisionRank(open(0.001)), 445, 'sắp hết hạn = gấp nhất');
+  assert.equal(decisionRank(open(30)), 415);
+  assert.equal(decisionRank(open(60)), 400, 'quá 45 ngày thì không cộng thêm nữa');
+  assert.equal(decisionRank(open(3, { score: '70', matched: true })), 547);
+
+  // Kế hoạch có "hạn" cũng không được cộng điểm gấp — chưa nộp được thì không gấp.
+  assert.equal(decisionRank({ bidNo: 'BP2600000001', closeDate: dateAt(0), score: 0, matched: false }), 240);
 });
 
 test('deadlineRank orders actionable groups and recent closed tenders as specified', () => {
   assert.equal(deadlineRank(tender({ closeDate: dateAt(2) })), 2);
-  assert.equal(deadlineRank(tender({ closeDate: null })), 9999);
+  // Không có hạn nộp CHÍNH LÀ vòng đời "chưa biết" — trước đây hai trường hợp
+  // này xếp hai bậc khác nhau (9999 và 10000), nhưng từ khi vòng đời được tính
+  // lại từ dữ liệu thì chúng là một. Hai bậc cho cùng một tình trạng là thừa.
+  assert.equal(deadlineRank(tender({ closeDate: null })), 10000);
   assert.equal(deadlineRank(tender({ status: 'UNKNOWN' })), 10000);
   assert.equal(deadlineRank(tender({ status: 'PLAN' })), 20000);
   assert.equal(deadlineRank(tender({ status: 'CLOSED', closeDate: dateAt(-2) })), 30002);
@@ -126,16 +172,22 @@ test('missingFields exempts plan deadlines but reports other absent decision dat
     []
   );
   assert.deepEqual(
-    missingFields(tender({ price: 0, closeDate: null, location: '', investorName: '' })),
+    missingFields(tender({ price: null, closeDate: null, location: '', investorName: '' })),
     ['Thiếu giá', 'Thiếu hạn nộp', 'Thiếu địa điểm', 'Thiếu chủ đầu tư']
   );
+
+  // Giá BẰNG 0 khác với KHÔNG CÓ GIÁ. parseMoney() trả null khi e-GP không công
+  // bố giá, và trả 0 chỉ khi e-GP thực sự gửi số 0. Báo "thiếu giá" cho một giá
+  // trị e-GP có công bố là nói sai về dữ liệu nguồn.
+  assert.equal(missingFields(tender({ price: 0 })).includes('Thiếu giá'), false);
+  assert.equal(missingFields(tender({ price: null })).includes('Thiếu giá'), true);
 });
 
 test('dataConfidence scores only sourced fields and assigns boundary labels', () => {
   assert.deepEqual(dataConfidence(tender()), {
     value: 100,
     level: 'GOOD',
-    label: 'Dữ liệu tốt'
+    label: 'Đủ trường chính'
   });
 
   assert.deepEqual(
@@ -147,13 +199,13 @@ test('dataConfidence scores only sourced fields and assigns boundary labels', ()
       investorName: '',
       detailUrl: ''
     })),
-    { value: 74, level: 'FAIR', label: 'Dữ liệu khá' }
+    { value: 74, level: 'FAIR', label: 'Thiếu một số trường' }
   );
 
   assert.deepEqual(dataConfidence({ status: 'UNKNOWN' }), {
     value: 0,
     level: 'CHECK',
-    label: 'Cần xác minh'
+    label: 'Cần bổ sung dữ liệu'
   });
 
   assert.equal(dataConfidence(tender({ price: 0 })).value, 100, 'zero is present data even if unusable for missingFields');
@@ -173,9 +225,11 @@ test('riskSignals reports verifiable deadline, missing-data, exclusion, and sour
   assert.deepEqual(riskSignals(tender({ closeDate: dateAt(3) }))[0], {
     code: 'DEADLINE', level: 'MEDIUM', label: 'Còn không quá 3 ngày'
   });
-  assert.deepEqual(riskSignals(tender({ closeDate: dateAt(-1) }))[0], {
-    code: 'DEADLINE', level: 'HIGH', label: 'Đã quá hạn'
-  });
+  // Gói đã quá hạn KHÔNG sinh cảnh báo hạn nữa: nó không còn là rủi ro, nó đã
+  // đóng, và vòng đời đã nói điều đó. Trước đây có nhãn 'Đã quá hạn' nhưng
+  // nhánh sinh ra nó không đời nào chạy được — đã bỏ hẳn thay vì để code chết.
+  assert.equal(riskSignals(tender({ closeDate: dateAt(-1) })).some((r) => r.code === 'DEADLINE'),
+    false, 'gói đã đóng không được gắn cảnh báo hạn nộp');
 
   const risks = riskSignals(tender({
     price: null,

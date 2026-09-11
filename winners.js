@@ -28,7 +28,7 @@ function show(el, on) { el.classList.toggle('hidden', !on); }
 function alertBox(message, kind) {
   const box = $('alert');
   box.className = `notice ${kind === 'error' ? 'error' : kind === 'ok' ? 'ok' : ''}`;
-  box.innerHTML = message;
+  box.textContent = String(message || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
   show(box, Boolean(message));
 }
 

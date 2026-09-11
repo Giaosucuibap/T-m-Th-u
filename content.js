@@ -1,7 +1,10 @@
 (() => {
   const PAGE_SOURCE='BID_RADAR_ONE_PAGE';
   const CONTENT_SOURCE='BID_RADAR_ONE_CONTENT';
-  function postPage(type,payload){ window.postMessage({source:CONTENT_SOURCE,type,payload},'*'); }
+  // Navigation arrival is distinct from a usable DOM. The reader can now
+  // distinguish a slow download from an e-GP page that loaded an error portlet.
+  chrome.runtime.sendMessage({type:'CONTENT_READY',payload:{url:location.href,phase:'document-start',pageError:null}}).catch(()=>{});
+  function postPage(type,payload){ window.postMessage({source:CONTENT_SOURCE,type,payload,v:440},location.origin); }
   function clean(v){ return String(v ?? '').replace(/\s+/g,' ').trim(); }
   function extractObjects(value,max=750){
     const keys=new Set(['notifyNo','notify_no','tbmtNo','bidNo','bidName','notifyName','packageName','publicDate','investorName','procuringEntityName','bidPrice','notifyVersion','investField','closeDate','bidCloseDate','projectName']);
@@ -501,10 +504,33 @@
   }
 
   /** Điểm vào: bắt đầu một lượt tra cứu KQLCNT. */
+  function kqNativePageError(readyState,title,body){
+    // At document-start even the error page has no body yet. Wait for the
+    // document, then distinguish native error pages from normal listing text.
+    if(readyState==='loading')return null;
+    const known=bbmtPageError(title,body);
+    if(known)return known;
+    const heading=String(title??'').replace(/\s+/g,' ').trim();
+    const text=String(body??'').replace(/\s+/g,' ').trim();
+    // e-GP also serves a shorter Error page without "Contact support".
+    if(/^error$/i.test(heading)&&/\bthis page can(?:not|['’]t) be displayed\b/i.test(text)
+      &&/\bincident id\b/i.test(text))return 'ACCESS_DENIED';
+    return null;
+  }
+  function kqPageErrorMessage(code){
+    return code==='PORTLET_UNAVAILABLE'
+      ?'Trang e-GP báo thành phần tra cứu tạm thời không khả dụng; chưa có dữ liệu để kết luận kết quả tìm kiếm.'
+      :'Trang e-GP đang từ chối truy cập hoặc báo lỗi hệ thống. Mở e-GP để kiểm tra và thử lại khi trang hoạt động; chưa có dữ liệu để kết luận kết quả tìm kiếm.';
+  }
   async function kqStart(plan){
     kqPlan=plan;
     kqCancelled=false;
     kqSaveState(plan);
+    const pageError=kqNativePageError(document.readyState,document.title,document.body?.innerText);
+    if(pageError){
+      kqFinish(false,kqPageErrorMessage(pageError));
+      return;
+    }
     if(kqIsResultsView()){ await kqRunHarvest(); return; }
 
     // Chưa ở màn hình kết quả: đặt đúng loại thông báo rồi bấm "Tìm kiếm" của
@@ -555,6 +581,8 @@
     if(!planId)return;
     const boot=setInterval(()=>{
       if(!kqPlan||kqPlan.id!==planId){clearInterval(boot);return;}
+      const pageError=kqNativePageError(document.readyState,document.title,document.body?.innerText);
+      if(pageError){clearInterval(boot);kqFinish(false,kqPageErrorMessage(pageError));return;}
       if(!kqIsResultsView())return;
       clearInterval(boot);
       kqRunHarvest();
@@ -562,7 +590,8 @@
     setTimeout(()=>{
       clearInterval(boot);
       if(kqPlan&&kqPlan.id===planId&&!kqIsResultsView()){
-        kqFinish(false,'Trang e-GP không mở được màn hình kết quả trong 40 giây. '
+        const pageError=kqNativePageError(document.readyState,document.title,document.body?.innerText);
+        kqFinish(false,pageError?kqPageErrorMessage(pageError):'Trang e-GP không mở được màn hình kết quả trong 40 giây. '
           +'Hãy mở trang Tra cứu Lựa chọn nhà thầu, bấm "Tìm kiếm" một lần cho ra danh sách, rồi chạy lại.');
       }
     },40000);
@@ -582,8 +611,10 @@
     // Trang Biên bản mở thầu vừa tải xong bảng nhà thầu tham dự. Gửi thẳng về
     // nền — kể cả khi người dùng tự mở trang, không cần đang quét.
     if(event.data.type==='BBMT_BIDDERS'){
-      kqSend('BBMT_BIDDERS',{url:payload.url||location.href,rows:payload.rows||[]});
+      kqSend('BBMT_BIDDERS',{url:payload.url||location.href,rows:payload.rows||[],status:payload.status,kind:payload.kind});
     }
+    if(event.data.type==='BBMT_PRICE_BASIS')kqSend('BBMT_PRICE_BASIS',{url:payload.url||location.href,status:payload.status,
+      bidPrice:payload.bidPrice,bidEstimatePrice:payload.bidEstimatePrice,isMultiLot:payload.isMultiLot,source:payload.source});
 
     // Danh sách tệp đính kèm — gửi kèm URL để tầng nền biết đang xem gói nào.
     if(event.data.type==='EGP_ENDPOINT_SEEN'){
@@ -607,6 +638,10 @@
     // Tab này đã đứng sẵn ở màn hình kết quả chưa? Nếu rồi thì background
     // không tải lại trang, và lượt tra cứu chạy luôn mà không qua chuỗi
     // điều-hướng → sessionStorage → khôi phục (chuỗi này là chỗ hay đứt nhất).
+    if(message.type==='SNAPSHOT_DOM'){
+      sendResponse({ok:true,html:String(document.documentElement?.outerHTML||'').slice(0,250000),url:location.href});
+      return true;
+    }
     if(message.type==='KQLCNT_PROBE'){
       sendResponse({ok:true,resultsView:kqIsResultsView(),busy:Boolean(kqPlan)});
       return true;
@@ -639,5 +674,162 @@
     }
   });
 
-  chrome.runtime.sendMessage({type:'CONTENT_READY',payload:{url:location.href}}).catch(()=>{});
+  /* BBMT_DOM_ADAPTER_START
+   * Pure adapter for a snapshot of the public, rendered BBMT table. Exact
+   * labels/cards come from the official detail-v2 template saved in
+   * test-results/4.3.2-research/IB2600486024.html (lines 7020-7890).
+   * It deliberately rejects other tables and the per-contractor lot aggregate.
+   */
+  function bbmtAdaptDomSnapshot(snapshot){
+    const text=v=>String(v??'').replace(/\s+/g,' ').trim();
+    const fold=v=>text(v).normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/đ/g,'d').toLowerCase();
+    const number=v=>{
+      const s=text(v).replace(/\s*(VND|đ)\s*$/i,'');
+      // The official currency filter uses vi-VN and up to four decimal places.
+      // A dash, attachment link or undisclosed amount is not a numeric zero.
+      if(!/^(?:\d{1,3}(?:\.\d{3})+|\d+)(?:,\d{1,4})?$/.test(s))return null;
+      const n=Number(s.replace(/\./g,'').replace(',','.'));
+      return Number.isFinite(n)&&n>=0?n:null;
+    };
+    if(!snapshot||!['ttnt-card-bbmt-ldt','ttnt-card-bbmt-khac','ttnt-card-bbmt-adbwb'].includes(snapshot.cardId))return null;
+    let url;
+    try{url=new URL(snapshot.url);}catch{return null;}
+    if(url.origin!=='https://muasamcong.mpi.gov.vn'||!url.pathname.endsWith('/contractor-selection'))return null;
+    const expected=text(url.searchParams.get('notifyNo')).toUpperCase();
+    const actual=text(snapshot.fields?.['Mã TBMT']).toUpperCase();
+    if(!/^IB\d{6,}$/.test(expected)||!new RegExp('^'+expected+'(?:-\\d{2})?$').test(actual))return null;
+    const noticeId=url.searchParams.get('notifyId')||url.searchParams.get('id');
+    if(!noticeId||noticeId==='undefined'||noticeId==='null')return null;
+    const bidPrice=number(snapshot.fields?.['Giá gói thầu']);
+    const bidEstimatePrice=number(snapshot.fields?.['Dự toán gói thầu']);
+    if(!(bidPrice>0)&&!(bidEstimatePrice>0))return null;
+    const headers=(snapshot.headers||[]).map(fold);
+    const index=label=>headers.indexOf(label);
+    const code=index('ma dinh danh'),name=index('ten nha thau');
+    const price=index('gia du thau (vnd)'),discount=index('ty le giam gia (%)');
+    const final=headers.findIndex(h=>/^gia du thau sau giam gia(?: \(neu co\))? \(vnd\)$/.test(h));
+    const lot=index('ma phan/lo'),lotName=headers.findIndex(h=>h==='ten phan/lo');
+    if(code<0||name<0||price<0||headers.some(h=>h.includes('so phan cua goi thau')))return null;
+    // A multi-lot table must expose its lot identity, never only an aggregate.
+    const multiLot=lot>=0;
+    if(snapshot.hasLotViewSelector&&!multiLot)return null;
+    const rows=[];
+    for(const group of snapshot.groups||[]){
+      let currentLot='',currentLotName='';
+      for(const raw of group){
+        const cells=(raw.cells||[]).map(c=>({text:text(c.text),colSpan:Number(c.colSpan||1),rowSpan:Number(c.rowSpan||1)}));
+        if(!cells.some(c=>c.text))continue;
+        if(cells.some(c=>/\{\{|\}\}/.test(c.text)||c.rowSpan!==1))return null;
+        // In the official lot view each tbody starts with a two-cell lot
+        // heading followed by bidder rows whose first two cells are blank.
+        if(multiLot&&lot===0&&cells.length===2&&cells[0].colSpan===1&&cells[1].colSpan>1){
+          currentLot=cells[0].text;currentLotName=cells[1].text;
+          if(!currentLot)return null;
+          continue;
+        }
+        if(cells.length!==headers.length||cells.some(c=>c.colSpan!==1))return null;
+        const value=i=>i>=0?cells[i].text:'';
+        if(!value(name))return null;
+        const row={contractorCode:value(code),contractorName:value(name),
+          lotPrice:number(value(price)),lotFinalPrice:number(value(final)),
+          discountPercent:discount<0?null:number(value(discount).replace(/\s*%$/,''))};
+        if(row.discountPercent!==null&&row.discountPercent>100)row.discountPercent=null;
+        if(multiLot){
+          row.lotNo=value(lot)||currentLot;
+          row.lotName=value(lotName)||currentLotName;
+          if(!row.lotNo)return null;
+        }
+        rows.push(row);
+        if(rows.length>500)return null;
+      }
+    }
+    // Do not finish a scan on a skeleton table while prices are still loading.
+    if(!rows.length||!rows.some(r=>r.lotPrice!==null||r.lotFinalPrice!==null))return null;
+    // Unlike LDT/KHAC, the ADB/WB template does not condition this table on
+    // isMultiLot. Its headers cannot certify a whole-package comparison.
+    const isMultiLot=snapshot.cardId==='ttnt-card-bbmt-adbwb'?null:multiLot;
+    return {url:snapshot.url,notifyNo:expected,kind:multiLot?'lot':'package',rows,
+      bidPrice:bidPrice>0?bidPrice:null,bidEstimatePrice:bidEstimatePrice>0?bidEstimatePrice:null,
+      isMultiLot,classificationKnown:isMultiLot!==null,source:'visible-dom',cardId:snapshot.cardId};
+  }
+  /* BBMT_DOM_ADAPTER_END */
+
+  function bbmtVisible(el){
+    if(!el||!el.getClientRects().length)return false;
+    for(let node=el;node&&node.nodeType===1;node=node.parentElement){
+      if(node.hidden||node.getAttribute('aria-hidden')==='true')return false;
+      const style=getComputedStyle(node);
+      if(style.display==='none'||style.visibility==='hidden'||style.opacity==='0')return false;
+    }
+    return true;
+  }
+  function bbmtSnapshotVisibleDom(){
+    const pane=document.getElementById('bidOpeningMinutes');
+    if(!pane?.classList.contains('active')||!bbmtVisible(pane))return null;
+    const cards=[...pane.querySelectorAll('#ttnt-card-bbmt-ldt,#ttnt-card-bbmt-khac,#ttnt-card-bbmt-adbwb')].filter(bbmtVisible);
+    if(cards.length!==1)return null;
+    const card=cards[0],tables=[...card.querySelectorAll('table')].filter(bbmtVisible);
+    if(tables.length!==1)return null;
+    const table=tables[0];
+    if(table.tHead?.rows.length!==1)return null;
+    const fields={};
+    for(const label of pane.querySelectorAll('.infomation__content__title')){
+      if(card.contains(label)||!bbmtVisible(label)||!bbmtVisible(label.nextElementSibling))continue;
+      const key=clean(label.innerText),value=clean(label.nextElementSibling.innerText);
+      if(['Mã TBMT','Giá gói thầu','Dự toán gói thầu'].includes(key)){
+        if(fields[key]&&fields[key]!==value)return null;
+        fields[key]=value;
+      }
+    }
+    return {url:location.href,cardId:card.id,fields,
+      headers:[...table.tHead.rows[0].cells].map(c=>clean(c.innerText)),
+      groups:[...table.tBodies].map(body=>[...body.rows].filter(bbmtVisible).map(row=>({
+        cells:[...row.cells].map(c=>({text:clean(c.innerText),colSpan:c.colSpan,rowSpan:c.rowSpan}))
+      }))),
+      hasLotViewSelector:[...card.querySelectorAll('select')].some(select=>bbmtVisible(select)&&[...select.options].some(o=>clean(o.textContent)==='Xem theo lô'))};
+  }
+  function bbmtStartDomFallback(){
+    if(!/[?&]notifyNo=IB\d+/i.test(location.search))return;
+    let fingerprint='',stableSince=0,samples=0,sent='',sending=false;
+    const startedAt=Date.now();
+    const timer=setInterval(async()=>{
+      if(Date.now()-startedAt>120000){clearInterval(timer);return;}
+      let payload;
+      try{payload=bbmtAdaptDomSnapshot(bbmtSnapshotVisibleDom());}catch{return;}
+      if(!payload){fingerprint='';samples=0;return;}
+      const next=JSON.stringify(payload);
+      if(next!==fingerprint){fingerprint=next;stableSince=Date.now();samples=1;return;}
+      samples++;
+      // Let native fetch/XHR finish first. Require multiple stable snapshots
+      // so a late estimate or partially rendered row is not accepted early.
+      if(samples<3||Date.now()-stableSince<2100||next===sent||sending)return;
+      sending=true;
+      try{
+        const result=await kqSend('BBMT_DOM_RESULT',payload,{requireAck:true,attempts:1});
+        if(result?.ok)sent=next;
+      }finally{sending=false;}
+    },700);
+    window.addEventListener('pagehide',()=>clearInterval(timer),{once:true});
+  }
+  /* BBMT_PAGE_ERROR_START */
+  function bbmtPageError(title,body){
+    const clean=v=>String(v??'').replace(/\s+/g,' ').trim();
+    const heading=clean(title),text=clean(body);
+    if(/egp-portal-contractor-selection-v2\s+tạm thời không có/i.test(text))return 'PORTLET_UNAVAILABLE';
+    if(/^(?:access denied|403 forbidden|request rejected)\b/i.test(heading))return 'ACCESS_DENIED';
+    // Observed public e-GP WAF page: title "Error", a display failure and
+    // support/incident instructions. Recognize only this fixed signature;
+    // never forward its body, request IDs or other page data to diagnostics.
+    if(/^error$/i.test(heading)&&/\bthis page can(?:not|['’]t) be displayed\b/i.test(text)
+      &&/\bcontact support\b/i.test(text))return 'ACCESS_DENIED';
+    return null;
+  }
+  /* BBMT_PAGE_ERROR_END */
+  function contentDomReady(){
+    const pageError=bbmtPageError(document.title,document.body?.innerText);
+    chrome.runtime.sendMessage({type:'CONTENT_READY',payload:{url:location.href,phase:'dom-ready',pageError}}).catch(()=>{});
+    bbmtStartDomFallback();
+  }
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',contentDomReady,{once:true});
+  else contentDomReady();
 })();

@@ -46,20 +46,20 @@ test('parseMoney supports raw numbers and Vietnamese display formats', () => {
 });
 
 test('parseDate parses valid Vietnamese dates and rejects impossible dates', () => {
-  const parsed = parseDate('02/09/2026 06:05:07');
-  assert.ok(parsed, 'a valid date should be parsed');
-  const date = new Date(parsed);
-  assert.equal(date.getFullYear(), 2026);
-  assert.equal(date.getMonth(), 8);
-  assert.equal(date.getDate(), 2);
-  assert.equal(date.getHours(), 6);
-  assert.equal(date.getMinutes(), 5);
-  assert.equal(date.getSeconds(), 7);
+  // e-GP công bố giờ theo đồng hồ Việt Nam, nên 06:05:07 ngày 02/09 phải ra
+  // đúng một mốc tuyệt đối, bất kể máy đặt múi giờ nào. Đọc bằng getHours()
+  // là đọc theo giờ máy — chính là thứ đã gây lỗi lọc ngày, nên so chuỗi ISO.
+  assert.equal(parseDate('02/09/2026 06:05:07'), '2026-09-01T23:05:07.000Z');
+  assert.equal(parseDate('2026-09-02T06:05:07'), '2026-09-01T23:05:07.000Z',
+    'dạng yyyy-mm-dd không kèm múi giờ cũng phải hiểu là giờ Việt Nam');
+  assert.equal(parseDate('2026-09-01T23:05:07Z'), '2026-09-01T23:05:07.000Z',
+    'chuỗi đã ghi rõ múi giờ thì giữ nguyên, không cộng thêm 7 tiếng');
 
   assert.equal(parseDate('31/02/2026'), null);
   assert.equal(parseDate('29/02/2025'), null);
   assert.equal(parseDate('32/13/2026'), null);
-  assert.equal(parseDate('29/02/2024'), new Date(2024, 1, 29).toISOString());
+  // 29/02/2024 lúc 00:00 GIỜ VIỆT NAM = 17:00 ngày 28/02 UTC.
+  assert.equal(parseDate('29/02/2024'), '2024-02-28T17:00:00.000Z');
 });
 
 test('canonicalEgpUrl only permits the official HTTPS origin', () => {

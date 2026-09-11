@@ -25,6 +25,22 @@
     `${PORTAL_SERVICE_ROOT}/services/expose/ldtkqmt/bid-notification-p/lotOpenDetail`,
     '/services/expose/ldtkqmt/bid-notification-p/lotOpenDetail'
   ]);
+  const BID_OPEN_ENDPOINTS = new Set([
+    `${PORTAL_SERVICE_ROOT}/services/expose/ldtkqmt/bid-notification-p/bid-open`,
+    '/services/expose/ldtkqmt/bid-notification-p/bid-open'
+  ]);
+  const BID_OPEN_NOTIFY_ENDPOINTS = new Set([
+    `${PORTAL_SERVICE_ROOT}/services/exposeldtkqmt/bid-notification-p/notify`,
+    '/services/exposeldtkqmt/bid-notification-p/notify'
+  ]);
+  const BID_OPEN_ROUND_ENDPOINTS = new Set([
+    `${PORTAL_SERVICE_ROOT}/services/expose/ldtkqmt/bid-notification-p/roundmng`,
+    '/services/expose/ldtkqmt/bid-notification-p/roundmng'
+  ]);
+  const KHAC_OPEN_ENDPOINTS = new Set([
+    `${PORTAL_SERVICE_ROOT}/services/expose/kqmt/bid-notify-contractor-out/get-by-id`,
+    '/services/expose/kqmt/bid-notify-contractor-out/get-by-id'
+  ]);
 
   /* Hai endpoint mà trang chi tiết tự gọi, có kèm danh sách tệp đính kèm:
    *   lcnt_tbmt_hsmt                     -> hồ sơ mời thầu (E-HSMT)
@@ -164,7 +180,7 @@
   }
 
   // Tên trường phân trang thường gặp trên e-GP và các framework phổ biến.
-  const post = (type, payload) => window.postMessage({ source: SOURCE, type, payload }, '*');
+  const post = (type, payload) => window.postMessage({ source: SOURCE, type, payload, v: 440 }, location.origin);
 
   /* ------------------------------------------------------------------------
    *  BẢN ĐỒ ENDPOINT — ghi e-GP GỌI CÁI GÌ, không ghi NỘI DUNG gì
@@ -178,8 +194,6 @@
    *  KHÔNG ghi giá trị, không ghi tên công ty, không ghi mã số thuế. Thu thụ
    *  động đúng nghĩa — không hề đụng vào request nào của e-GP.
    * --------------------------------------------------------------------- */
-  const seenEndpoints = new Set();
-
   function shapeOf(data, depth) {
     if (Array.isArray(data)) {
       return { kieu: 'mang', soBanGhi: data.length,
@@ -197,9 +211,8 @@
       const parsed = officialEgpUrl(url);
       if (!parsed) return;
       const path = parsed.pathname;
-      const key = (method || 'GET') + ' ' + path;
-      if (seenEndpoints.has(key)) return;
-      seenEndpoints.add(key);
+      // Report each response so a later success or schema change replaces an
+      // earlier error. The background keeps one bounded entry per endpoint.
       const sh = shapeOf(data, 0);
       post('EGP_ENDPOINT_SEEN', {
         path, method: method || 'GET', status: status || 0,
@@ -250,6 +263,131 @@
     return { url, method, headers, body: String(body || '') };
   }
 
+  // Accept explicit, shallow response envelopes; never search arbitrary objects.
+  function openingRows(data,depth=0){
+    if(Array.isArray(data))return data;
+    if(!data||typeof data!=='object'||depth>3||data.success===false)return null;
+    for(const key of ['data','result','content','rows']){
+      if(Object.hasOwn(data,key)){const rows=openingRows(data[key],depth+1);if(rows)return rows;}
+    }
+    return null;
+  }
+
+  // Verified against the official detail-v2 template for IB2600486024:
+  // single-package bids come from bid-open, not the separate lotOpenDetail.
+  // Copy only published bidder fields; never forward arbitrary response data.
+  function openingBoolean(flag) {
+    return flag === true || flag === 1 ? true : flag === false || flag === 0 ? false : null;
+  }
+  function bidOpeningKind(url, data) {
+    if (isExactEgpEndpoint(url, KHAC_OPEN_ENDPOINTS)) {
+      const flag = openingBoolean(data?.bidoNotifyContractorP?.isMultiLot);
+      return flag === null ? null : flag ? 'lot' : 'package';
+    }
+    return isExactEgpEndpoint(url, BID_OPEN_ENDPOINTS) ? 'package' : 'lot';
+  }
+  function packageOpeningRows(rows) {
+    if (!Array.isArray(rows)) return null;
+    // An unrecognized nonempty response must not masquerade as an empty table.
+    if (rows.some(row => !isPlainObject(row) || (!row.contractorCode && !row.contractorName && !row.ventureName))) return null;
+    return rows.map(row => ({
+      contractorCode: row.contractorCode,
+      contractorName: row.contractorName || row.ventureName,
+      ventureName: row.ventureName,
+      ventureCode: row.ventureCode,
+      lotPrice: row.bidPrice,
+      lotFinalPrice: row.bidFinalPrice,
+      discountPercent: row.saleNumber,
+      bidGuaranteeAmount: row.bidGuarantee,
+      bidGuaranteeEff: row.bidGuaranteeValidity,
+      techScore: row.techScore
+    }));
+  }
+
+  function bidOpeningRows(url, data) {
+    if (isExactEgpEndpoint(url, LOT_OPEN_DETAIL_ENDPOINTS)) return openingRows(data);
+    if (!isPlainObject(data) || data.success === false) return null;
+    const submission = data.bidSubmissionByContractorViewResponse;
+    if (isExactEgpEndpoint(url, BID_OPEN_ENDPOINTS)) return packageOpeningRows(submission?.bidSubmissionDTOList);
+    if (!isExactEgpEndpoint(url, KHAC_OPEN_ENDPOINTS) || !isPlainObject(data.bidoNotifyContractorP)) return null;
+    // The official loadDetailKqmtVk and its KHAC table select precisely these
+    // two arrays by bidoNotifyContractorP.isMultiLot. Missing is not false.
+    const kind = bidOpeningKind(url, data);
+    if (kind === 'package') return packageOpeningRows(submission?.bidSubmissionDTOList);
+    if (kind !== 'lot' || !Array.isArray(submission?.bidoLotOpenDetailDTOS)) return null;
+    const lots = submission.bidoLotOpenDetailDTOS;
+    if (lots.some(row => !isPlainObject(row) || !row.lotNo || (!row.contractorCode && !row.contractorName && !row.ventureName))) return null;
+    const bidders = Array.isArray(submission.bidSubmissionDTOList) ? submission.bidSubmissionDTOList : [];
+    return lots.map(row => {
+      const bidder = bidders.find(item => isPlainObject(item) && item.contractorCode && item.contractorCode === row.contractorCode);
+      return {
+        contractorCode: row.contractorCode,
+        contractorName: row.contractorName || bidder?.contractorName || row.ventureName || bidder?.ventureName,
+        ventureName: bidder?.ventureName || row.ventureName,
+        ventureCode: bidder?.ventureCode || row.ventureCode,
+        lotNo: row.lotNo,
+        lotName: row.lotName,
+        lotPrice: row.lotPrice,
+        lotFinalPrice: row.lotFinalPrice,
+        discountPercent: row.discountPercent,
+        bidGuaranteeAmount: bidder?.bidGuarantee ?? row.bidGuarantee,
+        bidGuaranteeEff: bidder?.bidGuaranteeValidity ?? row.bidGuaranteeValidity,
+        techScore: row.techScore
+      };
+    });
+  }
+
+  function bidOpeningPriceBasis(url, data) {
+    if (!isPlainObject(data) || data.success === false) return null;
+    if (isExactEgpEndpoint(url, BID_OPEN_ROUND_ENDPOINTS)) {
+      // Official loadDetailKqmtLdt assigns this exact DTO from roundmng.
+      const round = data.bidoBidroundMngViewDTO;
+      if (!isPlainObject(round)) return null;
+      const isMultiLot = openingBoolean(round.isMultiLot);
+      return isMultiLot === null ? null : {bidPrice:null, bidEstimatePrice:null, isMultiLot, source:'round'};
+    }
+    const isKhac = isExactEgpEndpoint(url, KHAC_OPEN_ENDPOINTS);
+    if (!isKhac && !isExactEgpEndpoint(url, BID_OPEN_NOTIFY_ENDPOINTS)) return null;
+    const notification = isKhac ? data.bidoNotifyContractorP : data.bidNoContractorResponse?.bidNotification;
+    if (!isPlainObject(notification)) return null;
+    const positive = value => {
+      if (typeof value !== 'number' && !(typeof value === 'string' && /^\d+(?:\.\d+)?$/.test(value))) return null;
+      const number = Number(value);
+      return Number.isFinite(number) && number > 0 ? number : null;
+    };
+    const bidPrice = positive(notification.bidPrice);
+    const bidEstimatePrice = positive(notification.bidEstimatePrice);
+    const isMultiLot = openingBoolean(notification.isMultiLot);
+    // Even an explicit notification without a price must finish the price
+    // observation. It is different from a notify response that has not arrived.
+    return {bidPrice, bidEstimatePrice, isMultiLot, source:'notify'};
+  }
+
+  const bidOpeningMetadataByPage = new Map();
+  function publishBidOpeningPriceBasis(pageUrl, status, incoming) {
+    const previous = bidOpeningMetadataByPage.get(pageUrl) || {};
+    const merged = {
+      bidPrice: incoming.bidPrice ?? previous.bidPrice ?? null,
+      bidEstimatePrice: incoming.bidEstimatePrice ?? previous.bidEstimatePrice ?? null,
+      isMultiLot: incoming.isMultiLot ?? previous.isMultiLot ?? null
+    };
+    bidOpeningMetadataByPage.set(pageUrl, merged);
+    if (bidOpeningMetadataByPage.size > 20) bidOpeningMetadataByPage.delete(bidOpeningMetadataByPage.keys().next().value);
+    post('BBMT_PRICE_BASIS', {url:pageUrl, status, ...merged, source:incoming.source});
+  }
+
+  function publishOpeningMetadata(responseUrl, pageUrl, status, data) {
+    if (status < 200 || status >= 300) return;
+    const basis = bidOpeningPriceBasis(responseUrl, data);
+    if (!basis) return;
+    publishBidOpeningPriceBasis(pageUrl, status, basis);
+    // KHAC get-by-id includes both verified price metadata and the actual table
+    // classifier, unlike LDT's independently delivered notify/round responses.
+    if (isExactEgpEndpoint(responseUrl, KHAC_OPEN_ENDPOINTS) && basis.isMultiLot !== null) {
+      publishBidOpeningPriceBasis(pageUrl, status, {...basis, source:'round'});
+    }
+  }
+
   async function inspectResponse(response, request, planId = '') {
     try {
       const clone = response.clone();
@@ -271,9 +409,12 @@
           data
         });
       }
-      if (isExactEgpEndpoint(responseUrl, LOT_OPEN_DETAIL_ENDPOINTS) && Array.isArray(data)) {
-        post('BBMT_BIDDERS', { url: location.href, rows: data, status: response.status });
+      const bidders = response.ok ? bidOpeningRows(responseUrl, data) : null;
+      if (bidders) {
+        post('BBMT_BIDDERS', { url: request.pageUrl, rows: bidders, status: response.status,
+          kind: bidOpeningKind(responseUrl, data) });
       }
+      publishOpeningMetadata(responseUrl, request.pageUrl, response.status, data);
       if (isAttachmentUrl(responseUrl) && data) {
         post('EGP_ATTACHMENTS', { url: location.href, payload: data });
       }
@@ -310,6 +451,7 @@
         }
       }
     }
+    request.pageUrl=location.href;
     const response = await originalFetch(fetchInput, fetchInit);
     void inspectResponse(response, request, planId);
     return response;
@@ -343,6 +485,7 @@
         }
       }
 
+      this.__br.pageUrl=location.href;
       this.addEventListener('load', () => {
         try {
           const data = this.responseType === 'json' ? this.response : safeParse(this.responseText || '');
@@ -356,9 +499,12 @@
           }
           // Bảng nhà thầu tham dự của một Biên bản mở thầu. Luôn chuyển tiếp,
           // kể cả khi người dùng tự mở trang — dữ liệu này chỉ có ở đây.
-          if (isExactEgpEndpoint(this.__br.url, LOT_OPEN_DETAIL_ENDPOINTS) && Array.isArray(data)) {
-            post('BBMT_BIDDERS', { url: location.href, rows: data, status: this.status });
+          const bidders = this.status>=200 && this.status<300 ? bidOpeningRows(this.responseURL || this.__br.url, data) : null;
+          if (bidders) {
+            post('BBMT_BIDDERS', { url: this.__br.pageUrl, rows: bidders, status: this.status,
+              kind: bidOpeningKind(this.responseURL || this.__br.url, data) });
           }
+          publishOpeningMetadata(this.responseURL || this.__br.url, this.__br.pageUrl, this.status, data);
           // Danh sách tệp đính kèm của gói đang xem. Chuyển nguyên phản hồi về
           // cho tầng nền bóc tách (lib/attachments.js) — tệp này không tự đoán
           // tên trường của e-GP.

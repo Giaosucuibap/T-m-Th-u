@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>Cấu hình — Giáo Sư Cùi Bắp</title>
   <link rel="stylesheet" href="app.css">
-</head>
+<link rel="stylesheet" href="workspace.css"><link rel="icon" href="icons/icon32.png"></head>
 <body>
   <header>
     <b><img class="brand-icon" src="icons/icon32.png" alt="">Cấu hình Giáo Sư Cùi Bắp</b>
@@ -50,6 +50,13 @@
         <div class="row" style="align-self:end"><button id="telegramDetect" class="btn secondary" type="button">Dò Chat ID</button><button id="telegramTest" class="btn light" type="button">Gửi thử</button></div>
         <div id="tgMsg" class="small full" role="status"></div>
         <div class="full"><label class="checkline"><input id="telegramEnabled" type="checkbox"><b>Bật gửi tự động</b> — gửi gói mới đạt ngưỡng</label><label class="checkline"><input id="telegramDailySummary" type="checkbox">Nhắn cả khi không có gói mới</label></div>
+        <div class="full"><label for="notifyEmail">Email soạn thư (mailto — tiện ích không gửi SMTP hộ)</label><input id="notifyEmail" placeholder="thau@congty.vn"></div>
+        <div class="full"><label for="notifyWebhook">Webhook HTTPS cho Zalo/n8n</label><input id="notifyWebhook" placeholder="https://…" autocomplete="off"></div>
+        <div class="full"><label for="webhookSecret">Khóa HMAC webhook (header X-GSCB-Signature)</label><input id="webhookSecret" type="password" autocomplete="off"></div>
+        <div class="full"><label for="operatorName">Người dùng trên máy này</label><input id="operatorName" placeholder="Ví dụ: An — hồ sơ thầu" maxlength="80"></div>
+        <div class="full"><label for="approvalSteps">Số bước duyệt Go</label>
+          <select id="approvalSteps"><option value="3">3 bước: đề xuất → kỹ thuật → giám đốc</option><option value="2">2 bước</option></select></div>
+        <div class="full"><label class="checkline"><input id="readOnlyMode" type="checkbox"><b>Chế độ chỉ xem (máy thanh tra)</b></label></div>
         <div class="full"><div class="row space"><b class="small">Nhật ký gửi gần đây</b><button id="tgRefresh" class="btn light" type="button">Làm mới</button></div><div id="tgLog" class="muted small" style="margin-top:6px">—</div></div>
       </div>
 
@@ -81,5 +88,5 @@
   </main>
   <script type="module" src="options.js"></script>
   <script src="logo.js"></script>
-</body>
+<script type="module" src="shell.js"></script></body>
 </html>

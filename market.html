@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Soi địa bàn — Giáo Sư Cùi Bắp</title>
+<link rel="stylesheet" href="vendor/leaflet.css">
 <link rel="stylesheet" href="app.css">
 <style>
   .num{font-variant-numeric:tabular-nums;white-space:nowrap}
@@ -47,7 +48,7 @@
   .checks input{width:auto;margin:0}
   details summary::-webkit-details-marker{color:var(--accent)}
 </style>
-</head>
+<link rel="stylesheet" href="workspace.css"><link rel="icon" href="icons/icon32.png"></head>
 <body>
   <header>
     <b>🗺️ Soi địa bàn</b>
@@ -170,6 +171,14 @@
     </div>
 
     <div id="alert" class="notice hidden" style="margin-top:14px"></div>
+    <div id="heat-box" class="card" style="margin-top:14px">
+      <h2>Nhiệt địa bàn trên kho gói đã lưu</h2>
+      <p class="muted small">Đếm theo chữ địa điểm đã lưu. Bản đồ Leaflet dùng tọa độ tỉnh gần đúng — bấm chấm để xem gói.</p>
+      <div id="heat-map" style="height:320px;margin:10px 0;border-radius:10px"></div>
+      <div id="heat-detail" class="muted small"></div>
+      <div id="heat-list" class="muted small">Đang đọc kho…</div>
+    </div>
+<script src="vendor/leaflet.js"></script>
 
     <div id="result" class="hidden">
       <div class="metrics">
@@ -207,5 +216,5 @@
 
   <script type="module" src="market.js"></script>
   <script src="logo.js"></script>
-</body>
+<script type="module" src="shell.js"></script></body>
 </html>

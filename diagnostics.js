@@ -99,12 +99,14 @@ function epRender(list) {
       <th style="text-align:left;padding:6px 8px">PT</th>
       <th style="text-align:right;padding:6px 8px">Bản ghi</th>
       <th style="text-align:left;padding:6px 8px">Các trường trong phản hồi</th>
+      <th style="text-align:left;padding:6px 8px">Quan sát gần nhất</th>
     </tr></thead>
     <tbody>${list.map((r) => `<tr style="border-top:1px solid #e2e8f0">
       <td style="padding:6px 8px;font-family:ui-monospace,Consolas,monospace">${esc(r.path)}</td>
       <td style="padding:6px 8px">${esc(r.method)} · ${r.status}</td>
       <td style="padding:6px 8px;text-align:right">${r.soBanGhi == null ? '—' : r.soBanGhi}</td>
       <td style="padding:6px 8px;color:#475569">${esc((r.truong || []).join(', ')) || '—'}</td>
+      <td style="padding:6px 8px;white-space:nowrap">${r.luc?esc(new Date(r.luc).toLocaleString('vi-VN')):'—'}<div class="small muted">${Number(r.observedCount)||1} lần ghi nhận</div></td>
     </tr>`).join('')}</tbody></table>`;
 }
 
@@ -112,7 +114,7 @@ async function epLoad() {
   const s = await msg('GET_STATE');
   const list = (s && s.endpointMap) || [];
   document.getElementById('epMsg').textContent =
-    list.length ? `Đã ghi ${list.length} endpoint.` : '';
+    list.length ? `Đã ghi ${list.length} endpoint. Bảng hiển thị phản hồi gần nhất của từng endpoint.` : '';
   epRender(list);
   return list;
 }
@@ -128,7 +130,7 @@ document.getElementById('epCopy').onclick = async () => {
   const list = await epLoad();
   const text = list.map((r) => `${r.method} ${r.path} [${r.status}] `
     + `${r.kieu}${r.soBanGhi == null ? '' : '(' + r.soBanGhi + ')'} `
-    + `truong: ${(r.truong || []).join(', ')}`).join('\n');
+    + `truong: ${(r.truong || []).join(', ')}; lan: ${Number(r.observedCount)||1}; gan nhat: ${r.luc||'—'}`).join('\n');
   try {
     await navigator.clipboard.writeText(text || '(trống)');
     document.getElementById('epMsg').textContent = '✅ Đã chép. Dán vào chỗ trao đổi để gửi đi.';

@@ -92,7 +92,7 @@
   :focus-visible{outline:3px solid #2563eb;outline-offset:2px}
   @media (prefers-reduced-motion:reduce){*{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}
 </style>
-</head>
+<link rel="stylesheet" href="workspace.css"><link rel="icon" href="icons/icon32.png"></head>
 <body>
   <header>
     <img class="logo" src="icons/icon32.png" alt="">
@@ -104,6 +104,7 @@
   </header>
 
   <main>
+    <button id="launch-search" class="popup-launch" type="button"><span><small>KHÔNG GIAN TÌM THẦU</small><b>Tìm cơ hội tiếp theo</b><em>Tìm kiếm · So sánh · Lịch đóng thầu</em></span><span data-icon="arrow"></span></button>
     <div class="card">
       <p id="status" class="status" role="status" aria-live="polite">Đang đọc trạng thái…</p>
       <button id="scan" class="btn block" type="button">🔍 Quét theo bộ lọc đang chọn</button>
@@ -134,7 +135,7 @@
     <div id="count" class="count"></div>
     <div id="list"></div>
 
-    <div class="nav">
+    <details class="popup-tools"><summary>Công cụ phân tích &amp; dữ liệu</summary><div class="nav">
       <div class="nav-title">Các chức năng chính</div>
       <button id="scanTop" class="navbtn" type="button"><b>1 · Tìm thông báo mời thầu</b><small>Chọn chủ đầu tư, tỉnh, xã/phường, từ khóa và khoảng giá rồi tra trên e-GP</small></button>
       <button id="winners" class="navbtn" type="button"><b>2 · Nhà thầu trúng thầu</b><small>Thống kê toàn bộ theo mã số thuế hoặc tên công ty</small></button>
@@ -153,10 +154,10 @@
       <button id="dashboard" class="btn ghost sm" type="button">📊 Mở bàn điều hành</button>
       <button id="egp2" class="btn ghost sm" type="button">↻ Làm mới</button>
     </div>
-    <div class="note">Tiện ích không lưu tài khoản/mật khẩu e-GP. Dữ liệu nằm trên máy bạn. <span id="ver"></span></div>
+    </details><div class="note">Tiện ích không lưu tài khoản/mật khẩu e-GP. Dữ liệu nằm trên máy bạn. <span id="ver"></span></div>
   </main>
 
-  <script src="popup.js"></script>
+  <script type="module" src="popup.js"></script>
   <script src="logo.js"></script>
-</body>
+<script type="module" src="shell.js"></script></body>
 </html>

@@ -1,4 +1,4 @@
-# Giáo Sư Cùi Bắp 4.2.0
+# Giáo Sư Cùi Bắp 4.9.0
 
 **Trợ lý ra quyết định dự thầu ngay trên nguồn e-GP chính thức.**
 
@@ -185,7 +185,19 @@ npm test
 
 Bộ hiện tại kiểm tra chuẩn hoá văn bản/tiền/ngày, URL chính thức, request an toàn, safe backup theo danh sách trắng, claim/ACK/lease của tác vụ, pipeline quyết định, xếp hạng, Radar, CSP/manifest, cú pháp/import JavaScript, tài nguyên giao diện, hyperlink Excel và cách tính liên danh.
 
-Kết quả 4.2.0: **113/113 kiểm thử tự động đạt**. Kết quả này chỉ là bằng chứng hồi quy cục bộ, không thay thế kiểm thử trực tiếp trên e-GP, kiểm thử hiệu năng, rà soát Chrome Web Store hoặc kiểm toán bảo mật độc lập.
+Kết quả 4.9.0: **144/144 kiểm thử tự động đạt**. Kết quả này chỉ là bằng chứng hồi quy cục bộ, không thay thế kiểm thử trực tiếp trên e-GP, kiểm thử hiệu năng, rà soát Chrome Web Store hoặc kiểm toán bảo mật độc lập.
+
+#### Chạy lại ở nhiều múi giờ
+
+```bash
+npm run test:tz
+```
+
+e-GP công bố giờ theo đồng hồ Việt Nam, còn máy người dùng thì không nhất thiết.
+Lệnh trên chạy lại toàn bộ bộ kiểm thử ở bốn múi giờ. Không thừa: 4.9.0 đã tìm
+ra **hai lỗi lọc ngày** mà khi chạy ở giờ Việt Nam thì **đạt hết** — chúng chỉ
+lộ ra ở múi giờ khác. Chạy một múi giờ duy nhất là tự bịt mắt trước cả một lớp
+lỗi im lặng.
 
 ### Kiểm thử trong trình duyệt thật
 

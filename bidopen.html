@@ -32,7 +32,7 @@
   @media(max-width:900px){.scope{grid-template-columns:1fr 1fr}}
   .empty-note{color:var(--muted);padding:10px 13px;font-size:13px}
 </style>
-</head>
+<link rel="stylesheet" href="workspace.css"><link rel="stylesheet" href="bidopen.css"><link rel="icon" href="icons/icon32.png"></head>
 <body>
   <header>
     <b>⏳ Gói đang chờ kết quả</b>
@@ -47,12 +47,12 @@
 
   <main>
     <div class="notice" style="margin-bottom:14px">
-      <b>Cách tính năng này hoạt động — đọc trước khi dùng.</b>
+      <b>Nhà thầu và giá dự thầu — đối chiếu ngay trên từng gói</b>
       <div class="small" style="margin-top:6px;line-height:1.65">
-        Khác với tra cứu trúng thầu, e-GP <b>không cho tìm nhà thầu đang tham dự</b>: danh sách nhà thầu
-        chỉ nằm trong từng <b>Biên bản mở thầu</b> riêng lẻ. Vì vậy Giáo Sư Cùi Bắp phải
-        <b>lọc trước rồi mở lần lượt từng biên bản để đọc</b> — khoảng 3 giây mỗi gói.
-        Hãy khoanh vùng cho hẹp thay vì quét tất cả. <b>Hiệu quả nhất là điền Tỉnh/Thành phố và Chủ đầu tư</b> — hai tiêu chí này được e-GP lọc sẵn trước khi gửi về, nên thu hẹp rất mạnh. Nếu chưa biết nhà thầu hay dự ở đâu, xem <b>Hồ sơ 360°</b> của họ trước.
+        Chọn tỉnh hoặc chủ đầu tư để thu hẹp danh sách. Bảng nhà thầu hiện ngay khi từng biên bản trả về,
+        gồm <b>giá dự thầu, giá sau giảm và chênh lệch bằng đồng / %</b>.
+        Mốc so sánh ưu tiên dự toán được duyệt; khi e-GP chỉ trả giá gói thầu, bảng sẽ ghi rõ mốc này.
+        Hạng giá chỉ so sánh giá đã công bố, chưa phải kết quả trúng thầu.
       </div>
     </div>
 
@@ -89,10 +89,10 @@
         <div>
           <label for="maxPackages">Số gói tối đa sẽ đọc</label>
           <select id="maxPackages">
-            <option value="50">50 gói (~2 phút)</option>
-            <option value="150" selected>150 gói (~7 phút)</option>
-            <option value="300">300 gói (~15 phút)</option>
-            <option value="600">600 gói (~30 phút)</option>
+            <option value="50">50 gói</option>
+            <option value="150" selected>150 gói</option>
+            <option value="300">300 gói</option>
+            <option value="600">600 gói</option>
           </select>
         </div>
       </div>
@@ -113,11 +113,11 @@
         </div>
         <div>
           <label for="minPrice">Giá gói thầu từ (đồng)</label>
-          <input id="minPrice" type="number" min="0" step="1000000000" placeholder="VD: 3000000000">
+          <input id="minPrice" type="number" min="0" step="1" placeholder="VD: 3000000000">
         </div>
         <div>
           <label for="maxPrice">đến (đồng)</label>
-          <input id="maxPrice" type="number" min="0" step="1000000000" placeholder="Bỏ trống = không giới hạn">
+          <input id="maxPrice" type="number" min="0" step="1" placeholder="Bỏ trống = không giới hạn">
         </div>
         <div style="display:flex;align-items:flex-end;gap:8px">
           <button id="go" class="btn" style="flex:1">🔎 Bắt đầu quét</button>
@@ -136,12 +136,14 @@
       </div>
       <div class="bar"><i id="barfill" style="width:0%"></i></div>
       <div class="muted small" style="margin-top:8px">
-        Giáo Sư Cùi Bắp đang mở lần lượt các trang biên bản trên tab e-GP. Đừng đóng tab đó.
+        Đang đọc tối đa hai biên bản cùng lúc trên các tab e-GP. Giữ các tab đó mở;
+        bạn có thể tiếp tục xem kết quả tại đây. Bản đã đọc đủ trong 30 phút được hiển thị từ bộ nhớ.
         Bấm <b>Dừng</b> bất cứ lúc nào để giữ lại phần đã đọc.
       </div>
     </div>
 
-    <div id="alert" class="notice hidden" style="margin-top:14px"></div>
+    <div id="alert" role="alert" class="notice hidden" style="margin-top:14px"></div>
+    <div class="results-toolbar"><span id="result-status" class="small muted" role="status"></span><button id="retry-missing" class="btn light hidden">Đọc tiếp các gói còn thiếu</button></div>
 
     <div id="summary" class="hidden">
       <div class="metrics">
@@ -159,7 +161,7 @@
     <div class="row space" style="margin-top:6px">
       <b id="list-title" class="hidden">Chi tiết từng gói</b>
       <label class="hidden" id="only-wrap" style="margin:0;display:flex;gap:6px;align-items:center;font-weight:600">
-        <input type="checkbox" id="only" style="width:auto" checked> Chỉ hiện gói có nhà thầu tôi theo dõi
+        <input type="checkbox" id="only" style="width:auto"> Chỉ hiện gói có nhà thầu tôi theo dõi
       </label>
     </div>
     <div id="list"></div>
@@ -167,5 +169,5 @@
 
   <script type="module" src="bidopen.js"></script>
   <script src="logo.js"></script>
-</body>
+<script type="module" src="shell.js"></script></body>
 </html>

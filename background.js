@@ -1,9 +1,27 @@
-import {DEFAULT_SETTINGS,extractCandidateObjects,normalizeCandidate,mergeTender,scoreTender,sanitizeRequestTemplate,extractParticipations,dedupeParticipations,mergeParticipation,formatMoney,formatDate,safeFilename,migrateTenderCodes,canonicalEgpUrl,EGP_SCAN_PAGE,hasContentScript,scanTargetUrl} from './lib/core.js';
+import { openingFingerprint, restoreOpening, cacheOpening, trimOpeningCache } from './lib/bbmt-cache.js';
+import { validateCriteria, safeSavedSearches, matchesAdditionalKeyword, matchesLocalFilters, splitProvinceNames } from './lib/workspace.js';
+import { safeHunts, validateHunt, huntAlarmName, parseHuntAlarm, MAX_HUNTS_ALLOWED, safeWatches } from './lib/hunts.js';
+import { touchLifecycle, inferLifecycleEvent, shouldRemindDeadline, investorWatchHit, schemaHealthOf } from './lib/lifecycle.js';
+import { normalizeCapability, checklistProgress, emptyChecklist, checklistItemsFor } from './lib/capability.js';
+import { safeHttpsWebhook, safeEmail, safeChatId, channelPayload } from './lib/channels.js';
+import { webhookHeaders } from './lib/hmac.js';
+import { safeContracts, normalizeContract } from './lib/contracts.js';
+import { missingSelectors } from './lib/dom-regression.js';
+import { checklistDueItems, contractExpiryAlert } from './lib/checklist-due.js';
+import { tokenDiff, highlightDiff, snapshotRecord } from './lib/html-diff.js';
+import { applyApproval, approvalSignature } from './lib/approval.js';
+import { methodOutline } from './lib/method-outline.js';
+import { buildChecklistPack, mergeChecklistPack, auditEntry } from './lib/sync-pack.js';
+import { inferGatesFromHsmt, extractPdfStrings } from './lib/hsmt-read.js';
+import { buildOutlineDocx, docxDataUrl } from './lib/docx-lite.js';
+import { filterAuditLog, guaranteeReminder } from './lib/audit-filter.js';
+import {DEFAULT_SETTINGS,extractCandidateObjects,normalizeCandidate,mergeTender,scoreTender,sanitizeRequestTemplate,extractParticipations,dedupeParticipations,mergeParticipation,formatMoney,formatDate,safeFilename,migrateTenderCodes,canonicalEgpUrl,EGP_SCAN_PAGE,hasContentScript,scanTargetUrl,BID_STATUS_LABEL} from './lib/core.js';
 import {buildSafeBackupState,safeRunForBackup} from './lib/backup.js';
 import {EGP_SEARCH_PAGE,PAGE_SIZE,normalizeTaxCodeForEgp,normalizeKqlcntRecord,extractContractorCandidates,dedupeKqlcnt,summarizeWinner,buildKqlcntQuery,buildWardMarketQuery,buildTbmtQuery,tbmtMatchesWard} from './lib/kqlcnt.js';
-import {buildBbmtQuery,bbmtDateRange,bbmtInDateRange,bbmtReadState,bbmtReadStateOf,READ_STATE,normalizeBbmtPackage,normalizeBidderTable,notifyNoFromUrl,summarizeBidOpenings,STEPS_DECIDED} from './lib/bbmt.js';
-import {normalizeKhlcntPlan,dedupeKhlcnt,summarizeKhlcnt,auditPlans,buildKhlcntQuery,filterPlansByArea,khlcntDateRange,khlcntInDateRange} from './lib/khlcnt.js';
-import {fetchAllAreas,currentProvinceNames,wardNamesForProvince,provinceCodesByName,wardCodesByName} from './lib/areas.js';
+import {buildBbmtQuery,bbmtDateRange,bbmtInDateRange,bbmtReadState,bbmtReadStateOf,READ_STATE,normalizeBbmtPackage,normalizeBidderTable,notifyNoFromUrl,summarizeBidOpenings,STEPS_DECIDED,sameBbmtDetailPage} from './lib/bbmt.js';
+import {normalizeKhlcntPlan,dedupeKhlcnt,summarizeKhlcnt,auditPlans,buildKhlcntQuery,filterPlansByArea,filterPlansByCategory,khlcntDateRange,khlcntInDateRange} from './lib/khlcnt.js';
+import {normalizeCategory,categoryLabel,matchesTenderCategory} from './lib/tender-categories.js';
+import {fetchProvinces,fetchAllAreas,currentProvinceNames,wardNamesForProvince,provinceCodesByName,wardCodesByName} from './lib/areas.js';
 import {buildXlsx,xlsxDataUrl,XLSX_MIME} from './lib/xlsx.js';
 import {summarizeArea,AREA_DISCLAIMER,AREA_SCOPE_NOTE} from './lib/localmarket.js';
 import {summarizePricing,priceReference,PRICING_DISCLAIMER,PRICING_METHOD_NOTE} from './lib/pricing.js';
@@ -12,10 +30,12 @@ import {buildProfile360,PROFILE_COMPLETE_NOTE,PROFILE_PARTIAL_NOTE,PROFILE_USE_N
 import {buildInvestorDiscoveryQuery,buildInvestorProfileQuery,discoverInvestors,summarizeInvestor,INVESTOR_COMPLETE_NOTE,INVESTOR_JOIN_NOTE,INVESTOR_PARTIAL_NOTE,INVESTOR_DISCLAIMER} from './lib/investor.js';
 import {observationsFromBidOpen,observationsFromWinner,mergeObservations,contractorProfile,discountProfile,winThreshold,investorMatrix,competitionStats} from './lib/analytics.js';
 import {BRAND} from './lib/brand.js';
-import {DECISION_STATE_LABEL,normalizeDecisionState} from './lib/decision.js';
+import {DECISION_STATE_LABEL,normalizeDecisionState,statusOf} from './lib/decision.js';
 
-const KEYS={settings:'settings',tenders:'tenders',runs:'runs',template:'searchTemplate',templates:'searchTemplates',lastTemplate:'lastObservedTemplate',activeRun:'activeRun',participations:'participations',winnerLookup:'winnerLookup',winnerCache:'winnerCache',bidOpenScan:'bidOpenScan',planLookup:'planLookup',telegramLog:'telegramLog',observations:'observations',areas:'areas',areaScan:'areaScan',attachments:'attachments',investorScan:'investorScan',endpointMap:'endpointMap'};
+const KEYS={settings:'settings',tenders:'tenders',runs:'runs',template:'searchTemplate',templates:'searchTemplates',lastTemplate:'lastObservedTemplate',activeRun:'activeRun',participations:'participations',winnerLookup:'winnerLookup',winnerCache:'winnerCache',bidOpenScan:'bidOpenScan',planLookup:'planLookup',telegramLog:'telegramLog',observations:'observations',areas:'areas',areaScan:'areaScan',attachments:'attachments',investorScan:'investorScan',endpointMap:'endpointMap',hunts:'hunts',watchedInvestors:'watchedInvestors',deadlineAlerts:'deadlineAlerts',schemaHealth:'schemaHealth',checklists:'checklists',pastContracts:'pastContracts',amendmentLog:'amendmentLog',domRegression:'domRegression',auditLog:'auditLog',domSnapshots:'domSnapshots'};
+const SAVED_SEARCHES = 'savedSearches';
 const DAILY_ALARM='gscb-daily';
+const DEADLINE_ALARM='gscb-deadlines';
 const TIMEOUT_PREFIX='gscb-timeout:';
 // Mọi tác vụ cần content script, vì vậy URL mặc định phải nằm đúng route mà
 // manifest cho phép. Trang home không nạp bridge và làm lượt quét thủ công treo.
@@ -35,13 +55,55 @@ if(chrome.storage.local.setAccessLevel){
 
 async function getState(){
   const data=await chrome.storage.local.get({
-    [KEYS.settings]:DEFAULT_SETTINGS,[KEYS.tenders]:[],[KEYS.runs]:[],[KEYS.template]:null,[KEYS.templates]:[],[KEYS.lastTemplate]:null,[KEYS.activeRun]:null,[KEYS.participations]:[],[KEYS.winnerLookup]:null,[KEYS.winnerCache]:{},[KEYS.bidOpenScan]:null,[KEYS.planLookup]:null,[KEYS.telegramLog]:[],[KEYS.observations]:[],[KEYS.areaScan]:null,[KEYS.attachments]:{},[KEYS.investorScan]:null,[KEYS.endpointMap]:[]
+    [SAVED_SEARCHES]:[],[KEYS.settings]:DEFAULT_SETTINGS,[KEYS.tenders]:[],[KEYS.runs]:[],[KEYS.template]:null,[KEYS.templates]:[],[KEYS.lastTemplate]:null,[KEYS.activeRun]:null,[KEYS.participations]:[],[KEYS.winnerLookup]:null,[KEYS.winnerCache]:{},[KEYS.bidOpenScan]:null,[KEYS.planLookup]:null,[KEYS.telegramLog]:[],[KEYS.observations]:[],[KEYS.areaScan]:null,[KEYS.attachments]:{},[KEYS.investorScan]:null,[KEYS.endpointMap]:[],[KEYS.hunts]:[],[KEYS.watchedInvestors]:[],[KEYS.deadlineAlerts]:{},[KEYS.schemaHealth]:null,[KEYS.checklists]:{},[KEYS.pastContracts]:[],[KEYS.amendmentLog]:[],[KEYS.domRegression]:null,[KEYS.auditLog]:[],[KEYS.domSnapshots]:[],[KEYS.areas]:null
   });
-  return {settings:{...DEFAULT_SETTINGS,...data[KEYS.settings]},tenders:data[KEYS.tenders]||[],runs:data[KEYS.runs]||[],template:data[KEYS.template]||null,templates:data[KEYS.templates]||[],lastTemplate:data[KEYS.lastTemplate]||null,activeRun:data[KEYS.activeRun]||null,participations:data[KEYS.participations]||[],winnerLookup:data[KEYS.winnerLookup]||null,winnerCache:data[KEYS.winnerCache]||{},bidOpenScan:data[KEYS.bidOpenScan]||null,planLookup:data[KEYS.planLookup]||null,telegramLog:data[KEYS.telegramLog]||[],observations:data[KEYS.observations]||[],areaScan:data[KEYS.areaScan]||null,attachments:data[KEYS.attachments]||{},investorScan:data[KEYS.investorScan]||null,endpointMap:data[KEYS.endpointMap]||[]};
+  return {savedSearches:safeSavedSearches(data[SAVED_SEARCHES]),settings:{...DEFAULT_SETTINGS,...data[KEYS.settings]},tenders:data[KEYS.tenders]||[],runs:data[KEYS.runs]||[],template:data[KEYS.template]||null,templates:data[KEYS.templates]||[],lastTemplate:data[KEYS.lastTemplate]||null,activeRun:data[KEYS.activeRun]||null,participations:data[KEYS.participations]||[],winnerLookup:data[KEYS.winnerLookup]||null,winnerCache:data[KEYS.winnerCache]||{},bidOpenScan:data[KEYS.bidOpenScan]||null,planLookup:data[KEYS.planLookup]||null,telegramLog:data[KEYS.telegramLog]||[],observations:data[KEYS.observations]||[],areaScan:data[KEYS.areaScan]||null,attachments:data[KEYS.attachments]||{},investorScan:data[KEYS.investorScan]||null,endpointMap:data[KEYS.endpointMap]||[],hunts:safeHunts(data[KEYS.hunts]),watchedInvestors:safeWatches(data[KEYS.watchedInvestors]),deadlineAlerts:data[KEYS.deadlineAlerts]&&typeof data[KEYS.deadlineAlerts]==='object'?data[KEYS.deadlineAlerts]:{},schemaHealth:data[KEYS.schemaHealth]||null,checklists:data[KEYS.checklists]&&typeof data[KEYS.checklists]==='object'?data[KEYS.checklists]:{},pastContracts:safeContracts(data[KEYS.pastContracts]),amendmentLog:Array.isArray(data[KEYS.amendmentLog])?data[KEYS.amendmentLog].slice(0,500):[],domRegression:data[KEYS.domRegression]||null,auditLog:Array.isArray(data[KEYS.auditLog])?data[KEYS.auditLog].slice(0,800):[],domSnapshots:Array.isArray(data[KEYS.domSnapshots])?data[KEYS.domSnapshots].slice(0,8):[],areas:data[KEYS.areas]||null};
+}
+
+async function appendAudit(kind,detail,operator){
+  const s=await getState();
+  const auditLog=[auditEntry(kind,detail,operator||s.settings.operatorName),[...(s.auditLog||[])]].flat().slice(0,800);
+  await save({[KEYS.auditLog]:auditLog});
 }
 async function save(partial){await chrome.storage.local.set(partial);}
 
-function newRun(mode){return {id:`${Date.now()}-${Math.random().toString(36).slice(2,8)}`,mode,status:'STARTING',startedAt:new Date().toISOString(),finishedAt:null,captured:0,newCount:0,updatedCount:0,matchedCount:0,message:'Đang mở Hệ thống mạng đấu thầu quốc gia...',tabId:null,queue:[],qi:0,pendingAlerts:[],pendingMatches:[]};}
+function publicSettings(settings={}){
+  const out={...DEFAULT_SETTINGS,...settings};
+  out.telegramBotToken=settings.telegramBotToken?'••••':'';
+  out.telegramChatId=settings.telegramChatId?'••••':'';
+  out.hasTelegramToken=Boolean(String(settings.telegramBotToken||'').trim());
+  out.hasTelegramChat=Boolean(String(settings.telegramChatId||'').trim());
+  out.notifyWebhook=settings.notifyWebhook?'••••':'';
+  out.webhookSecret=settings.webhookSecret?'••••':'';
+  out.notifyEmail=settings.notifyEmail||'';
+  out.operatorName=settings.operatorName||'';
+  out.readOnlyMode=Boolean(settings.readOnlyMode);
+  out.approvalSteps=Number(settings.approvalSteps)===2?2:3;
+  out.hasWebhook=Boolean(safeHttpsWebhook(settings.notifyWebhook));
+  out.capability=normalizeCapability(settings.capability||{});
+  return out;
+}
+
+function senderIsOptions(sender){
+  const url=String(sender?.url||'');
+  return url.startsWith(chrome.runtime.getURL('options.html'));
+}
+
+async function resolveProvinceCodes(provinceText){
+  const names=splitProvinceNames(provinceText);
+  if(!names.length)return {ok:true,names:[],codes:[],unknown:[]};
+  const areas=(await getAreas({})).areas;
+  if(!areas)return {ok:true,names,codes:[],unknown:[]};
+  const codes=[],unknown=[];
+  for(const name of names){
+    const found=provinceCodesByName(areas.provinces,name);
+    if(found.length)codes.push(...found);
+    else unknown.push(name);
+  }
+  return {ok:unknown.length===0,names,codes:[...new Set(codes)],unknown};
+}
+
+function newRun(mode){return {foundKeys:[],id:`${Date.now()}-${Math.random().toString(36).slice(2,8)}`,mode,status:'STARTING',startedAt:new Date().toISOString(),finishedAt:null,captured:0,newCount:0,updatedCount:0,matchedCount:0,message:'Đang mở Hệ thống mạng đấu thầu quốc gia...',tabId:null,queue:[],qi:0,pendingAlerts:[],pendingMatches:[]};}
 function isEgpUrl(url){
   try{const u=new URL(url);return u.protocol==='https:'&&u.origin==='https://muasamcong.mpi.gov.vn';}catch{return false;}
 }
@@ -128,6 +190,12 @@ async function finishRun(runId,status,message){
     await notifyHighScore(run?.pendingAlerts||[]);
     await pushTelegramMatches(s.settings,run?.pendingMatches||[],run);
     if(s.settings.autoExportMobileReport)await exportMobileReport(false);
+    await reviewDeadlines();
+    if(s.schemaHealth&&s.schemaHealth.ok===false){
+      chrome.notifications.create({type:'basic',iconUrl:'icons/icon128.png',title:'Giáo Sư Cùi Bắp — schema e-GP lạ',
+        message:'Lượt vừa rồi thiếu trường notifyNo/bidName quen thuộc. Đừng tin đây là toàn bộ dữ liệu; mở Chẩn đoán để xem.'}).catch(()=>{});
+      compareOpenEgpDom().catch(()=>{});
+    }
   }else if(status==='ERROR'||status==='TIMEOUT'){
     chrome.notifications.create({type:'basic',iconUrl:'icons/icon128.png',title:'Giáo Sư Cùi Bắp cần kiểm tra',message}).catch(()=>{});
   }
@@ -143,7 +211,7 @@ async function notifyHighScore(alerts){
   for(const t of (alerts||[]).slice(0,5)){
     const nid='gscb-alert:'+t.key;
     if(t.detailUrl)notifUrls.set(nid,t.detailUrl);
-    chrome.notifications.create(nid,{type:'basic',iconUrl:'icons/icon128.png',title:`⭐ ${t.score}đ · ${t.notifyNo}`,message:(t.bidName||'').slice(0,150),buttons:[{title:'Mở gói thầu trên e-GP'}]}).catch(()=>{});
+    chrome.notifications.create(nid,{type:'basic',iconUrl:'icons/icon128.png',title:t.alertKind==='amendment'?`✏️ Điều chỉnh · ${t.notifyNo}`:`⭐ ${t.score}đ · ${t.notifyNo}`,message:(t.bidName||'').slice(0,150),buttons:[{title:'Mở gói thầu trên e-GP'}]}).catch(()=>{});
   }
 }
 /* ==========================================================================
@@ -206,7 +274,7 @@ async function callTelegram(token,method,payload){
 async function sendTelegram(settings,text,opts={}){
   if(!opts.force&&!settings.telegramEnabled)return {ok:false,message:'Chưa bật gửi Telegram trong Cấu hình.'};
   const token=String(settings.telegramBotToken||'').trim();
-  const chatId=String(settings.telegramChatId||'').trim();
+  const chatId=String(opts.chatId||settings.telegramChatId||'').trim();
   if(!token||!chatId)return {ok:false,message:'Thiếu Bot Token hoặc Chat ID.'};
 
   const parts=chunkForTelegram(text);
@@ -284,31 +352,45 @@ function telegramTenderLine(t){
     +(t.investorName?`\n  🏛 ${escapeHtml(t.investorName)}`:'');
 }
 
+async function dispatchOutbound(settings,text,opts={}){
+  const hook=safeHttpsWebhook(settings.notifyWebhook);
+  if(hook){
+    try{
+      const body=JSON.stringify(channelPayload(opts.kind||'notice',text,{email:safeEmail(settings.notifyEmail)}));
+      await fetch(hook,{method:'POST',headers:webhookHeaders(settings.webhookSecret,body),body});
+    }catch{}
+  }
+  return sendTelegram(settings,text,opts);
+}
+
 async function pushTelegramMatches(settings,matches,run){
-  if(!settings.telegramEnabled)return;
+  if(!settings.telegramEnabled && !safeHttpsWebhook(settings.notifyWebhook))return;
   const list=matches||[];
   const partial=run?.status==='PARTIAL'||Boolean(run?.partial);
   const scopeNote=partial?'\n⚠️ <b>DỮ LIỆU CHƯA ĐẦY ĐỦ</b>: lượt quét bị giới hạn hoặc gián đoạn.':' ';
 
   // Không có gói mới: chỉ nhắn khi người dùng bật "báo cả khi không có gì mới",
   // để biết hệ thống vẫn sống chứ không phải đã chết âm thầm.
+  const hunt=(run?.huntId?((await getState()).hunts||[]).find(h=>h.id===run.huntId):null);
+  const chatId=safeChatId(hunt?.telegramChatId);
   if(!list.length){
     if(!settings.telegramDailySummary)return;
-    await sendTelegram(settings,
+    await dispatchOutbound(settings,
       `📡 <b>Giáo Sư Cùi Bắp</b> — ${new Date().toLocaleString('vi-VN')}\n`
       +`${partial?'Đã quét một phần':'Đã quét xong'}, <b>không có gói mới</b> đạt ngưỡng.${scopeNote}\n`
       +`Tổng cộng đã nhận ${Number(run?.captured||0)} bản ghi từ e-GP.`,
-      {kind:'summary'});
+      {kind:'summary',chatId});
     return;
   }
 
-  const head=`📡 <b>Giáo Sư Cùi Bắp</b>: ${list.length} gói mới đạt ngưỡng\n`
-    +`<i>${new Date().toLocaleString('vi-VN')}</i>${scopeNote}`;
-  // Sắp theo điểm giảm dần để gói đáng chú ý nhất nằm ngay đầu tin nhắn.
+  const amended=list.filter(t=>t.alertKind==='amendment').length;
+  const head=`📡 <b>Giáo Sư Cùi Bắp</b>: ${list.length} gói mới đạt ngưỡng`
+    +(amended?` · ${amended} gói theo dõi vừa điều chỉnh/gia hạn`:'')
+    +`\n<i>${new Date().toLocaleString('vi-VN')}</i>${scopeNote}`;
   const body=[...list].sort((a,b)=>Number(b.score||0)-Number(a.score||0))
-    .slice(0,25).map(telegramTenderLine).join('\n\n');
+    .slice(0,25).map(t=> (t.alertKind==='amendment'?'✏️ <b>Điều chỉnh / gia hạn</b>\n':'')+telegramTenderLine(t)).join('\n\n');
   const tail=list.length>25?`\n\n… và ${list.length-25} gói nữa, xem trong tiện ích.`:'';
-  await sendTelegram(settings,`${head}\n\n${body}${tail}`,{kind:'matches'});
+  await dispatchOutbound(settings,`${head}\n\n${body}${tail}`,{kind:'matches',chatId});
 }
 
 function makeTemplateId(){return 't'+Date.now().toString(36)+Math.random().toString(36).slice(2,6);}
@@ -318,24 +400,50 @@ async function ingest(records,meta={}){
   return withLock(async()=>{
     const s=await getState();
     const existing=new Map(s.tenders.map(t=>[t.key,t]));
+    const ingestedKeys=[];
     const alertMin=Number(s.settings.alertMinScore||85);
     const teleMin=Number(s.settings.telegramMinScore||70);
     const freshAlerts=[],freshMatches=[];
     let newCount=0,updatedCount=0,matchedCount=0,valid=0;
+    const health=schemaHealthOf(records);
+    const watches=s.watchedInvestors||[];
+    const amendmentEvents=[];
     for(const raw of records.slice(0,1000)){
-      const normalized=normalizeCandidate(raw,meta);if(!normalized)continue;valid++;
+      const normalized=normalizeCandidate(raw,meta);if(!normalized)continue;valid++;ingestedKeys.push(normalized.key);
       const before=existing.get(normalized.key);
-      const merged=mergeTender(before||{},normalized,s.settings);
-      if(before)updatedCount++;else{
+      let merged=mergeTender(before||{},normalized,s.settings);
+      const event=inferLifecycleEvent(merged);
+      merged={...merged,lifecycle:touchLifecycle(before||merged,event,merged.lastSeenAt)};
+      const watch=investorWatchHit(merged,watches);
+      if(watch){
+        merged.watchlisted=true;
+        merged.watchedInvestorId=watch.id;
+      }
+      if(before){
+        updatedCount++;
+        const prevLog=Array.isArray(before.changeLog)?before.changeLog.length:0;
+        const fresh=(merged.changeLog||[]).slice(prevLog);
+        if((merged.watchlisted||watch)&&fresh.some(ch=>ch.field==='closeDate'||ch.field==='version'||ch.field==='bidName')){
+          merged.amendment = true;
+          freshAlerts.push({...merged,alertKind:'amendment'});
+          freshMatches.push({...merged,alertKind:'amendment'});
+          for(const ch of fresh){
+            amendmentEvents.push({at:ch.at||new Date().toISOString(),key:merged.key,notifyNo:merged.notifyNo,bidName:merged.bidName,field:ch.field,before:ch.before,after:ch.after});
+          }
+        }
+      }else{
         newCount++;
-        if(merged.score>=alertMin)freshAlerts.push(merged);
-        if(merged.matched&&merged.score>=teleMin)freshMatches.push(merged);
+        if(merged.score>=alertMin||watch)freshAlerts.push(merged);
+        if((merged.matched&&merged.score>=teleMin)||watch)freshMatches.push(merged);
       }
       if(merged.matched)matchedCount++;
       existing.set(merged.key,merged);
     }
     const tenders=[...existing.values()].sort((a,b)=>new Date(b.lastSeenAt)-new Date(a.lastSeenAt)).slice(0,Number(s.settings.maxStoredTenders||3000));
-    const patch={[KEYS.tenders]:tenders};
+    const patch={[KEYS.tenders]:tenders,[KEYS.schemaHealth]:{...health,at:new Date().toISOString(),source:meta.captureType||''}};
+    if(amendmentEvents.length){
+      patch[KEYS.amendmentLog]=[...amendmentEvents,...(s.amendmentLog||[])].slice(0,500);
+    }
     // Nhà thầu: trích nhà thầu tham dự/trúng thầu từ chính dữ liệu vừa bắt.
     // Bọc an toàn tuyệt đối: lỗi ở đây KHÔNG được phép làm hỏng việc lưu gói thầu.
     let partCount=0;
@@ -353,7 +461,7 @@ async function ingest(records,meta={}){
       if(run){
         const captured=Number(run.captured||0)+valid;
         const progress=meta.total?`Đã lấy ${captured} bản ghi${meta.page?` (trang ${meta.page}`:''}${meta.page&&meta.total?` · tổng ~${meta.total} gói)`:meta.page?')':''}; đang chấm điểm...`:`Đã nhận ${captured} bản ghi; đang chống trùng và chấm điểm...`;
-        const updatedRun={...run,status:'RUNNING',message:progress,captured,newCount:Number(run.newCount||0)+newCount,updatedCount:Number(run.updatedCount||0)+updatedCount,matchedCount:Number(run.matchedCount||0)+matchedCount,pendingAlerts:[...(run.pendingAlerts||[]),...freshAlerts].slice(0,50),pendingMatches:[...(run.pendingMatches||[]),...freshMatches].slice(0,50)};
+        const updatedRun={...run,foundKeys:[...new Set([...(run.foundKeys||[]),...ingestedKeys])],status:'RUNNING',message:progress,captured,newCount:Number(run.newCount||0)+newCount,updatedCount:Number(run.updatedCount||0)+updatedCount,matchedCount:Number(run.matchedCount||0)+matchedCount,pendingAlerts:[...(run.pendingAlerts||[]),...freshAlerts].slice(0,50),pendingMatches:[...(run.pendingMatches||[]),...freshMatches].slice(0,50)};
         patch[KEYS.runs]=s.runs.map(r=>r.id===meta.runId?updatedRun:r).slice(0,100);
         if(s.activeRun?.id===meta.runId)patch[KEYS.activeRun]={...s.activeRun,...updatedRun};
       }
@@ -477,7 +585,122 @@ async function advanceOrFinish(runId,ok,message){
 }
 
 function nextDailyTime(hhmm){const [h,m]=String(hhmm||'06:05').split(':').map(Number);const now=new Date();const next=new Date(now);next.setHours(h||0,m||0,0,0);if(next<=now)next.setDate(next.getDate()+1);return next.getTime();}
-async function ensureDailyAlarm(){const s=await getState();await chrome.alarms.clear(DAILY_ALARM);if(s.settings.autoScan)await chrome.alarms.create(DAILY_ALARM,{when:nextDailyTime(s.settings.dailyTime),periodInMinutes:1440});}
+async function ensureDailyAlarm(){
+  const s=await getState();
+  await chrome.alarms.clear(DAILY_ALARM);
+  if(s.settings.autoScan)await chrome.alarms.create(DAILY_ALARM,{when:nextDailyTime(s.settings.dailyTime),periodInMinutes:1440});
+  await chrome.alarms.create(DEADLINE_ALARM,{periodInMinutes:30});
+  await ensureHuntAlarms(s.hunts);
+}
+
+async function ensureHuntAlarms(hunts){
+  const all=await chrome.alarms.getAll();
+  for(const alarm of all){
+    if(parseHuntAlarm(alarm.name))await chrome.alarms.clear(alarm.name);
+  }
+  for(const hunt of safeHunts(hunts)){
+    if(!hunt.enabled)continue;
+    for(const time of hunt.times){
+      await chrome.alarms.create(huntAlarmName(hunt.id,time),{when:nextDailyTime(time),periodInMinutes:1440});
+    }
+  }
+}
+
+async function reviewDeadlines(){
+  const s=await getState();
+  const sent={...s.deadlineAlerts};
+  const now=Date.now();
+  const targets=(s.tenders||[]).filter(t=>t.watchlisted||t.decisionState&&t.decisionState!=='NEW'||Number(t.score||0)>=Number(s.settings.alertMinScore||85));
+  let changed=false;
+  for(const tender of targets.slice(0,80)){
+    const window=shouldRemindDeadline(tender,sent,now);
+    if(!window)continue;
+    const nid=`gscb-deadline:${tender.key}:${window.key}`;
+    if(tender.detailUrl)notifUrls.set(nid,tender.detailUrl);
+    chrome.notifications.create(nid,{type:'basic',iconUrl:'icons/icon128.png',
+      title:`Hạn nộp · ${window.label}`,
+      message:String(tender.bidName||tender.notifyNo||'').slice(0,160)}).catch(()=>{});
+    if(s.settings.telegramEnabled){
+      await sendTelegram(s.settings,`⏰ <b>${escapeHtml(window.label)}</b>\n${escapeHtml(tender.bidName||tender.notifyNo)}\n${escapeHtml(tender.displayCode||tender.notifyNo||'')}`,{force:false,kind:'deadline'});
+    }
+    sent[tender.key]={...(sent[tender.key]||{}),[window.key]:new Date().toISOString()};
+    changed=true;
+    if(window.key==='h24'){
+      const list=checklistItemsFor(tender.category || '');
+      const progress=checklistProgress(s.checklists?.[tender.key]||{}, tender.category||'');
+      if(progress.done<list.length && !sent[tender.key]?.checklist){
+        chrome.notifications.create(`gscb-check:${tender.key}`,{type:'basic',iconUrl:'icons/icon128.png',
+          title:'Sát hạn mà checklist chưa đủ',
+          message:`${progress.done}/${progress.total} mục · ${String(tender.bidName||'').slice(0,120)}`}).catch(()=>{});
+        sent[tender.key]={...sent[tender.key],checklist:new Date().toISOString()};
+      }
+    }
+    const due=checklistDueItems(tender,s.checklists?.[tender.key]||{},tender.category||'');
+    if(due.length && !sent[tender.key]?.dueItem){
+      chrome.notifications.create(`gscb-due:${tender.key}`,{type:'basic',iconUrl:'icons/icon128.png',
+        title:`Checklist sát hạn: ${due[0].label}`,
+        message:`Còn ~${due[0].hoursLeft}h · ${String(tender.bidName||'').slice(0,100)}`}).catch(()=>{});
+      sent[tender.key]={...sent[tender.key],dueItem:new Date().toISOString()};
+      changed=true;
+    }
+  }
+  for(const hd of (s.pastContracts||[]).slice(0,20)){
+    const alert=contractExpiryAlert(hd);
+    if(alert.ok || sent[`hd:${hd.id}`]) continue;
+    chrome.notifications.create(`gscb-hd:${hd.id}`,{type:'basic',iconUrl:'icons/icon128.png',
+      title:`HĐ tương tự gần hết cửa sổ ${alert.years||5} năm`,
+      message:String(hd.name||'').slice(0,140)+' · '+alert.text}).catch(()=>{});
+    sent[`hd:${hd.id}`]=new Date().toISOString();
+    changed=true;
+  }
+  for(const tender of targets.slice(0,80)){
+    const notes=guaranteeReminder(tender);
+    if(!notes.length || sent[tender.key]?.guarantee) continue;
+    chrome.notifications.create(`gscb-bh:${tender.key}`,{type:'basic',iconUrl:'icons/icon128.png',
+      title:'Bảo đảm dự thầu',message:notes[0].text}).catch(()=>{});
+    sent[tender.key]={...(sent[tender.key]||{}),guarantee:new Date().toISOString()};
+    changed=true;
+  }
+  if(changed)await save({[KEYS.deadlineAlerts]:sent});
+}
+
+async function compareOpenEgpDom(){
+  const tabs=await chrome.tabs.query({url:'https://muasamcong.mpi.gov.vn/*contractor-selection*'});
+  const tab=tabs.find(t=>t.id)&&tabs[0];
+  if(!tab?.id){
+    await save({[KEYS.domRegression]:{ok:false,at:new Date().toISOString(),message:'Không có tab e-GP đang mở để đối chiếu DOM.'}});
+    return {ok:false,message:'Không có tab e-GP đang mở.'};
+  }
+  let html='';
+  try{
+    const res=await chrome.tabs.sendMessage(tab.id,{type:'SNAPSHOT_DOM'});
+    html=res?.html||'';
+  }catch(e){
+    return {ok:false,message:String(e?.message||e)};
+  }
+  const s=await getState();
+  const prev=(s.domSnapshots||[])[0]?.html||'';
+  const diff=tokenDiff(prev,html);
+  const snap=snapshotRecord(html,{url:tab.url});
+  const result={...missingSelectors(html),at:new Date().toISOString(),url:tab.url||'',length:html.length,diff,highlight:highlightDiff(diff)};
+  await save({[KEYS.domRegression]:result,[KEYS.domSnapshots]:[snap,...(s.domSnapshots||[])].slice(0,8)});
+  if(result.miss?.length){
+    chrome.notifications.create({type:'basic',iconUrl:'icons/icon128.png',title:'DOM e-GP lệch fixture',
+      message:`Thiếu nhóm: ${result.miss.map(m=>m.group).join(', ')}`}).catch(()=>{});
+  }
+  return {ok:true,...result};
+}
+
+async function runHuntById(huntId){
+  const s=await getState();
+  const hunt=(s.hunts||[]).find(h=>h.id===huntId);
+  if(!hunt||!hunt.enabled)return {ok:false,message:'Bộ săn không tồn tại hoặc đang tắt.'};
+  const payload={...hunt.criteria,focusTab:false,huntId:hunt.id};
+  const result=hunt.kind==='plan'?await startPlanLookup(payload):await startTbmtSearch(payload);
+  const hunts=s.hunts.map(h=>h.id===hunt.id?{...h,lastRunAt:new Date().toISOString(),lastStatus:result.ok?'RUNNING':'ERROR',lastMessage:result.message||''}:h);
+  await save({[KEYS.hunts]:hunts});
+  return result;
+}
 
 async function saveObservedTemplate(payload){
   const template=sanitizeRequestTemplate(payload.request,payload.sourcePageUrl,payload.candidateCount||0);if(!template)return {ok:false};
@@ -534,8 +757,14 @@ const stamp=()=>new Date().toISOString().slice(0,10);
 
 /** Số hoặc null — để ô thiếu giá là ô TRỐNG, không phải "0 đ". */
 const numOrNull=v=>(v===null||v===undefined||v===''||typeof v==='boolean'||!Number.isFinite(Number(v)))?null:Number(v);
-async function exportCsv(saveAs=true){
+async function exportCsv(saveAs=true,keys=null){
   const s=await getState();
+  if(keys!==null){
+    if(!Array.isArray(keys)||keys.length>10000||keys.some(k=>typeof k!=='string'))throw new Error('Phạm vi xuất không hợp lệ.');
+    const selected=new Set(keys);
+    s.tenders=s.tenders.filter(t=>selected.has(t.key));
+  }
+  if(!s.tenders.length)throw new Error('Không có gói trong phạm vi xuất.');
   return downloadXlsx(`GiaoSuCuiBap/DS-goi-thau-${stamp()}.xlsx`,{
     sheetName:'Gói thầu',
     columns:[
@@ -561,7 +790,7 @@ async function exportCsv(saveAs=true){
       {header:'Link e-GP',key:'detailUrl',type:'url',width:44}
     ],
     rows:s.tenders.map(t=>({
-      score:numOrNull(t.score),recommendation:t.recommendation,statusLabel:t.statusLabel||'',
+      score:numOrNull(t.score),recommendation:t.recommendation,statusLabel:BID_STATUS_LABEL[statusOf(t)],
       notifyNo:t.notifyNo||'',bidNo:t.bidNo||'',version:t.version,
       bidName:t.bidName,projectName:t.projectName,location:t.location,
       price:numOrNull(t.price),publicDate:t.publicDate,closeDate:t.closeDate,
@@ -660,7 +889,10 @@ async function dispatchLookupToTab(tabId,payload){
 
 async function ensureEgpSearchTab(active){
   const tabs=await chrome.tabs.query({url:'https://muasamcong.mpi.gov.vn/*'});
-  const candidates=tabs.filter(t=>/contractor-selection/i.test(t.url||''));
+  const state=await getState();
+  const reserved=new Set([state.activeRun,...LOOKUP_KINDS.map(k=>state[k.key])]
+    .filter(j=>j&&ACTIVE_JOB_STATUSES.has(j.status)).flatMap(j=>[j.tabId,...(j.detailTabIds||[])]));
+  const candidates=tabs.filter(t=>!reserved.has(t.id)&&/contractor-selection/i.test(t.url||''));
 
   // Hỏi từng tab: đang ở màn hình kết quả chưa, và có đang chạy việc khác không.
   // Trạng thái "bận" đọc trực tiếp từ tab nên luôn đúng, không cần sổ ghi riêng
@@ -936,40 +1168,21 @@ async function exportWinnersCsv(){
  *       (đắt, ~3 giây mỗi gói) — nên LUÔN có trần và nút dừng.
  * ======================================================================== */
 
-/* --------------------------------------------------------------------------
- *  NHỊP ĐỌC BIÊN BẢN — vì sao trước đây rất chậm
- *
- *  Vòng lặp chờ MỘT hạn duy nhất 20 giây cho mỗi gói. Gói có dữ liệu trả lời
- *  sau 2-3 giây nên không sao; nhưng gói mà e-GP KHÔNG phát request nhà thầu
- *  (khá nhiều) thì vòng lặp nằm chết đủ 20 giây rồi mới sang gói kế.
- *
- *  Với 150 gói mà 30 gói không có dữ liệu, riêng phần nằm chờ vô ích đã là
- *  10 phút. Đó chính là cái chậm người dùng thấy.
- *
- *  Nay tách làm hai mốc:
- *    BBMT_SETTLE_MS  — sau khi TRANG ĐÃ TẢI XONG mới bắt đầu đếm. Request nhà
- *                      thầu luôn phát trong hoặc ngay sau lúc tải; quá mốc này
- *                      mà chưa thấy thì kết luận gói không có dữ liệu.
- *    BBMT_DETAIL_TIMEOUT — trần tuyệt đối, phòng trang không bao giờ tải xong.
- *
- *  Đường nhanh giữ nguyên tốc độ; đường chậm rút từ 20 giây xuống còn
- *  thời gian tải trang cộng 4 giây.
- * ------------------------------------------------------------------------ */
-const BBMT_DETAIL_TIMEOUT=20000;   // trần tuyệt đối cho một trang biên bản
-const BBMT_SETTLE_MS=4000;         // chờ thêm sau khi trang đã tải xong
-const BBMT_DETAIL_PAUSE=450;       // nghỉ giữa hai gói — vẫn đủ thưa với e-GP
-const BBMT_DETAIL_ALARM_MS=BBMT_DETAIL_TIMEOUT+30000;
-
-// Hàng đợi giai đoạn 2 sống trong bộ nhớ service worker; tiến độ ghi vào storage.
-let bbmtWaiter=null;               // {notifyNo, resolve}
+// Wait for actual data, not the document load event. Two bounded readers let
+// a slow detail page coexist with a fast one. No API request replay.
+const BBMT_DETAIL_TIMEOUT=25000;
+const BBMT_NAVIGATION_TIMEOUT=45000;
+const BBMT_TOTAL_TIMEOUT=90000;
+const BBMT_DETAIL_ALARM_MS=60000;
+let bbmtWaiter=null; // coordinator: scanId, waiters, resolve (cancel all)
 let bbmtCancelled=false;
-
-async function setScan(patch){
+const getBidScan=async()=> (await chrome.storage.local.get('bidOpenScan')).bidOpenScan;
+async function setScan(patch,id){
   return withLock(async()=>{
-    const s=await getState();
-    const next={...(s.bidOpenScan||{}),...patch};
-    await save({[KEYS.bidOpenScan]:next});
-    return next;
+    const current=await getBidScan();
+    if(!current||(id&&current.id!==id)||!isLookupActive(lookupKind('bidOpenScan'),current))return null;
+    const next={...current,...patch,lastProgressAt:new Date().toISOString()};
+    await save({bidOpenScan:next});return next;
   });
 }
 
@@ -982,8 +1195,9 @@ async function startBidOpenScan(payload={}){
   const provinceName=String(payload.province||'').trim();
   let provinces=[];
   if(provinceName){
-    const areas=(await getAreas({})).areas;
+    const areas=(await getProvincesOnly()).areas;
     if(areas)provinces=provinceCodesByName(areas.provinces,provinceName);
+    if(!provinces.length)return {ok:false,message:'Chưa xác định được mã tỉnh. Hãy chọn tên trong danh sách gợi ý rồi thử lại.'};
   }
 
   /* CHE DO DO GOI TRUOT
@@ -1010,6 +1224,9 @@ async function startBidOpenScan(payload={}){
     minPrice:Number(payload.minPrice)||0,
     maxPrice:Number(payload.maxPrice)||0
   };
+  const validation=validateCriteria({...scope,keyword:scope.keyword||'Biên bản mở thầu'});
+  if(!validation.ok)return {ok:false,message:validation.message};
+  if(scope.fromDate&&scope.toDate&&scope.fromDate>scope.toDate)return {ok:false,message:'Ngày kết thúc phải từ ngày bắt đầu trở đi.'};
   const maxPackages=Math.max(1,Math.min(Number(payload.maxPackages)||150,600));
   const id=newLookupId();
 
@@ -1022,7 +1239,8 @@ async function startBidOpenScan(payload={}){
       ?'Đang lấy danh sách gói ĐÃ CÓ KẾT QUẢ để dò gói bạn dự mà không trúng...'
       :'Đang lấy danh sách gói đã mở thầu nhưng chưa có kết quả...',
     startedAt:new Date().toISOString(),finishedAt:null,
-    totalCandidates:0,packages:[],scannedCount:0,cancelled:false
+    totalCandidates:0,totalPages:0,pagesRead:0,listedRows:0,listingCapped:false,
+    packages:[],scannedCount:0,cancelled:false
   };
   const claimed=await claimLookupJob('bidOpenScan',scan);
   if(!claimed.ok)return {ok:false,message:'Một lượt soi biên bản mở thầu đang chạy. Hãy chờ hoặc bấm Dừng trước khi chạy lại.',scan:claimed.current};
@@ -1055,161 +1273,213 @@ async function ingestBidOpenList(payload={}){
     if(!scan||scan.id!==payload.planId)return false;
 
     const rows=Array.isArray(payload.records)?payload.records:[];
-    /* LỌC THỜI GIAN TẠI CHỖ.
-     *
-     * Bộ lọc gửi lên máy chủ chỉ là tối ưu tốc độ: trường publicDateKqmt chưa
-     * được đo là có lập chỉ mục range hay không, và e-GP thì BỎ QUA lặng lẽ bộ
-     * lọc nó không hiểu thay vì báo lỗi. Đúng chỗ này từng làm người dùng chọn
-     * "15 ngày" mà nhận về gói mở thầu năm 2023.
-     *
-     * Vì vậy khoảng thời gian được áp lại một lần nữa trên dữ liệu đã tải về.
-     * Đây mới là thứ bảo đảm kết quả nằm đúng khoảng, bất kể máy chủ làm gì. */
+    // The server query deliberately has no publication-date range: the user
+    // selects opening dates, and publication can precede opening by many days.
+    // Normalize first so the local range uses actual Vietnamese opening time.
     const range=bbmtDateRange(scan.scope||{});
     const all=rows.map(normalizeBbmtPackage).filter(Boolean);
-    const found=all.filter(p=>bbmtInDateRange(p,range));
+    const cache=(await chrome.storage.local.get('bidOpenCache')).bidOpenCache||{};
+    const found=all.filter(p=>bbmtInDateRange(p,range)&&matchesAdditionalKeyword(p,scan.scope||{}))
+      .map(p=>restoreOpening(p,cache[p.key]));
     const dropped=Number(scan.outOfRangeCount||0)+(all.length-found.length);
 
     const map=new Map((scan.packages||[]).map(p=>[p.key,p]));
     for(const p of found)if(!map.has(p.key))map.set(p.key,p);
 
     const packages=[...map.values()].slice(0,scan.maxPackages);
+    const listingCapped=Boolean(scan.listingCapped||payload.capped);
     const next={...scan,packages,outOfRangeCount:dropped,
       totalCandidates:Number(payload.totalElements||scan.totalCandidates||0),
+      totalPages:Number(payload.totalPages||scan.totalPages||0),
+      pagesRead:Math.max(Number(scan.pagesRead)||0,(Number(payload.pageIndex)||0)+(payload.done?0:1)),
+      listedRows:Number(scan.listedRows||0)+rows.length,listingCapped,
+      // Persist the scope limit before detail phase can finish an empty queue.
+      partial:Boolean(scan.partial||payload.partial||listingCapped),
       message:`Đã tìm được ${packages.length} gói đang chờ kết quả`
         +(dropped?` (đã bỏ ${dropped} gói ngoài khoảng thời gian đã chọn)`:'')+'...'};
     if(payload.done)next.listingDone=true;
     await save({[KEYS.bidOpenScan]:next});
     return Boolean(payload.done&&!scan.listingDone);
   });
-  if(done)startBidOpenDetailPhase();
+  if(done)void startBidOpenDetailPhase(payload.planId).catch(e=>failLookupJob('bidOpenScan',payload.planId,String(e.message||e)));
   return {ok:true};
 }
 
-/** Giai đoạn 2: mở lần lượt từng trang biên bản để đọc bảng nhà thầu. */
-async function startBidOpenDetailPhase(){
-  const s=await getState();
-  const scan=s.bidOpenScan;
-  if(!scan)return;
+/** Read at most two official detail pages concurrently; publish each result. */
+async function startBidOpenDetailPhase(scanId,selectedKeys=null){
+  const scan=await getBidScan();
+  if(!scan||scan.id!==scanId||!isLookupActive(lookupKind('bidOpenScan'),scan))return;
   const list=scan.packages||[];
-  if(!list.length){
-    await setScan({status:'SUCCESS',finishedAt:new Date().toISOString(),
-      message:'Không có gói nào khớp bộ lọc. Hãy nới rộng số ngày hoặc bỏ bớt điều kiện.'});
-    await chrome.alarms.clear(TIMEOUT_PREFIX+scan.id).catch(()=>{});
-    return;
-  }
-
-  let tab=null;
-  if(Number.isInteger(scan.tabId)){
-    try{const own=await chrome.tabs.get(scan.tabId);if(isEgpUrl(own.url))tab=own;}catch{}
-  }
-  if(!tab)[tab]=await chrome.tabs.query({url:'https://muasamcong.mpi.gov.vn/*'});
-  if(!tab){
-    await setScan({status:'ERROR',finishedAt:new Date().toISOString(),
-      message:'Không còn tab e-GP nào đang mở để đọc biên bản.'});
-    await chrome.alarms.clear(TIMEOUT_PREFIX+scan.id).catch(()=>{});
-    return;
-  }
-
-  /* BỎ QUA GÓI ĐÃ ĐỌC RỒI.
-   *
-   * Mỗi gói phải mở riêng một trang rồi chờ bảng nhà thầu tải xong — đây là
-   * toàn bộ chi phí thời gian của chức năng này. Dò lần hai trên cùng địa bàn
-   * mà đọc lại từ đầu là lãng phí thẳng vào mặt người dùng: họ ngồi chờ lại
-   * đúng những gói đã biết kết quả.
-   *
-   * Kho quan sát đã ghi gói nào từng đọc được bảng nhà thầu (nguồn 'bbmt'),
-   * nên chỉ cần đối chiếu là bỏ qua được.
-   */
-  const daDoc=new Set();
-  {
-    const st0=await getState();
-    for(const o of (st0.observations||[])){
-      if(o&&o.source==='bbmt'&&o.notifyNo)daDoc.add(String(o.notifyNo));
+  const queue=list.filter(p=>selectedKeys?selectedKeys.includes(p.key):!['OK','EMPTY'].includes(bbmtReadStateOf(p)));
+  const job={scanId,waiters:new Map(),cancelled:false,blocked:false,failures:0,extraTabs:scan.ownedDetailTab?[scan.ownedDetailTab]:[],
+    resolve(){this.cancelled=true;for(const w of [...this.waiters.values()])w.resolve(null);}};
+  bbmtWaiter=job;
+  if(!await setScan({status:'SCANNING',cachedCount:list.filter(p=>p.fromCache).length,
+    message:'Đang đọc bảng nhà thầu; kết quả hiện ngay khi từng gói trả về.'},scanId))return;
+  let cursor=0;
+  try{
+    if(!queue.length){await finalizeBidOpenScan(scanId);return;}
+    const tab=await chrome.tabs.get(scan.tabId);
+    const ownedBlank=scan.ownedDetailTab===tab.id&&(!tab.url||tab.url==='about:blank')&&(!tab.pendingUrl||tab.pendingUrl==='about:blank');
+    if(!isEgpUrl(tab.url)&&!ownedBlank)throw Error('Tab đọc biên bản đã chuyển khỏi e-GP.');
+    const tabIds=[tab.id];
+    if(queue.length>1){
+      const extra=await chrome.tabs.create({url:'about:blank',active:false});
+      job.extraTabs.push(extra.id);tabIds.push(extra.id);
     }
-  }
-  /* Khi ĐI DÒ GÓI TRƯỢT: gói mà chính nhà thầu này đã trúng thì không cần mở
-     ra đọc — kết quả đã biết chắc từ KQLCNT, đọc thêm không đổi được gì mà
-     vẫn tốn đúng ngần ấy thời gian chờ trang tải. */
-  if(scan.mode==='loss'&&scan.focusTaxCode){
-    const st1=await getState();
-    for(const o of (st1.observations||[])){
-      if(o&&o.won===true&&String(o.taxCode||'')===scan.focusTaxCode&&o.notifyNo){
-        daDoc.add(String(o.notifyNo));
+    if(!await setScan({detailTabIds:tabIds},scanId))return;
+    async function reader(tabId){
+      while(!job.cancelled&&!job.blocked){
+        const index=cursor++;if(index>=queue.length)return;
+        const pkg=queue[index];
+        let result=null;
+        for(let attempt=1;attempt<=2&&!job.cancelled;attempt++){
+          if(!await markOpeningReading(scanId,pkg.key,attempt))return;
+          await chrome.alarms.create(TIMEOUT_PREFIX+scanId,{when:Date.now()+BBMT_DETAIL_ALARM_MS});
+          result=await openBbmtDetail(tabId,pkg,job);
+          if(job.cancelled)return;
+          await recordBidders(scanId,pkg.key,result);
+          if(result!==null&&(!result.incomplete||result.retryable===false))break;
+          if(attempt===1)await new Promise(r=>setTimeout(r,800));
+        }
+        job.failures=result===null||result.rows===null?job.failures+1:0;
+        if(job.failures>=4)job.blocked=true;
+        if(!job.cancelled)await new Promise(r=>setTimeout(r,250));
       }
     }
+    await Promise.all(tabIds.map(reader));
+    if(!job.cancelled)await finalizeBidOpenScan(scanId);
+  }finally{
+    job.resolve();
+    if(bbmtWaiter===job)bbmtWaiter=null;
+    // Only tabs created by this coordinator are closed.
+    await Promise.all(job.extraTabs.map(id=>chrome.tabs.remove(id).catch(()=>{})));
   }
-
-  const canDoc=list.filter(p=>!daDoc.has(String(p.notifyNo)));
-  const boQua=list.length-canDoc.length;
-
-  const activated=await withLock(async()=>{
-    const current=(await getState()).bidOpenScan;
-    const kind=lookupKind('bidOpenScan');
-    if(!current||current.id!==scan.id||current.cancelled||!isLookupActive(kind,current))return false;
-    await save({[KEYS.bidOpenScan]:{...current,status:'SCANNING',totalCandidates:canDoc.length,
-      message:canDoc.length
-        ?`Đang đọc biên bản mở thầu của ${canDoc.length} gói`
-          +(boQua?` (bỏ qua ${boQua} gói đã đọc lần trước)`:'')+'...'
-        :`Cả ${list.length} gói đều đã đọc ở lượt trước, không phải đọc lại.`}});
-    return true;
-  });
-  if(!activated)return;
-  await chrome.alarms.create(TIMEOUT_PREFIX+scan.id,{when:Date.now()+BBMT_DETAIL_ALARM_MS});
-
-  if(!canDoc.length){ await finalizeBidOpenScan(); return; }
-
-  for(let i=0;i<canDoc.length;i++){
-    if(bbmtCancelled)break;
-    const pkg=canDoc[i];
-    await setScan({scannedCount:i,expectedNotifyNo:pkg.notifyNo,
-      message:`Đang đọc biên bản ${i+1}/${canDoc.length}: ${pkg.notifyNo}...`});
-    // Alarm bền qua vòng đời service worker. Nếu waiter RAM mất do worker bị
-    // dọn, alarm sẽ chốt ERROR/PARTIAL thay vì để SCANNING treo vô hạn.
-    await chrome.alarms.create(TIMEOUT_PREFIX+scan.id,{when:Date.now()+BBMT_DETAIL_ALARM_MS});
-    let rows=null;
-    try{
-      rows=await openBbmtDetail(tab.id,pkg,scan.id);
-    }catch{ rows=null; }
-    await recordBidders(scan.id,pkg.key,rows,pkg.bidPrice);
-    if(i+1<canDoc.length&&!bbmtCancelled)await new Promise(r=>setTimeout(r,BBMT_DETAIL_PAUSE));
-  }
-
-  await finalizeBidOpenScan();
 }
 
-/**
- * Mở một trang biên bản và chờ content script gửi về bảng nhà thầu.
- *
- * Trả về:
- *    mảng  — e-GP đã trả bảng nhà thầu (có thể rỗng nếu gói không ai dự)
- *    null  — hết hạn chờ, KHÔNG kết luận gì về gói này
- *
- * Hai mốc thời gian, xem khối ghi chú ở BBMT_SETTLE_MS.
- */
-function openBbmtDetail(tabId,pkg,scanId){
-  return new Promise((resolve,reject)=>{
-    let settleTimer=null;
-    const hardTimer=setTimeout(()=>finish(null),BBMT_DETAIL_TIMEOUT);
-
-    // Trang tải xong là lúc bắt đầu đếm ngược ngắn: request nhà thầu luôn phát
-    // trong hoặc ngay sau lúc tải, nên quá mốc này coi như gói không có dữ liệu.
-    function onUpdated(id,info){
-      if(id!==tabId||info.status!=='complete'||settleTimer)return;
-      settleTimer=setTimeout(()=>finish(null),BBMT_SETTLE_MS);
-    }
-    chrome.tabs.onUpdated.addListener(onUpdated);
-
-    function cleanup(){
-      clearTimeout(hardTimer);
-      if(settleTimer)clearTimeout(settleTimer);
-      try{chrome.tabs.onUpdated.removeListener(onUpdated);}catch{}
-      bbmtWaiter=null;
-    }
-    function finish(rows){ cleanup(); resolve(rows); }
-
-    bbmtWaiter={scanId,tabId,notifyNo:pkg.notifyNo,resolve:finish};
-    chrome.tabs.update(tabId,{url:pkg.detailUrl}).catch(e=>{ cleanup(); reject(e); });
+async function markOpeningReading(id,key,attempt){
+  return withLock(async()=>{
+    const scan=await getBidScan();
+    if(!scan||scan.id!==id||scan.cancelled||scan.status!=='SCANNING')return false;
+      await save({bidOpenScan:{...scan,lastProgressAt:new Date().toISOString(),
+      packages:scan.packages.map(p=>p.key===key?{...p,readState:'READING',attempt,fromCache:false}:p),
+      message:'Đang đọc '+scan.packages.filter(p=>['OK','EMPTY'].includes(p.readState)).length+'/'+scan.packages.length+' biên bản · tối đa 2 gói cùng lúc'}});
+    return true;
   });
+}
+
+function openBbmtDetail(tabId,pkg,job){
+  return new Promise(resolve=>{
+    let finished=false;
+    let dataTimer=null;
+    const waiter={scanId:job.scanId,tabId,pkg,resolve:finish,packageRows:null,lotRows:null,
+      packageNativeRows:null,lotNativeRows:null,packageDomRows:null,lotDomRows:null,metadata:null,consider,progress,publish,
+      pageFailure(code){
+        const message=code==='ACCESS_DENIED'?'Trang e-GP đang từ chối truy cập; hãy kiểm tra tab nguồn trước khi đọc lại.'
+          :'Trang chi tiết e-GP báo thành phần tạm thời không khả dụng; chưa thể đọc biên bản.';
+        finish({...deadlineResult(message),incomplete:true,incompleteReason:message,retryable:false});
+      }};
+    const navigationTimer=setTimeout(()=>finish(deadlineResult('Trang chi tiết e-GP chưa tải được trong thời gian chờ.')),BBMT_NAVIGATION_TIMEOUT);
+    const totalTimer=setTimeout(()=>finish(deadlineResult('Lượt đọc đã đạt giới hạn thời gian; giữ lại dữ liệu đã nhận.')),BBMT_TOTAL_TIMEOUT);
+    function deadlineResult(message){
+      return selectResult(true)||{rows:null,metadata:waiter.metadata,incomplete:true,incompleteReason:message,retryable:true};
+    }
+    function finish(result){
+      if(finished)return;finished=true;clearTimeout(navigationTimer);clearTimeout(dataTimer);clearTimeout(totalTimer);
+      if(job.waiters.get(tabId)?.resolve===finish)job.waiters.delete(tabId);
+      resolve(result);
+    }
+    function progress(){
+      if(finished||job.cancelled||job.waiters.get(tabId)!==waiter)return;
+      clearTimeout(navigationTimer);clearTimeout(dataTimer);
+      // Start/rearm the data window only after a usable DOM or an actual
+      // data response arrives. First-byte/document-start is still navigation.
+      // The independent total timer cannot be extended.
+      dataTimer=setTimeout(()=>finish(deadlineResult('Chưa nhận đủ dữ liệu từ e-GP sau lần phản hồi gần nhất.')),BBMT_DETAIL_TIMEOUT);
+      void chrome.alarms.create(TIMEOUT_PREFIX+job.scanId,{when:Date.now()+BBMT_DETAIL_ALARM_MS}).catch(()=>{});
+    }
+    function selectResult(fallback=false){
+      const m=waiter.metadata;
+      const metadataKnown=m?.roundReceived===true&&typeof m?.isMultiLot==='boolean';
+      const priceReceived=m?.notifyReceived===true;
+      const expectedKind=m?.isMultiLot===true?'lot':'package';
+      let kind=expectedKind,rows=metadataKnown?(expectedKind==='lot'?waiter.lotRows:waiter.packageRows):null;
+      if(fallback&&rows===null){rows=waiter.lotRows??waiter.packageRows;kind=waiter.lotRows!==null?'lot':'package';}
+      if(rows===null)return null;
+      const sourceMatches=metadataKnown&&kind===expectedKind;
+      const count=new Set(normalizeBidderTable(rows,null).map(b=>b.taxCode||b.nameFold)).size;
+      const incomplete=!sourceMatches||!priceReceived||count<Number(pkg.numBidderJoin||0);
+      if(!fallback&&incomplete)return null;
+      const incompleteReason=!metadataKnown?'Chưa nhận được thông tin xác định loại biên bản; bảng tạm chưa dùng để đối chiếu giá toàn gói.'
+        :!priceReceived?'Chưa nhận được phản hồi xác minh giá mốc của biên bản; bảng tạm chưa dùng để đối chiếu giá toàn gói.'
+        :!sourceMatches?'Chưa nhận được bảng đúng loại biên bản; dữ liệu tạm chưa dùng để đối chiếu giá toàn gói.'
+        :incomplete?'Số nhà thầu đọc được còn ít hơn số e-GP công bố; bảng này chưa đầy đủ.':'';
+      return {rows,metadata:m,kind,incomplete,incompleteReason,comparisonPending:!sourceMatches||!priceReceived};
+    }
+    function consider(){
+      // Notify metadata and bidder tables arrive independently. Do not certify
+      // an opening before its package/lot classification has actually arrived.
+      const result=selectResult();if(result)finish(result);
+    }
+    function publish(){
+      if(finished||job.cancelled)return Promise.resolve();
+      const snapshot=selectResult(true);
+      return snapshot?publishOpeningProgress(waiter,snapshot):Promise.resolve();
+    }
+    job.waiters.set(tabId,waiter);
+    chrome.tabs.update(tabId,{url:pkg.detailUrl}).catch(()=>finish({...deadlineResult('Không mở được tab chi tiết e-GP.'),retryable:false}));
+  });
+}
+
+async function onBbmtContentReady(payload={},senderTabId=null){
+  const waiter=bbmtWaiter?.waiters.get(senderTabId);
+  if(!waiter||bbmtWaiter.cancelled||!sameBbmtDetailPage(waiter.pkg.detailUrl,payload.url))return {ok:true,ignored:true};
+  // Receiving the first byte does not mean the document and its scripts are
+  // ready. Keep the navigation deadline until DOMContentLoaded; stale or
+  // unknown readiness phases must not shorten or refresh the API window.
+  if(payload.phase!=='dom-ready')return {ok:true,ignored:true};
+  if(payload.pageError){waiter.pageFailure(payload.pageError);return {ok:true};}
+  waiter.progress();return {ok:true};
+}
+
+async function publishOpeningProgress(waiter,result){
+  return withLock(async()=>{
+    const scan=await getBidScan();
+    if(!scan||scan.id!==waiter.scanId||scan.status!=='SCANNING'||scan.cancelled||bbmtWaiter?.cancelled||
+      bbmtWaiter?.waiters.get(waiter.tabId)!==waiter)return;
+    const packages=scan.packages.map(p=>p.key===waiter.pkg.key?applyOpeningResult(p,result,true):p);
+    // Provisional rows are visible, but never enter the completed cache or
+    // observations. Final completion later replaces this same package.
+    await save({bidOpenScan:{...scan,packages,lastProgressAt:new Date().toISOString()}});
+  });
+}
+
+/** Resume only selected/unread packages; no repeat of the listing phase. */
+async function retryBidOpen(payload={}){
+  const previous=await getBidScan();
+  if(!previous)return {ok:false,message:'Chưa có danh sách để đọc lại.'};
+  if(isLookupActive(lookupKind('bidOpenScan'),previous))return {ok:false,message:'Hãy chờ lượt hiện tại hoàn tất hoặc bấm Dừng.'};
+  const keys=payload.key?previous.packages.filter(p=>p.key===payload.key).map(p=>p.key)
+    :previous.packages.filter(p=>!['OK','EMPTY'].includes(bbmtReadStateOf(p))).map(p=>p.key);
+  if(!keys.length)return {ok:false,message:'Không còn gói chưa đọc trong danh sách.'};
+  const id=newLookupId();
+  const claimed=await claimLookupJob('bidOpenScan',{...previous,id,status:'LISTING',cancelled:false,
+    partial:Boolean(previous.listPartial||previous.listingCapped),startedAt:new Date().toISOString(),finishedAt:null,
+    detailTabIds:[],ownedDetailTab:null,message:'Đang mở lại các biên bản được chọn…'});
+  if(!claimed.ok)return {ok:false,message:'Một lượt đọc khác vừa bắt đầu.'};
+  try{
+    const state=await getState();
+    const reserved=new Set([state.activeRun,...LOOKUP_KINDS.filter(k=>k.key!=='bidOpenScan').map(k=>state[k.key])]
+      .filter(j=>j&&ACTIVE_JOB_STATUSES.has(j.status)).map(j=>j.tabId));
+    let tab=null;
+    if(Number.isInteger(previous.tabId)&&!reserved.has(previous.tabId)){
+      try{const old=await chrome.tabs.get(previous.tabId);if(isEgpUrl(old.url))tab=old;}catch{}
+    }
+    if(!tab){tab=await chrome.tabs.create({url:'about:blank',active:false});await setScan({ownedDetailTab:tab.id},id);}
+    await bindLookupTab('bidOpenScan',id,tab.id);
+    void startBidOpenDetailPhase(id,keys).catch(e=>failLookupJob('bidOpenScan',id,String(e.message||e)));
+    return {ok:true};
+  }catch(e){await failLookupJob('bidOpenScan',id,String(e.message||e));return {ok:false,message:String(e.message||e)};}
 }
 
 /** content script báo về bảng nhà thầu của trang biên bản đang mở. */
@@ -1229,27 +1499,90 @@ async function recordEndpointSeen(payload={}){
     const s=await getState();
     const list=s.endpointMap||[];
     const key=method+' '+path;
-    if(list.some(x=>x.key===key))return {ok:true,duplicate:true};
+    const previous=list.find(x=>x.key===key);
     const row={key,path,method,
       status:Number(payload.status)||0,
       kieu:String(payload.kieu||''),
       soBanGhi:payload.soBanGhi==null?null:Number(payload.soBanGhi),
       truong:(payload.truong||[]).slice(0,40).map(x=>String(x).slice(0,60)),
       trang:String(payload.trang||'').slice(0,200),
-      luc:payload.luc||new Date().toISOString()};
+      luc:payload.luc||new Date().toISOString(),
+      firstSeenAt:previous?.firstSeenAt||previous?.luc||payload.luc||new Date().toISOString(),
+      observedCount:Math.min(1_000_000,Math.max(1,Number(previous?.observedCount)||1)+(previous?1:0))};
     // Giữ 80 endpoint gần nhất là quá đủ để dựng bản đồ một cổng thông tin.
-    await save({[KEYS.endpointMap]:[row,...list].slice(0,80)});
+    await save({[KEYS.endpointMap]:[row,...list.filter(x=>x.key!==key)].slice(0,80)});
     return {ok:true};
   });
 }
 
+function setOpeningRows(waiter,kind,rows,source){
+  const prefix=kind==='package'?'package':'lot';
+  const bucket=prefix+(source==='native'?'NativeRows':'DomRows');
+  const count=items=>items===null||items===undefined?-1:normalizeBidderTable(items,null).length;
+  // A visible table can fill in asynchronously without changing its row count.
+  // Retain both sources so such updates never erase equally complete API rows.
+  if(count(rows)>=count(waiter[bucket]))waiter[bucket]=rows;
+  const native=waiter[prefix+'NativeRows'],dom=waiter[prefix+'DomRows'];
+  const nativeWins=count(native)>=count(dom)&&native!==null&&native!==undefined;
+  waiter[prefix+'Rows']=nativeWins?native:dom??null;
+  waiter[prefix+'RowsSource']=nativeWins?'native':dom?'visible-dom':null;
+}
+
 async function onBbmtBidders(payload={},senderTabId=null){
-  if(!bbmtWaiter||bbmtWaiter.tabId!==senderTabId)return {ok:false,ignored:true};
-  const notifyNo=notifyNoFromUrl(payload.url||'');
-  if(bbmtWaiter&&(!notifyNo||notifyNo===bbmtWaiter.notifyNo)){
-    bbmtWaiter.resolve(payload.rows||[]);
-  }
-  return {ok:true};
+  const waiter=bbmtWaiter?.waiters.get(senderTabId);
+  if(!waiter||bbmtWaiter.cancelled)return {ok:false,ignored:true};
+  if(!sameBbmtDetailPage(waiter.pkg.detailUrl,payload.url))return {ok:false,ignored:true};
+  if(payload.status<200||payload.status>=300)return {ok:false,ignored:true};
+  const rows=normalizeBidderTable(payload.rows,waiter.pkg.priceBasis??waiter.pkg.bidPrice);
+  // Malformed or unexpectedly empty responses must not certify zero bidders.
+  if((payload.rows.length&&!rows.length)||(!rows.length&&waiter.pkg.numBidderJoin>0))return {ok:false,ignored:true};
+  setOpeningRows(waiter,payload.kind,payload.rows,'native');
+  waiter.progress();waiter.consider();await waiter.publish();return {ok:true};
+}
+
+async function onBbmtPriceBasis(payload={},senderTabId=null){
+  const waiter=bbmtWaiter?.waiters.get(senderTabId);
+  if(!waiter||bbmtWaiter.cancelled||!sameBbmtDetailPage(waiter.pkg.detailUrl,payload.url))return {ok:false,ignored:true};
+  if(payload.status<200||payload.status>=300)return {ok:false,ignored:true};
+  const previous=waiter.metadata||{bidPrice:null,bidEstimatePrice:null,isMultiLot:null};
+  const round=payload.source==='round',notify=payload.source==='notify';
+  const hasFlag=typeof payload.isMultiLot==='boolean';
+  waiter.metadata={...previous,
+    bidPrice:payload.bidPrice>0?payload.bidPrice:previous.bidPrice,
+    bidEstimatePrice:payload.bidEstimatePrice>0?payload.bidEstimatePrice:previous.bidEstimatePrice,
+    // Round management is the native UI's authoritative package/lot flag.
+    isMultiLot:hasFlag&&(round||!previous.nativeRoundReceived)?payload.isMultiLot:previous.isMultiLot,
+    nativeRoundReceived:Boolean(previous.nativeRoundReceived||(round&&hasFlag)),
+    nativeNotifyReceived:Boolean(previous.nativeNotifyReceived||notify),
+    roundReceived:Boolean(previous.roundReceived||(round&&hasFlag)),
+    notifyReceived:Boolean(previous.notifyReceived||notify)};
+  waiter.progress();waiter.consider();await waiter.publish();return {ok:true};
+}
+
+/** Visible public table fallback, sent directly by our isolated content script. */
+async function onBbmtDomResult(payload={},senderTabId=null){
+  const waiter=bbmtWaiter?.waiters.get(senderTabId);
+  if(!waiter||bbmtWaiter.cancelled||payload.source!=='visible-dom'||
+    !sameBbmtDetailPage(waiter.pkg.detailUrl,payload.url)||payload.notifyNo!==waiter.pkg.notifyNo)return {ok:false,ignored:true};
+  const cards=['ttnt-card-bbmt-ldt','ttnt-card-bbmt-khac','ttnt-card-bbmt-adbwb'];
+  if(!cards.includes(payload.cardId)||!['package','lot'].includes(payload.kind))return {ok:false,ignored:true};
+  if(!(payload.bidPrice>0||payload.bidEstimatePrice>0))return {ok:false,ignored:true};
+  const known=payload.classificationKnown&&typeof payload.isMultiLot==='boolean';
+  if(known&&(payload.isMultiLot!==(payload.kind==='lot')))return {ok:false,ignored:true};
+  const rows=normalizeBidderTable(payload.rows,null);
+  if(!rows.length||rows.length!==payload.rows.length)return {ok:false,ignored:true};
+  const previous=waiter.metadata||{};
+  // Keep network prices/classification when already received. ADB/WB's DOM
+  // table cannot establish its package/lot classification by itself.
+  const domClassification=known&&payload.cardId!=='ttnt-card-bbmt-adbwb';
+  waiter.metadata={...previous,
+    bidPrice:previous.nativeNotifyReceived?previous.bidPrice:payload.bidPrice,
+    bidEstimatePrice:previous.nativeNotifyReceived?previous.bidEstimatePrice:payload.bidEstimatePrice,
+    isMultiLot:previous.nativeRoundReceived?previous.isMultiLot:domClassification?payload.isMultiLot:previous.isMultiLot??null,
+    roundReceived:Boolean(previous.roundReceived||domClassification),notifyReceived:true,
+    source:previous.source||'visible-dom'};
+  setOpeningRows(waiter,payload.kind,payload.rows,'visible-dom');
+  waiter.progress();waiter.consider();await waiter.publish();return {ok:true};
 }
 
 /**
@@ -1269,59 +1602,76 @@ async function onBbmtBidders(payload={},senderTabId=null){
  * Còn TIMEOUT thì bị ghi thành "e-GP không trả dữ liệu" — một kết luận về
  * e-GP mà ta không có cơ sở để đưa ra.
  */
-async function recordBidders(scanId,key,rows,packageBidPrice){
+function applyOpeningResult(p,result,provisional=false){
+      const rows=result?.rows??null,metadata=result?.metadata;
+      const attemptedAt=new Date().toISOString();
+      if(rows===null&&p.bidders?.length)return {...p,readState:provisional?'READING':'TIMEOUT',attemptedAt,staleTable:true,fromCache:false,
+        openingProvisional:provisional,readIssue:result?.incompleteReason||''};
+      if(result?.incomplete&&p.bidders?.length>normalizeBidderTable(rows,null).length){
+        return {...p,readState:provisional?'READING':'PARTIAL',attemptedAt,staleTable:true,fromCache:false,openingProvisional:provisional,
+          readIssue:'Lần thử gần nhất trả ít dữ liệu hơn; giữ lại bảng của lần đọc trước để đối chiếu.'};
+      }
+      // Cache validation uses the listing as received, before detail metadata
+      // supplies a more precise approved estimate.
+      p={...p,listingFingerprint:openingFingerprint(p)};
+      if(metadata){
+        const estimate=metadata.bidEstimatePrice;
+        const price=metadata.bidPrice;
+        if(price>0)p={...p,bidPrice:price};
+        if(estimate>0)p={...p,priceBasis:estimate,priceBasisLabel:'Dự toán được duyệt (e-GP)',priceBasisSource:'bidEstimatePrice'};
+        else if(price>0&&p.priceBasisSource!=='bidEstimatePrice')p={...p,priceBasis:price,priceBasisLabel:'Giá gói thầu (e-GP)',priceBasisSource:'bidPrice'};
+      }
+      const bidders=rows===null?null:normalizeBidderTable(rows,p.priceBasis??p.bidPrice);
+      if(metadata?.isMultiLot===true||(result?.kind==='lot'&&bidders?.some(b=>b.lotCode)))for(const b of bidders||[]){b.multiLot=true;b.vsPackageAmount=null;b.vsPackageRate=null;b.priceRank=null;}
+      if(result?.comparisonPending)for(const b of bidders||[]){b.comparisonPending=true;b.vsPackageAmount=null;b.vsPackageRate=null;b.priceRank=null;}
+      const participantCount=new Set((bidders||[]).map(b=>b.taxCode||b.nameFold)).size;
+      const readState=provisional?'READING':rows===null?'TIMEOUT':result?.incomplete||(bidders&&participantCount<Number(p.numBidderJoin||0))?'PARTIAL':bbmtReadState(bidders);
+      return {...p,bidders,readState,attemptedAt,scannedAt:rows===null?null:attemptedAt,fromCache:false,staleTable:false,openingProvisional:provisional,
+        openingMetadataVerified:metadata?.notifyReceived===true&&metadata?.roundReceived===true&&typeof metadata?.isMultiLot==='boolean',isMultiLot:metadata?.isMultiLot??null,
+        openingKind:result?.kind||null,readIssue:result?.incompleteReason||'',comparisonPending:Boolean(result?.comparisonPending)};
+}
+
+async function recordBidders(scanId,key,result){
   return withLock(async()=>{
-    const s=await getState();
-    const scan=s.bidOpenScan;
-    if(!scan||scan.id!==scanId)return;
-    const readState=bbmtReadState(rows);
-    const packages=(scan.packages||[]).map(p=>p.key!==key?p:({
-      ...p,
-      readState,
-      bidders:rows===null?null:normalizeBidderTable(rows,packageBidPrice),
-      scannedAt:new Date().toISOString()
-    }));
-    await save({[KEYS.bidOpenScan]:{...scan,packages}});
-    // Tich luy vao kho quan sat de phan tich lau dai.
+    const scan=await getBidScan();
+    if(!scan||scan.id!==scanId||scan.cancelled||scan.status!=='SCANNING')return;
+    const packages=scan.packages.map(p=>p.key===key?applyOpeningResult(p,result):p);
     const done=packages.find(p=>p.key===key);
-    if(done&&done.bidders&&done.bidders.length)obsQueue.push(...observationsFromBidOpen(done));
+    const cache=(await chrome.storage.local.get('bidOpenCache')).bidOpenCache||{};
+    const entry=cacheOpening(done);
+    if(entry)cache[key]=entry;else delete cache[key];
+    await save({bidOpenScan:{...scan,packages,lastProgressAt:new Date().toISOString(),
+      scannedCount:packages.filter(p=>['OK','EMPTY'].includes(p.readState)).length},
+      bidOpenCache:trimOpeningCache(cache)});
+    if(done?.bidders?.length)obsQueue.push(...observationsFromBidOpen(done));
   });
 }
 
-async function finalizeBidOpenScan(){
+async function finalizeBidOpenScan(scanId){
   await flushObservations();
-  let finishedId=null;
-  const result=await withLock(async()=>{
-    const s=await getState();
-    const scan=s.bidOpenScan;
-    if(!isLookupActive(lookupKind('bidOpenScan'),scan))return;
-    finishedId=scan.id;
+  await withLock(async()=>{
+    const scan=await getBidScan();
+    if(!scan||scan.id!==scanId||!isLookupActive(lookupKind('bidOpenScan'),scan))return;
     const summary=summarizeBidOpenings(scan.packages,scan.focusTaxCode,scan.contractorQuery);
-    const list0=scan.packages||[];
-    const failed=list0.filter(p=>bbmtReadStateOf(p)===READ_STATE.TIMEOUT).length;
-    const trong=list0.filter(p=>bbmtReadStateOf(p)===READ_STATE.EMPTY).length;
-    await save({[KEYS.bidOpenScan]:{...scan,
-      status:scan.partial?'PARTIAL':'SUCCESS',finishedAt:new Date().toISOString(),
-      cancelled:bbmtCancelled,summary,failedCount:failed,
-      scannedCount:summary.scanned,
-      message:bbmtCancelled
-        ?`Đã dừng: đọc được ${summary.scanned}/${(scan.packages||[]).length} gói.`
-        :scan.partial
-          ?`Hoàn tất một phần: danh sách e-GP bị gián đoạn; đã đọc ${summary.scanned} biên bản trong phần dữ liệu nhận được.`
-        :`Xong: đọc ${summary.scanned} biên bản`
-          +(trong?`, ${trong} gói chưa có nhà thầu nào dự`:'')
-          +(failed?`, ${failed} gói hết hạn chờ (bấm quét lại để đọc nốt)`:'')+'.'
-    }});
+    const failed=scan.packages.filter(p=>!['OK','EMPTY'].includes(bbmtReadStateOf(p))).length;
+    const complete=scan.packages.length-failed;
+    const partial=Boolean(scan.partial||scan.listingCapped);
+    const scopeNote=scan.listingCapped
+      ?` Danh sách chưa đầy đủ: đã lấy ${scan.pagesRead||0}/${scan.totalPages||'?'} trang (${scan.listedRows||0}/${scan.totalCandidates||'?'} bản ghi), đạt giới hạn quét. Có thể thu hẹp bộ lọc hoặc tăng số gói tối đa.`
+      :partial?' Danh sách tìm kiếm chưa đầy đủ.':'';
+    const message=scan.packages.length
+      ?'Đã đọc đủ biên bản của '+complete+'/'+scan.packages.length+' gói trong danh sách đã thu thập.'
+      :Number(scan.listedRows||0)>0
+        ?`Đã đối chiếu ${scan.listedRows} bản ghi; chưa thấy gói phù hợp trong danh sách đã thu thập.`
+        :partial?'Chưa thu thập được gói phù hợp; chưa thể kết luận không có kết quả.'
+          :'e-GP không trả gói nào theo bộ lọc đã chọn.';
+    await save({bidOpenScan:{...scan,status:partial||failed?'PARTIAL':'SUCCESS',partial,
+      finishedAt:new Date().toISOString(),summary,failedCount:failed,scannedCount:complete,
+      message:message+
+        (failed?' Còn '+failed+' gói chưa đủ dữ liệu; có thể đọc lại riêng các gói này.':'')+
+        scopeNote}});
   });
-  if(finishedId)await chrome.alarms.clear(TIMEOUT_PREFIX+finishedId).catch(()=>{});
-  return result;
-}
-
-async function cancelBidOpenScan(){
-  bbmtCancelled=true;
-  if(bbmtWaiter)bbmtWaiter.resolve(null);
-  await setScan({message:'Đang dừng sau khi đọc nốt gói hiện tại...'});
-  return {ok:true};
+  await chrome.alarms.clear(TIMEOUT_PREFIX+scanId).catch(()=>{});
 }
 
 async function exportBidOpenCsv(){
@@ -1338,6 +1688,8 @@ async function exportBidOpenCsv(){
         name:b.name,taxCode:b.taxCode,ventureName:b.ventureName,
         bidderPrice:numOrNull(b.bidPrice),discountPercent:numOrNull(b.discountPercent),
         finalPrice:numOrNull(b.finalPrice),vsPackageRate:numOrNull(b.vsPackageRate),
+        vsPackageAmount:numOrNull(b.vsPackageAmount),priceBasis:numOrNull(p.priceBasis??p.bidPrice),
+        priceBasisLabel:p.priceBasisLabel||'Giá gói thầu (e-GP)',readState:bbmtReadStateOf(p),scannedAt:formatDate(p.scannedAt),
         detailUrl:p.detailUrl
       });
     }
@@ -1360,7 +1712,12 @@ async function exportBidOpenCsv(){
       {header:'Giá dự thầu',key:'bidderPrice',type:'money',width:20},
       {header:'Giảm giá tự khai',key:'discountPercent',type:'percent',width:16},
       {header:'Giá sau giảm giá',key:'finalPrice',type:'money',width:20},
-      {header:'So với giá gói thầu',key:'vsPackageRate',type:'percent',width:18},
+      {header:'Mốc giá đối chiếu',key:'priceBasis',type:'money',width:22},
+      {header:'Nguồn mốc giá',key:'priceBasisLabel',width:30},
+      {header:'Giảm so mốc giá (%)',key:'vsPackageRate',type:'percent',width:22},
+      {header:'Giảm so mốc giá (đồng)',key:'vsPackageAmount',type:'money',width:24},
+      {header:'Trạng thái đọc',key:'readState',width:16},
+      {header:'Đọc lúc',key:'scannedAt',width:20},
       {header:'Link e-GP',key:'detailUrl',type:'url',width:44}
     ],
     rows
@@ -1386,6 +1743,20 @@ async function exportBidOpenCsv(){
 /** Nhớ lại 30 ngày; quá hạn thì hỏi e-GP lần nữa cho khớp thay đổi địa giới. */
 const AREAS_TTL_MS=30*24*60*60*1000;
 
+let provincesInFlight=null;
+async function getProvincesOnly(){
+  const store=await chrome.storage.local.get(['areas','provinceCatalog']);
+  const cached=store.provinceCatalog||store.areas;
+  if(cached?.provinces?.length&&Date.now()-Date.parse(cached.fetchedAt)<AREAS_TTL_MS)return {ok:true,areas:cached};
+  if(provincesInFlight)return provincesInFlight;
+  provincesInFlight=(async()=>{
+    try{const areas={provinces:await fetchProvinces(),fetchedAt:new Date().toISOString()};
+      await save({provinceCatalog:areas});return {ok:true,areas};
+    }catch(e){return cached?{ok:true,areas:cached,stale:true}:{ok:false,message:String(e.message||e)};}
+    finally{provincesInFlight=null;}
+  })();return provincesInFlight;
+}
+
 async function getAreas({refresh=false}={}){
   const store=await chrome.storage.local.get({[KEYS.areas]:null});
   const cached=store[KEYS.areas];
@@ -1407,6 +1778,7 @@ async function getAreas({refresh=false}={}){
 
 /** Trả về danh sách tên cho ô chọn: tỉnh hiện hành, và xã/phường theo tỉnh. */
 async function getAreaOptions(payload={}){
+  if(payload.provincesOnly){const r=await getProvincesOnly();return {...r,provinces:r.areas?currentProvinceNames(r.areas):[]};}
   const res=await getAreas({refresh:Boolean(payload.refresh)});
   if(!res.ok)return res;
   return {
@@ -2278,6 +2650,8 @@ async function startPlanLookup(payload={}){
   const province=String(payload.province||'').trim();
   const ward=String(payload.ward||'').trim();
   const keyword=String(payload.keyword||'').trim();
+  const category=normalizeCategory(payload.category);
+  if(String(payload.category??'').trim()&&!category)return {ok:false,message:'Loại gói thầu không hợp lệ. Hãy chọn lại trong danh sách.'};
   const fromDate=String(payload.fromDate||'').trim();
   const toDate=String(payload.toDate||'').trim();
   const days=Number(payload.days)||0;
@@ -2285,8 +2659,8 @@ async function startPlanLookup(payload={}){
      locations.provCode cho đúng Lâm Đồng, locations.districtCode cho 108 kế
      hoạch của Xã Hàm Thạnh. Nên chỉ chọn tỉnh cũng tra được, không còn bắt
      buộc nhập chủ đầu tư như bản trước. */
-  if(!investor&&!keyword&&!province&&!ward){
-    return {ok:false,message:'Hãy nhập ít nhất một tiêu chí: Chủ đầu tư, Tỉnh/Thành phố, Xã/Phường hoặc từ khoá.'};
+  if(!investor&&!keyword&&!province&&!ward&&!category&&!String(payload.mustKeywords||'').trim()){
+    return {ok:false,message:'Hãy chọn loại gói thầu hoặc nhập Chủ đầu tư, Tỉnh/Thành phố, Xã/Phường, từ khoá.'};
   }
 
   // Quy TÊN địa bàn ra MÃ. Tỉnh phải lấy đủ mọi mã cùng tên (68 + 703).
@@ -2295,10 +2669,11 @@ async function startPlanLookup(payload={}){
     const areas=(await getAreas({})).areas;
     if(areas){
       if(province){
-        provinces=provinceCodesByName(areas.provinces,province);
-        if(!provinces.length){
-          return {ok:false,message:`Không nhận ra tỉnh/thành "${province}". Hãy chọn từ danh sách gợi ý.`};
+        const resolved=await resolveProvinceCodes(province);
+        if(!resolved.ok){
+          return {ok:false,message:`Không nhận ra tỉnh/thành "${resolved.unknown.join(', ')}". Hãy chọn từ danh sách gợi ý; nhiều tỉnh cách nhau bằng dấu phẩy.`};
         }
+        provinces=resolved.codes;
       }
       if(ward){
         wards=wardCodesByName(areas,province,ward);
@@ -2310,14 +2685,14 @@ async function startPlanLookup(payload={}){
   }
 
   const id=newLookupId();
-  const label=[investor&&`CĐT "${investor}"`,ward&&`xã/phường "${ward}"`,province&&!ward&&`tỉnh "${province}"`]
+  const label=[category&&categoryLabel(category),investor&&`CĐT "${investor}"`,ward&&`xã/phường "${ward}"`,province&&!ward&&`tỉnh "${province}"`]
     .filter(Boolean).join(' · ')||`từ khoá "${keyword}"`;
 
   const lookup={
-    id,criteria:{investor,province,ward,keyword,provinces,wards,fromDate,toDate,days},label,
-    status:'RUNNING',message:'Đang hỏi e-GP các kế hoạch của chủ đầu tư này...',
+    id,criteria:{investor,province,ward,keyword,category,provinces,wards,fromDate,toDate,days},label,
+    status:'RUNNING',message:'Đang hỏi e-GP các kế hoạch theo tiêu chí đã chọn...',
     startedAt:new Date().toISOString(),finishedAt:null,
-    plans:[],totalElements:0,serverCount:0,areaDropped:0,dateDropped:0,
+    plans:[],totalElements:0,serverCount:0,areaDropped:0,dateDropped:0,categoryDropped:0,categoryUnknownPackages:0,
     cancelled:false,applied:null,mismatched:[]
   };
   const claimed=await claimLookupJob('planLookup',lookup);
@@ -2330,7 +2705,7 @@ async function startPlanLookup(payload={}){
       id,mode:'khlcnt',label,
       // Tự dựng truy vấn, KHÔNG chạm vào biểu mẫu e-GP nữa. Tỉnh và xã/phường
       // được lọc tại chỗ ở ingestPlanPage.
-      query:buildKhlcntQuery({investor,keyword,provinces,wards,fromDate,toDate,days}),
+      query:buildKhlcntQuery({investor,keyword,category,provinces,wards,fromDate,toDate,days}),
       pageSize:PAGE_SIZE,
       /* Có chủ đầu tư / từ khoá / xã thì phạm vi đã hẹp -> lấy hết.
          CHỈ lọc tỉnh thì có thể hơn 10.000 kế hoạch, tải hết sẽ rất lâu, nên
@@ -2366,12 +2741,15 @@ async function ingestPlanPage(payload={}){
     const range=khlcntDateRange(lookup.criteria||{});
     const inRange=kept.filter(p=>khlcntInDateRange(p,range));
     const dateDropped=Number(lookup.dateDropped||0)+(kept.length-inRange.length);
+    const categoryResult=filterPlansByCategory(inRange,lookup.criteria?.category);
 
     const next={...lookup,
-      plans:dedupeKhlcnt([...(lookup.plans||[]),...inRange]),
+      plans:dedupeKhlcnt([...(lookup.plans||[]),...categoryResult.kept]),
       serverCount:Number(lookup.serverCount||0)+all.length,
       areaDropped:Number(lookup.areaDropped||0)+dropped.length,
       dateDropped,
+      categoryDropped:Number(lookup.categoryDropped||0)+categoryResult.dropped,
+      categoryUnknownPackages:Number(lookup.categoryUnknownPackages||0)+categoryResult.unknownPackages,
       totalElements:Number(payload.totalElements||lookup.totalElements||0)};
     next.message=`Đã xét ${next.serverCount}/${next.totalElements||next.serverCount} kế hoạch, khớp ${next.plans.length}...`;
 
@@ -2386,6 +2764,7 @@ async function ingestPlanPage(payload={}){
       const drops=[];
       if(next.areaDropped)drops.push(`${next.areaDropped} lệch địa bàn`);
       if(next.dateDropped)drops.push(`${next.dateDropped} ngoài khoảng ngày`);
+      if(next.categoryDropped)drops.push(`${next.categoryDropped} không có gói khớp loại đã chọn`);
       const dropNote=drops.length?` (đã bỏ ${drops.join(', ')})`:'';
       const c2=next.criteria||{};
       const broad=!c2.investor&&!c2.keyword&&!(c2.wards&&c2.wards.length);
@@ -2397,9 +2776,10 @@ async function ingestPlanPage(payload={}){
         // Nói rõ e-GP CÓ trả dữ liệu nhưng bộ lọc địa bàn loại hết — khác hẳn
         // với việc chủ đầu tư không có kế hoạch nào.
         : next.serverCount
-          ?`e-GP có ${next.serverCount} kế hoạch cho tiêu chí này, nhưng không kế hoạch nào thuộc địa bàn đã chọn. Thử bỏ ô Tỉnh/Xã phường.`
+          ?`Đã đối chiếu ${next.serverCount} kế hoạch; chưa thấy gói khớp các tiêu chí trong dữ liệu đã tải${dropNote}. Có thể nới loại gói, địa bàn hoặc khoảng ngày.`
           :'e-GP không trả kế hoạch nào cho chủ đầu tư/từ khoá này.';
     }
+    if(next.categoryUnknownPackages)next.message+=` Có ${next.categoryUnknownPackages} gói chưa đủ thông tin phân loại; chọn Tất cả loại gói thầu để xem thêm.`;
     await save({[KEYS.planLookup]:next});
     return {ok:true};
   });
@@ -2614,11 +2994,11 @@ async function markLookupDoneFailure(key,id,message,partial=false){
     const cur=s[key];
     if(!cur||cur.id!==id)return {changed:false,stopBid:false};
     const got=lookupResultCount(key,cur);
-    const isPartial=Boolean(partial||cur.partial||got);
+    const isPartial=key==='bidOpenScan'?got>0:Boolean(partial||cur.partial||got);
     // Danh sách BBMT có thể thiếu một phần nhưng các gói đã nhận vẫn đáng để
     // đọc biên bản. Giữ phase LISTING/SCANNING chạy tiếp, rồi finalize PARTIAL.
-    const keepBidDetails=key==='bidOpenScan'&&isPartial&&isLookupActive(lookupKind(key),cur);
-    const next={...cur,status:keepBidDetails?cur.status:(isPartial?'PARTIAL':'ERROR'),
+    const keepBidDetails=key==='bidOpenScan'&&isPartial&&(cur.listingDone||cur.status==='SCANNING')&&isLookupActive(lookupKind(key),cur);
+    const next={...cur,listPartial:key==='bidOpenScan'?isPartial:cur.listPartial,status:keepBidDetails?cur.status:(isPartial?'PARTIAL':'ERROR'),
       partial:isPartial,finishedAt:keepBidDetails?cur.finishedAt:new Date().toISOString(),
       message:String(message||'Lượt tra cứu e-GP bị gián đoạn.').slice(0,1000)};
     await save({[KEYS[key]]:next});
@@ -2721,6 +3101,7 @@ async function cancelLookups(which,reason='Đã dừng theo yêu cầu.',expecte
         next.message=`Đã dừng: giữ lại ${got} kế hoạch · ${next.summary.packageCount} gói thầu.`;
       }else if(kind.key==='bidOpenScan'&&got){
         next.status='PARTIAL';
+        next.packages=(cur.packages||[]).map(p=>p.readState==='READING'?{...p,readState:'PENDING'}:p);
         next.summary=summarizeBidOpenings(cur.packages||[],cur.focusTaxCode,cur.contractorQuery);
         next.scannedCount=next.summary.scanned;
         next.message=`Đã dừng: giữ lại ${got} gói, đã đọc ${next.summary.scanned} biên bản.`;
@@ -2749,6 +3130,7 @@ async function cancelLookups(which,reason='Đã dừng theo yêu cầu.',expecte
  * nên để trạng thái RUNNING lại là nói dối người dùng.
  */
 chrome.tabs.onRemoved.addListener(async tabId=>{
+  bbmtWaiter?.waiters.get(tabId)?.resolve(null);
   const s=await getState();
   if(s.activeRun?.tabId===tabId){
     await finishRun(s.activeRun.id,'TIMEOUT','Tab e-GP của lượt quét đã bị đóng.');
@@ -2819,37 +3201,24 @@ async function reconcileStaleLookups({coldStart=false}={}){
 reconcileStaleLookups({coldStart:true}).catch(()=>{});
 
 /** Dừng hẳn lượt quét đang chạy theo yêu cầu người dùng. */
-async function cancelActiveRun(){
+async function cancelActiveRun(expectedId=null){
   const s=await getState();
   if(!s.activeRun)return {ok:true,message:'Không có lượt nào đang chạy.'};
+  if(expectedId&&s.activeRun.id!==expectedId)return {ok:false,message:'Lượt đã thay đổi. Tải lại trạng thái trước khi dừng.'};
   const run=s.activeRun;
   if(run.tabId){
     try{ await chrome.tabs.sendMessage(run.tabId,{type:'KQLCNT_CANCEL',payload:{planId:run.id}}); }catch{}
   }
-  await finishRun(run.id,'ERROR','Đã dừng theo yêu cầu.');
+  await finishRun(run.id,'CANCELLED','Đã dừng theo yêu cầu; dữ liệu đã nhận được giữ lại.');
   await save({[KEYS.activeRun]:null});
   await chrome.alarms.clear(TIMEOUT_PREFIX+run.id).catch(()=>{});
   return {ok:true,message:'Đã dừng lượt quét.'};
 }
 
 async function startTbmtSearch(payload={}){
-  const criteria={
-    investor:String(payload.investor||'').trim(),
-    province:String(payload.province||'').trim(),
-    ward:String(payload.ward||'').trim(),
-    keyword:String(payload.keyword||'').trim(),
-    minPrice:Number(payload.minPrice)||0,
-    maxPrice:Number(payload.maxPrice)||0
-  };
-  if(!criteria.investor&&!criteria.province&&!criteria.ward&&!criteria.keyword
-     &&!criteria.minPrice&&!criteria.maxPrice){
-    return {ok:false,message:'Hãy nhập ít nhất một tiêu chí trước khi tra cứu.'};
-  }
-  // Bỏ ràng buộc cũ "muốn lọc Xã thì phải chọn Tỉnh". Ràng buộc đó là của
-  // BIỂU MẪU e-GP; nay tiện ích tự dựng truy vấn nên không còn cần.
-  if(criteria.minPrice&&criteria.maxPrice&&criteria.minPrice>criteria.maxPrice){
-    return {ok:false,message:'Giá "từ" đang lớn hơn giá "đến". Kiểm tra lại giúp mình.'};
-  }
+  const validation=validateCriteria(payload);
+  if(!validation.ok)return validation;
+  const criteria=validation.criteria;
 
   const s=await getState();
   // Lượt cũ còn kẹt thì dọn rồi chạy tiếp, thay vì chặn người dùng vô thời hạn.
@@ -2859,23 +3228,25 @@ async function startTbmtSearch(payload={}){
       run:{id:blocking.id,message:blocking.message,startedAt:blocking.startedAt}};
   }
 
-  const label=[criteria.investor&&`CĐT "${criteria.investor}"`,
+  const label=[criteria.category&&categoryLabel(criteria.category),criteria.investor&&`CĐT "${criteria.investor}"`,
     criteria.ward&&`xã/phường "${criteria.ward}"`,
     criteria.province&&!criteria.ward&&`tỉnh "${criteria.province}"`,
+    criteria.mustKeywords&&`bắt buộc "${criteria.mustKeywords}"`,
+    criteria.excludeKeywords&&`loại "${criteria.excludeKeywords}"`,
     criteria.keyword&&`từ khoá "${criteria.keyword}"`].filter(Boolean).join(' · ')||'theo khoảng giá';
 
   /* Quy TÊN tỉnh ra MỌI MÃ cùng tên (Lâm Đồng = 68 hiện hành + 703 cũ). */
   let provinces=[];
   if(criteria.province){
-    const areas=(await getAreas({})).areas;
-    if(areas)provinces=provinceCodesByName(areas.provinces,criteria.province);
-    if(!provinces.length){
-      return {ok:false,message:`Không nhận ra tỉnh/thành "${criteria.province}". `
-        +'Hãy chọn từ danh sách gợi ý (tên phải đúng như e-GP ghi, có chữ "Tỉnh" hoặc "Thành phố").'};
+    const resolved=await resolveProvinceCodes(criteria.province);
+    if(!resolved.ok){
+      return {ok:false,message:`Không nhận ra tỉnh/thành "${resolved.unknown.join(', ')}". `
+        +'Hãy chọn từ danh sách gợi ý; nhiều tỉnh cách nhau bằng dấu phẩy hoặc chấm phẩy.'};
     }
+    provinces=resolved.codes;
   }
 
-  const run={...newRun('form'),queue:[],qi:0,criteria:{...criteria,provinces},
+  const run={...newRun('form'),queue:[],qi:0,criteria:{...criteria,provinces},huntId:payload.huntId||'',
     message:'Đang hỏi e-GP các gói thầu khớp tiêu chí...'};
   const claimed=await claimActiveRun(run);
   if(!claimed.ok)return {ok:false,message:'Một lượt quét khác vừa được bắt đầu.',run:claimed.current};
@@ -2910,13 +3281,26 @@ async function ingestTbmtPage(payload={}){
      locations.districtCode in ["23122"] trả về 0 dù mã đúng dạng và có thật.
      Tỉnh thì đã lọc ở phía máy chủ nên tới đây chỉ còn thu hẹp theo xã. */
   const st=await getState();
-  const ward=String(((st.activeRun&&st.activeRun.id===payload.planId
-    ? st.activeRun.criteria : null)||{}).ward||'').trim();
-  const rows=ward?all.filter(r=>tbmtMatchesWard(r,ward)):all;
-  if(ward&&all.length>rows.length){
+  const criteria=st.activeRun?.id===payload.planId?st.activeRun.criteria||{}:{};
+  const ward=String(criteria.ward||'').trim();
+  const byWard=ward?all.filter(r=>tbmtMatchesWard(r,ward)):all;
+  // e-GP has one keyword block; investor takes that block. Apply the package
+  // keyword locally in this combination so no requested criterion disappears.
+  const keywordRows=byWard.filter(r=>matchesLocalFilters(r,criteria));
+  const rows=keywordRows.filter(r=>matchesTenderCategory(r,criteria.category));
+  if(rows.length<keywordRows.length){
+    await withLock(async()=>{
+      const state=await getState();
+      if(state.activeRun?.id!==payload.planId)return;
+      const categoryDropped=Number(state.activeRun.categoryDropped||0)+keywordRows.length-rows.length;
+      await save({[KEYS.activeRun]:{...state.activeRun,categoryDropped},
+        [KEYS.runs]:state.runs.map(run=>run.id===payload.planId?{...run,categoryDropped}:run)});
+    });
+  }
+  if(ward&&all.length>byWard.length){
     await withLock(async()=>{
       const cur=await getState();
-      const add=all.length-rows.length;
+      const add=all.length-byWard.length;
       const runs=cur.runs.map(r=>r.id===payload.planId
         ?{...r,wardDropped:Number(r.wardDropped||0)+add}:r);
       const patch={[KEYS.runs]:runs.slice(0,100)};
@@ -2931,20 +3315,7 @@ async function ingestTbmtPage(payload={}){
     await ingest(rows,{runId:payload.planId,captureType:'form',
       total:payload.totalElements,page:(Number(payload.pageIndex)||0)+1});
 
-    // Ghi lại ĐÚNG những gói của lượt tra này. Kho gói thầu là nơi tích luỹ
-    // qua nhiều lượt, nên nếu không ghi thì màn hình kết quả sẽ hiện cả những
-    // gói của các lần tra trước — trông như tra sai tiêu chí.
-    await withLock(async()=>{
-      const s=await getState();
-      const run=s.runs.find(r=>r.id===payload.planId);
-      if(!run)return;
-      const keys=rows.map(r=>normalizeCandidate(r,{})).filter(Boolean).map(r=>r.key);
-      const found=[...new Set([...(run.foundKeys||[]),...keys])];
-      const runs=s.runs.map(r=>r.id===payload.planId?{...r,foundKeys:found}:r);
-      const patch={[KEYS.runs]:runs.slice(0,100)};
-      if(s.activeRun?.id===payload.planId)patch[KEYS.activeRun]={...s.activeRun,foundKeys:found};
-      await save(patch);
-    });
+
   }
   if(payload.done){
     const s=await getState();
@@ -2955,19 +3326,20 @@ async function ingestTbmtPage(payload={}){
       const wardNote=dropped
         ? ` Đã bỏ ${dropped} gói không thuộc xã/phường "${c.ward}".`
         : '';
+      const categoryNote=c.category?` Loại gói: ${categoryLabel(c.category)}; đã lọc ${Number(s.activeRun.categoryDropped||0)} gói không khớp trong dữ liệu tải về.`:'';
       const receivedPages=Math.max(0,Number(payload.pageIndex)||0);
       const totalPages=Math.max(receivedPages,Number(payload.totalPages)||0);
       const isPartial=Boolean(payload.partial||payload.capped||s.activeRun.partial);
       const partialMessage=payload.capped
-        ?`Phạm vi lớn: mới lấy ${receivedPages}/${totalPages||receivedPages} trang đầu theo giới hạn cấu hình.${wardNote}`
+        ?`Phạm vi lớn: mới lấy ${receivedPages}/${totalPages||receivedPages} trang đầu theo giới hạn cấu hình.${wardNote}${categoryNote}`
         :payload.partial
-          ?`e-GP dừng sớm sau ${receivedPages}/${totalPages||receivedPages} trang; kết quả chưa đầy đủ.${wardNote}`
+          ?`e-GP dừng sớm sau ${receivedPages}/${totalPages||receivedPages} trang; kết quả chưa đầy đủ.${wardNote}${categoryNote}`
           :s.activeRun.partialMessage||'';
       // Chưa finish ở đây: content script sẽ xoá kqPlan rồi mới gửi
       // KQLCNT_DONE. Chỉ lúc đó mới an toàn giao bộ lọc kế tiếp cho cùng tab.
       await updateRun(payload.planId,{applied:ap,pageDone:true,capped:Boolean(payload.capped),partial:isPartial,
         partialMessage:partialMessage||s.activeRun.partialMessage||'',
-        completionMessage:isPartial?(partialMessage||'Hoàn tất một phần.'):'Hoàn tất.'+wardNote,
+        completionMessage:isPartial?(partialMessage||'Hoàn tất một phần.'):'Hoàn tất.'+wardNote+categoryNote,
         message:'Đã nhận trang cuối; đang chốt lượt tra cứu...'});
     }
   }
@@ -3121,6 +3493,7 @@ function sanitizeBackupImport(data){
     const status=terminalStatuses.has(rawStatus)?rawStatus:(nonterminalStatuses.has(rawStatus)?'CANCELLED':'ERROR');
     const changed=status!==rawStatus;
     return {
+      ...safeRunForBackup(r||{},{terminalize:true}),
       id:String(r&&r.id||'').slice(0,100),mode:String(r&&r.mode||'import').slice(0,30),status,
       startedAt:r&&r.startedAt||null,finishedAt:r&&r.finishedAt||new Date().toISOString(),
       captured:Math.max(0,Number(r&&r.captured)||0),newCount:Math.max(0,Number(r&&r.newCount)||0),
@@ -3148,12 +3521,12 @@ function sanitizeBackupImport(data){
 
 const CONTENT_MESSAGE_TYPES=new Set([
   'INGEST_CAPTURE','OBSERVED_TEMPLATE','SCAN_DONE','KQLCNT_RESULTS','KQLCNT_DONE',
-  'BBMT_BIDDERS','EGP_ENDPOINT_SEEN','EGP_ATTACHMENTS','CONTENT_READY'
+  'BBMT_BIDDERS','BBMT_PRICE_BASIS','BBMT_DOM_RESULT','EGP_ENDPOINT_SEEN','EGP_ATTACHMENTS','CONTENT_READY'
 ]);
 
 const CONTENT_MAX_CHARS={
   INGEST_CAPTURE:4_000_000,OBSERVED_TEMPLATE:180_000,SCAN_DONE:8_000,
-  KQLCNT_RESULTS:2_000_000,KQLCNT_DONE:8_000,BBMT_BIDDERS:1_000_000,
+  KQLCNT_RESULTS:2_000_000,KQLCNT_DONE:8_000,BBMT_BIDDERS:1_000_000,BBMT_PRICE_BASIS:8_000,BBMT_DOM_RESULT:1_000_000,
   EGP_ENDPOINT_SEEN:64_000,EGP_ATTACHMENTS:2_000_000,CONTENT_READY:4_000
 };
 
@@ -3223,13 +3596,26 @@ function sanitizeContentPayload(type,input){
   if(type==='KQLCNT_DONE')return {planId:shortString(p.planId,120),mode:shortString(p.mode,30),
     ok:p.ok!==false,partial:Boolean(p.partial),message:shortString(p.message,1000)};
   if(type==='BBMT_BIDDERS')return {url:isEgpUrl(p.url)?shortString(p.url,2000):'',
-    rows:assertObjectRows(p.rows||[],500,'rows')};
+    rows:assertObjectRows(p.rows||[],500,'rows'),status:safeCount(p.status,999),kind:p.kind==='package'?'package':'lot'};
+  if(type==='BBMT_PRICE_BASIS')return {url:isEgpUrl(p.url)?shortString(p.url,2000):'',status:safeCount(p.status,999),
+    source:p.source==='round'?'round':'notify',
+    bidPrice:Number.isFinite(p.bidPrice)&&p.bidPrice>0?p.bidPrice:null,
+    bidEstimatePrice:Number.isFinite(p.bidEstimatePrice)&&p.bidEstimatePrice>0?p.bidEstimatePrice:null,
+    isMultiLot:typeof p.isMultiLot==='boolean'?p.isMultiLot:null};
+  if(type==='BBMT_DOM_RESULT')return {url:isEgpUrl(p.url)?shortString(p.url,2000):'',
+    source:p.source==='visible-dom'?'visible-dom':'',cardId:shortString(p.cardId,60),notifyNo:shortString(p.notifyNo,40),
+    kind:p.kind==='package'?'package':p.kind==='lot'?'lot':'',rows:assertObjectRows(p.rows||[],500,'rows'),
+    bidPrice:Number.isFinite(p.bidPrice)&&p.bidPrice>0?p.bidPrice:null,
+    bidEstimatePrice:Number.isFinite(p.bidEstimatePrice)&&p.bidEstimatePrice>0?p.bidEstimatePrice:null,
+    isMultiLot:typeof p.isMultiLot==='boolean'?p.isMultiLot:null,classificationKnown:p.classificationKnown===true};
   if(type==='EGP_ENDPOINT_SEEN')return {path:shortString(p.path,300),method:shortString(p.method,12),
-    status:safeCount(p.status,999),kieu:shortString(p.kieu,80),soBanGhi:safeCount(p.soBanGhi,10_000_000),
+    status:safeCount(p.status,999),kieu:shortString(p.kieu,80),soBanGhi:p.soBanGhi==null?null:safeCount(p.soBanGhi,10_000_000),
     truong:Array.isArray(p.truong)?p.truong.slice(0,40).map(x=>shortString(x,60)):[],
     trang:shortString(p.trang,200),luc:shortString(p.luc,40)};
   if(type==='EGP_ATTACHMENTS')return {url:isEgpUrl(p.url)?shortString(p.url,2000):'',payload:p.payload};
-  if(type==='CONTENT_READY')return {url:isEgpUrl(p.url)?shortString(p.url,2000):''};
+  if(type==='CONTENT_READY')return {url:isEgpUrl(p.url)?shortString(p.url,2000):'',
+    phase:p.phase==='dom-ready'?'dom-ready':'document-start',
+    pageError:['PORTLET_UNAVAILABLE','ACCESS_DENIED'].includes(p.pageError)?p.pageError:null};
   return {};
 }
 
@@ -3316,7 +3702,7 @@ async function routeKqlcntDone(payload,sender){
     const job=pending.key==='activeRun'?s.activeRun:s[pending.key];
     if(job?.id===pending.id&&payload.ok===false){
       if(pending.key==='activeRun')await finishRun(job.id,
-        (payload.partial||job.partial||Number(job.captured||0)>0)?'PARTIAL':'ERROR',
+        Number(job.captured||0)>0?'PARTIAL':'ERROR',
         payload.message||'Lượt tra cứu e-GP bị gián đoạn.');
       else await markLookupDoneFailure(pending.key,job.id,payload.message||'Lượt tra cứu e-GP bị gián đoạn.',payload.partial);
     }else if(pending.key==='activeRun'&&job?.id===pending.id){
@@ -3339,7 +3725,7 @@ async function routeKqlcntDone(payload,sender){
   const {key,job}=target;
   if(payload.ok===false){
     if(key==='activeRun')await finishRun(job.id,
-      (payload.partial||job.partial||Number(job.captured||0)>0)?'PARTIAL':'ERROR',
+      Number(job.captured||0)>0?'PARTIAL':'ERROR',
       payload.message||'Lượt tra cứu e-GP bị gián đoạn.');
     else await markLookupDoneFailure(key,job.id,payload.message||'Lượt tra cứu e-GP bị gián đoạn.',payload.partial);
     return {ok:true};
@@ -3424,8 +3810,12 @@ chrome.runtime.onStartup.addListener(async()=>{
 });
 chrome.alarms.onAlarm.addListener(async alarm=>{
   if(alarm.name===DAILY_ALARM)await startScan('scheduled');
+  else if(alarm.name===DEADLINE_ALARM)await reviewDeadlines();
   else if(alarm.name.startsWith(TIMEOUT_PREFIX)){
     await handleJobTimeout(alarm.name.slice(TIMEOUT_PREFIX.length));
+  }else{
+    const huntRef=parseHuntAlarm(alarm.name);
+    if(huntRef)await runHuntById(huntRef.huntId);
   }
 });
 chrome.notifications.onClicked.addListener(id=>{const u=notifUrls.get(id);if(u)chrome.tabs.create({url:u});});
@@ -3445,8 +3835,213 @@ chrome.runtime.onMessage.addListener((message,sender,sendResponse)=>{
     }else if(CONTENT_MESSAGE_TYPES.has(type)){
       sendResponse({ok:false,message:'Message dữ liệu chỉ được nhận từ content script e-GP.'});return;
     }
+    const WRITE_TYPES=new Set(['SAVE_NAMED_SEARCH','DELETE_NAMED_SEARCH','SAVE_HUNT','DELETE_HUNT','SAVE_WATCH','DELETE_WATCH','SAVE_CHECKLIST','SAVE_CONTRACT','DELETE_CONTRACT','IMPORT_SYNC_PACK','SET_WATCH','SET_DECISION','DELETE_TENDER','CLEAR_DATA','FACTORY_RESET','START_SCAN','SCAN_ALL']);
+    if(WRITE_TYPES.has(message.type)){
+      const cur=await getState();
+      if(cur.settings?.readOnlyMode && message.type!=='UPDATE_SETTINGS'){
+        sendResponse({ok:false,message:'Máy đang chế độ chỉ xem (thanh tra). Không sửa checklist hay quyết định.'});return;
+      }
+    }
     switch(message.type){
-      case 'GET_STATE': {const s=await getState();sendResponse({ok:true,...s,manifest:chrome.runtime.getManifest(),extensionId:chrome.runtime.id,alarm:await chrome.alarms.get(DAILY_ALARM)});break;}
+      case 'SAVE_NAMED_SEARCH': {
+        const p=message.payload||{};
+        const item=safeSavedSearches([{id:p.id||crypto.randomUUID(),name:p.name,criteria:p.criteria}])[0];
+        if(!item)throw new Error('Tên hoặc tiêu chí tìm kiếm không hợp lệ.');
+        const rows=await withLock(async()=>{
+          const s=await getState();
+          const rest=s.savedSearches.filter(x=>x.id!==item.id);
+          if(rest.length>=30)throw new Error('Đã lưu 30 bộ tìm kiếm. Hãy xóa một bộ trước.');
+          const rows=[item,...rest];await save({[SAVED_SEARCHES]:rows});return rows;
+        });
+        sendResponse({ok:true,savedSearches:rows});break;
+      }
+      case 'DELETE_NAMED_SEARCH': {
+        const rows=await withLock(async()=>{const s=await getState();const rows=s.savedSearches.filter(x=>x.id!==message.payload?.id);await save({[SAVED_SEARCHES]:rows});return rows;});
+        sendResponse({ok:true,savedSearches:rows});break;
+      }
+      case 'SAVE_HUNT': {
+        const parsed=validateHunt(message.payload||{});
+        if(!parsed.ok){sendResponse(parsed);break;}
+        const rows=await withLock(async()=>{
+          const s=await getState();
+          const hunt={...parsed.hunt,id:parsed.hunt.id||crypto.randomUUID()};
+          const rest=(s.hunts||[]).filter(x=>x.id!==hunt.id);
+          if(rest.length>=MAX_HUNTS_ALLOWED)throw new Error(`Đã đủ ${MAX_HUNTS_ALLOWED} bộ săn. Hãy xóa một bộ trước.`);
+          const hunts=[hunt,...rest];
+          await save({[KEYS.hunts]:hunts});
+          await ensureHuntAlarms(hunts);
+          return hunts;
+        });
+        sendResponse({ok:true,hunts:rows});break;
+      }
+      case 'DELETE_HUNT': {
+        const rows=await withLock(async()=>{
+          const s=await getState();
+          const hunts=(s.hunts||[]).filter(x=>x.id!==message.payload?.id);
+          await save({[KEYS.hunts]:hunts});
+          await ensureHuntAlarms(hunts);
+          return hunts;
+        });
+        sendResponse({ok:true,hunts:rows});break;
+      }
+      case 'RUN_HUNT': sendResponse(await runHuntById(message.payload?.id));break;
+      case 'SAVE_WATCH': {
+        const rows=await withLock(async()=>{
+          const s=await getState();
+          const next=safeWatches([{id:message.payload?.id||crypto.randomUUID(),name:message.payload?.name,taxCode:message.payload?.taxCode,createdAt:new Date().toISOString()},...s.watchedInvestors]);
+          await save({[KEYS.watchedInvestors]:next});
+          return next;
+        });
+        sendResponse({ok:true,watchedInvestors:rows});break;
+      }
+      case 'DELETE_WATCH': {
+        const rows=await withLock(async()=>{
+          const s=await getState();
+          const next=(s.watchedInvestors||[]).filter(x=>x.id!==message.payload?.id);
+          await save({[KEYS.watchedInvestors]:next});
+          return next;
+        });
+        sendResponse({ok:true,watchedInvestors:rows});break;
+      }
+      case 'SAVE_CHECKLIST': {
+        const key=String(message.payload?.key||'').slice(0,220);
+        if(!key){sendResponse({ok:false,message:'Thiếu mã gói.'});break;}
+        try{
+          const store=await withLock(async()=>{
+            const s=await getState();
+            const owner=String(s.settings.operatorName||message.payload?.owner||'').trim().slice(0,80);
+            const prev=s.checklists?.[key];
+            if(prev?.owner&&owner&&prev.owner!==owner&&!message.payload?.force){
+              throw new Error(`Checklist đang do “${prev.owner}” giữ. Đổi tên người dùng trong Cấu hình hoặc bấm ghi đè.`);
+            }
+            const progress=checklistProgress(message.payload||{}, message.payload?.category||'');
+            const row={items:progress.items,updatedAt:new Date().toISOString(),owner:owner||prev?.owner||''};
+            const checklists={...s.checklists,[key]:row};
+            await save({[KEYS.checklists]:checklists});
+            return {row,owner};
+          });
+          await appendAudit('checklist',{key,text:`Tick checklist ${key}`},store.owner);
+          sendResponse({ok:true,checklist:store.row});
+        }catch(e){sendResponse({ok:false,message:String(e.message||e)});}
+        break;
+      }
+      case 'SAVE_CONTRACT': {
+        const row=normalizeContract({...message.payload,id:message.payload?.id||crypto.randomUUID()});
+        if(!row){sendResponse({ok:false,message:'Nhập tên hợp đồng tương tự (ít nhất 4 ký tự).'});break;}
+        const rows=await withLock(async()=>{
+          const s=await getState();
+          const next=safeContracts([row,...(s.pastContracts||[]).filter(x=>x.id!==row.id)]);
+          await save({[KEYS.pastContracts]:next});
+          return next;
+        });
+        sendResponse({ok:true,pastContracts:rows});break;
+      }
+      case 'DELETE_CONTRACT': {
+        const rows=await withLock(async()=>{
+          const s=await getState();
+          const next=(s.pastContracts||[]).filter(x=>x.id!==message.payload?.id);
+          await save({[KEYS.pastContracts]:next});
+          return next;
+        });
+        sendResponse({ok:true,pastContracts:rows});break;
+      }
+      case 'EXPORT_AMENDMENTS': {
+        const s=await getState();
+        const rows=s.amendmentLog||[];
+        const id=await downloadXlsx(`GiaoSuCuiBap/Dieu-chinh-${new Date().toISOString().slice(0,10)}.xlsx`,{
+          sheetName:'DieuChinh',
+          columns:[
+            {header:'Thời điểm',key:'at',width:22},
+            {header:'Mã',key:'notifyNo',width:18},
+            {header:'Tên gói',key:'bidName',width:48},
+            {header:'Trường',key:'field',width:16},
+            {header:'Trước',key:'before',width:28},
+            {header:'Sau',key:'after',width:28}
+          ],
+          rows:rows.map(r=>({at:r.at,notifyNo:r.notifyNo||r.key,bidName:r.bidName,field:r.field,before:String(r.before??''),after:String(r.after??'')}))
+        },true);
+        sendResponse({ok:true,id,count:rows.length});break;
+      }
+      case 'COMPARE_EGP_DOM': sendResponse(await compareOpenEgpDom());break;
+      case 'EXPORT_AUDIT': {
+        const s=await getState();
+        const id=await downloadXlsx(`GiaoSuCuiBap/Nhat-ky-noi-bo-${new Date().toISOString().slice(0,10)}.xlsx`,{
+          sheetName:'Audit',
+          columns:[
+            {header:'Thời điểm',key:'at',width:22},
+            {header:'Người',key:'operator',width:22},
+            {header:'Loại',key:'kind',width:14},
+            {header:'Mã gói',key:'key',width:22},
+            {header:'Nội dung',key:'detail',width:60}
+          ],
+          rows:s.auditLog||[]
+        },true);
+        await appendAudit('export',{text:'Xuất nhật ký nội bộ'});
+        sendResponse({ok:true,id,count:(s.auditLog||[]).length});break;
+      }
+      case 'EXPORT_SYNC_PACK': {
+        const s=await getState();
+        const pack=buildChecklistPack(s,s.settings.webhookSecret||'');
+        const filename=`GiaoSuCuiBap/dong-bo-checklist-${new Date().toISOString().slice(0,10)}.json`;
+        await downloadData(filename,'application/json',JSON.stringify(pack,null,2),true);
+        await appendAudit('export',{text:'Xuất gói đồng bộ JSON'});
+        sendResponse({ok:true});break;
+      }
+      case 'IMPORT_SYNC_PACK': {
+        const merged=await withLock(async()=>{
+          const s=await getState();
+          const result=mergeChecklistPack(s,message.payload?.pack||{},s.settings.operatorName||'',s.settings.webhookSecret||'');
+          if(!result.ok)return result;
+          const contracts=safeContracts(result.pastContracts);
+          await save({[KEYS.checklists]:result.checklists,[KEYS.tenders]:result.tenders,[KEYS.pastContracts]:contracts});
+          return result;
+        });
+        if(merged.ok)await appendAudit('import',{text:`Nhập JSON ${merged.checklistCount} checklist, ${merged.decisionCount} quyết định`});
+        sendResponse(merged);break;
+      }
+      case 'METHOD_OUTLINE': {
+        const s=await getState();
+        const tender=(s.tenders||[]).find(t=>t.key===message.payload?.key)||message.payload?.tender||{};
+        sendResponse({ok:true,outline:methodOutline(tender,s.settings.capability||{})});break;
+      }
+      case 'EXPORT_OUTLINE_DOCX': {
+        const s=await getState();
+        const tender=(s.tenders||[]).find(t=>t.key===message.payload?.key)||{};
+        const outline=methodOutline(tender,s.settings.capability||{});
+        const bytes=buildOutlineDocx(outline);
+        const filename=`GiaoSuCuiBap/Khung-BPTC-${(tender.notifyNo||'goi').slice(0,20)}.docx`;
+        const id=await chrome.downloads.download({url:docxDataUrl(bytes),filename,saveAs:true,conflictAction:'overwrite'});
+        await appendAudit('export',{key:tender.key,text:'Xuất khung BPTC DOCX'});
+        sendResponse({ok:true,id});break;
+      }
+      case 'PARSE_HSMT': {
+        const text=message.payload?.text||extractPdfStrings(message.payload?.latin1||'');
+        const guess=inferGatesFromHsmt(text);
+        sendResponse({ok:true,...guess,text:text.slice(0,2000)});break;
+      }
+      case 'FILTER_AUDIT': {
+        const s=await getState();
+        sendResponse({ok:true,rows:filterAuditLog(s.auditLog||[],message.payload||{})});break;
+      }
+      case 'GET_SEARCH_STATE': {
+        const s=await chrome.storage.local.get({settings:DEFAULT_SETTINGS,tenders:[],runs:[],activeRun:null,savedSearches:[],schemaHealth:null,checklists:{},pastContracts:[],participations:[]});
+        // The workspace never needs integration credentials or analytics caches.
+        const settings={...DEFAULT_SETTINGS,...s.settings};
+        sendResponse({ok:true,tenders:s.tenders,runs:s.runs.map(r=>safeRunForBackup(r)),activeRun:s.activeRun?{id:s.activeRun.id,mode:s.activeRun.mode,status:s.activeRun.status,message:s.activeRun.message,foundKeys:s.activeRun.foundKeys}:null,
+          savedSearches:safeSavedSearches(s.savedSearches),settings:{provinces:settings.provinces,minPrice:settings.minPrice,maxPrice:settings.maxPrice,operatorName:settings.operatorName||'',readOnlyMode:Boolean(settings.readOnlyMode)},schemaHealth:s.schemaHealth||null,checklists:s.checklists||{},pastContracts:safeContracts(s.pastContracts),participations:(s.participations||[]).slice(0,800)});break;
+      }
+      case 'GET_STATE': {
+        const s=await getState();
+        sendResponse({ok:true,...s,settings:publicSettings(s.settings),hunts:s.hunts,watchedInvestors:s.watchedInvestors,schemaHealth:s.schemaHealth,
+          manifest:chrome.runtime.getManifest(),extensionId:chrome.runtime.id,alarm:await chrome.alarms.get(DAILY_ALARM)});
+        break;
+      }
+      case 'GET_PRIVATE_SETTINGS': {
+        if(!senderIsOptions(sender)){sendResponse({ok:false,message:'Chỉ trang Cấu hình được đọc token.'});break;}
+        const s=await getState();
+        sendResponse({ok:true,settings:s.settings});
+        break;
+      }
       case 'START_SCAN': sendResponse(await startScan(message.payload?.mode||'manual',message.payload||{}));break;
       case 'SCAN_ALL': sendResponse(await startScan('manual',{all:true}));break;
       case 'INGEST_CAPTURE': {
@@ -3470,29 +4065,66 @@ chrome.runtime.onMessage.addListener((message,sender,sendResponse)=>{
         }
         await advanceOrFinish(p.runId,p.ok!==false,p.message||'Hoàn tất.');sendResponse({ok:true});break;
       }
-      case 'UPDATE_SETTINGS': {const s=await getState();const settings={...s.settings,...message.payload};const tenders=rescoreStoredTenders(s.tenders,settings);await save({[KEYS.settings]:settings,[KEYS.tenders]:tenders});await ensureDailyAlarm();sendResponse({ok:true,settings});break;}
-      case 'SET_WATCH': {const s=await getState();const tenders=s.tenders.map(t=>t.key===message.payload.key?{...t,watchlisted:Boolean(message.payload.value)}:t);await save({[KEYS.tenders]:tenders});sendResponse({ok:true});break;}
-      case 'SET_DECISION': {
+      case 'UPDATE_SETTINGS': {
+        const settings=await withLock(async()=>{
+          const s=await getState(),raw={...s.settings,...message.payload};
+          const prices=validateCriteria({keyword:'settings',minPrice:raw.minPrice,maxPrice:raw.maxPrice});
+          if(!prices.ok)throw new Error(prices.message);
+          const clean=importedSettings(raw);
+          // Backup imports disable integrations; ordinary settings preserve intent.
+          for(const k of ['telegramBotToken','telegramChatId']){
+            const next=String(raw[k]||'').trim().slice(0,500);
+            clean[k]=(!next||/^•+$/.test(next))?String(s.settings[k]||''):next;
+          }
+          for(const k of ['telegramEnabled','autoScan','scanOnStartup','autoExportMobileReport'])clean[k]=Boolean(raw[k]);
+          clean.capability=normalizeCapability(raw.capability||s.settings.capability||{});
+          clean.notifyEmail=safeEmail(raw.notifyEmail);
+          clean.notifyWebhook=safeHttpsWebhook(raw.notifyWebhook);
+          const secret=String(raw.webhookSecret||'').trim().slice(0,200);
+          clean.webhookSecret=(!secret||/^•+$/.test(secret))?String(s.settings.webhookSecret||''):secret;
+          clean.operatorName=String(raw.operatorName||'').trim().slice(0,80);
+          clean.readOnlyMode=Boolean(raw.readOnlyMode);
+          clean.approvalSteps=Number(raw.approvalSteps)===2?2:3;
+          clean.minPrice=prices.criteria.minPrice;clean.maxPrice=prices.criteria.maxPrice||Number.MAX_SAFE_INTEGER;
+          const tenders=rescoreStoredTenders(s.tenders,clean);
+          await save({[KEYS.settings]:clean,[KEYS.tenders]:tenders});return clean;
+        });
+        await ensureDailyAlarm();sendResponse({ok:true,settings});break;
+      }
+      case 'SET_WATCH': {await withLock(async()=>{const s=await getState();const tenders=s.tenders.map(t=>t.key===message.payload.key?{...t,watchlisted:Boolean(message.payload.value)}:t);await save({[KEYS.tenders]:tenders});});sendResponse({ok:true});break;}
+      case 'SET_DECISION': {await withLock(async()=>{
         const p=message.payload||{};
         const key=String(p.key||'');
-        if(!key){sendResponse({ok:false,message:'Thiếu mã gói thầu.'});break;}
+        if(!key){sendResponse({ok:false,message:'Thiếu mã gói thầu.'});return;}
         const state=normalizeDecisionState(p.state);
         const s=await getState();
-        let found=false;
+        const operator=String(s.settings.operatorName||p.owner||'').trim().slice(0,120);
+        const current=s.tenders.find(t=>t.key===key);
+        const confirming=state==='GO'&&current?.decisionProposedBy&&current.decisionProposedBy!==operator;
+        if(current?.decisionOwner&&operator&&current.decisionOwner!==operator&&!p.force&&!confirming){
+          sendResponse({ok:false,message:`Quyết định đang do “${current.decisionOwner}” giữ. Đổi tên người dùng hoặc ghi đè.`});return;
+        }
+        let found=false;let approvalNote='';
         const tenders=s.tenders.map(t=>{
           if(t.key!==key)return t;
           found=true;
-          const next={...t,decisionState:state,decisionUpdatedAt:new Date().toISOString()};
-          if(Object.prototype.hasOwnProperty.call(p,'owner'))next.decisionOwner=String(p.owner||'').trim().slice(0,120);
+          const applied=applyApproval({...t,decisionState:state},operator,state,s.settings.approvalSteps||3);
+          const next={...applied.tender,decisionState:applied.tender.decisionState||state,decisionUpdatedAt:new Date().toISOString()};
+          approvalNote=applied.message||'';
+          if(!applied.ok){found='blocked';return t;}
+          if(Object.prototype.hasOwnProperty.call(p,'owner'))next.decisionOwner=String(p.owner||operator||'').trim().slice(0,120);
+          else if(operator)next.decisionOwner=next.decisionOwner||operator;
           if(Object.prototype.hasOwnProperty.call(p,'note'))next.decisionNote=String(p.note||'').trim().slice(0,1000);
-          // Các gói đã vào quy trình phải luôn xuất hiện trong danh sách theo dõi.
-          if(['REVIEW','GO','BID','SUBMITTED'].includes(state))next.watchlisted=true;
+          if(['REVIEW','GO','BID','SUBMITTED'].includes(next.decisionState))next.watchlisted=true;
           return next;
         });
-        if(!found){sendResponse({ok:false,message:'Không tìm thấy gói thầu trong kho dữ liệu.'});break;}
+        if(found==='blocked'){sendResponse({ok:false,message:approvalNote||'Không tự xác nhận đề xuất của chính mình.'});return;}
+        if(!found){sendResponse({ok:false,message:'Không tìm thấy gói thầu trong kho dữ liệu.'});return;}
         await save({[KEYS.tenders]:tenders});
-        sendResponse({ok:true,state,label:DECISION_STATE_LABEL[state]});
-        break;
+        const auditLog=[auditEntry('decision',{key,text:`${state} ${approvalNote}`.trim()},operator),...(s.auditLog||[])].slice(0,800);
+        await save({[KEYS.auditLog]:auditLog});
+        sendResponse({ok:true,state,label:DECISION_STATE_LABEL[state],message:approvalNote});
+        });break;
       }
       case 'DELETE_TENDER': {const s=await getState();await save({[KEYS.tenders]:s.tenders.filter(t=>t.key!==message.payload.key)});sendResponse({ok:true});break;}
       case 'CLEAR_DATA': await save({[KEYS.tenders]:[],[KEYS.runs]:[],[KEYS.activeRun]:null,[KEYS.participations]:[],[KEYS.winnerLookup]:null,[KEYS.winnerCache]:{}});sendResponse({ok:true});break;
@@ -3504,7 +4136,7 @@ chrome.runtime.onMessage.addListener((message,sender,sendResponse)=>{
         sendResponse({ok:true});
         break;
       }
-      case 'EXPORT_CSV': await exportCsv(message.payload?.saveAs!==false);sendResponse({ok:true});break;
+      case 'EXPORT_CSV': await exportCsv(message.payload?.saveAs!==false,message.payload?.keys??null);sendResponse({ok:true});break;
       case 'EXPORT_MOBILE': await exportMobileReport(message.payload?.saveAs!==false);sendResponse({ok:true});break;
       case 'EXPORT_BACKUP_SAFE': await exportBackup();sendResponse({ok:true});break;
       // Tương thích lệnh cũ nhưng luôn xuất định dạng an toàn.
@@ -3514,11 +4146,12 @@ chrome.runtime.onMessage.addListener((message,sender,sendResponse)=>{
         // Chốt phụ ở service worker; phía giao diện đã chặn theo kích thước tệp.
         if(JSON.stringify(data||{}).length>30_000_000)throw new Error('File backup vượt quá 30 MB.');
         const clean=sanitizeBackupImport(data);
+        const savedSearches=safeSavedSearches(data.savedSearches);
         // Chỉ dừng tác vụ sau khi file đã qua kiểm tra. Không để tab/alarm cũ
         // tiếp tục gửi dữ liệu vào state vừa được khôi phục.
         await cancelActiveRun();
         await cancelLookups(null,'Đã dừng để nhập bản sao dữ liệu.');
-        await save({[KEYS.settings]:clean.settings,[KEYS.tenders]:clean.tenders,[KEYS.runs]:clean.runs,
+        await save({[SAVED_SEARCHES]:savedSearches,[KEYS.settings]:clean.settings,[KEYS.tenders]:clean.tenders,[KEYS.runs]:clean.runs,
           [KEYS.template]:clean.template,[KEYS.templates]:clean.templates,[KEYS.lastTemplate]:clean.lastTemplate,
           [KEYS.activeRun]:null,[KEYS.participations]:clean.participations,[KEYS.winnerLookup]:null,
           [KEYS.winnerCache]:{},[KEYS.bidOpenScan]:null,[KEYS.planLookup]:null,[KEYS.areaScan]:null,
@@ -3560,7 +4193,7 @@ chrome.runtime.onMessage.addListener((message,sender,sendResponse)=>{
       case 'EXPORT_AREA_XLSX': await exportAreaXlsx();sendResponse({ok:true});break;
       case 'OPEN_AREA': await chrome.tabs.create({url:chrome.runtime.getURL('market.html')});sendResponse({ok:true});break;
       case 'TBMT_SEARCH': sendResponse(await startTbmtSearch(message.payload||{}));break;
-      case 'CANCEL_ACTIVE_RUN': sendResponse(await cancelActiveRun());break;
+      case 'CANCEL_ACTIVE_RUN': sendResponse(await cancelActiveRun(message.payload?.runId||null));break;
       case 'OPEN_SEARCH': await chrome.tabs.create({url:chrome.runtime.getURL('search.html')});sendResponse({ok:true});break;
       case 'GET_PLAN_STATE': {const s=await getState();sendResponse({ok:true,lookup:s.planLookup});break;}
       case 'CANCEL_PLAN_LOOKUP': sendResponse(await cancelLookups('planLookup'));break;
@@ -3571,17 +4204,20 @@ chrome.runtime.onMessage.addListener((message,sender,sendResponse)=>{
       case 'EGP_ENDPOINT_SEEN': sendResponse(await recordEndpointSeen(message.payload||{}));break;
       case 'CLEAR_ENDPOINT_MAP': await save({[KEYS.endpointMap]:[]});sendResponse({ok:true});break;
       case 'BBMT_BIDDERS': sendResponse(await onBbmtBidders(message.payload||{},sender.tab?.id));break;
+      case 'BBMT_PRICE_BASIS': sendResponse(await onBbmtPriceBasis(message.payload||{},sender.tab?.id));break;
+      case 'BBMT_DOM_RESULT': sendResponse(await onBbmtDomResult(message.payload||{},sender.tab?.id));break;
       case 'BID_OPEN_SCAN': sendResponse(await startBidOpenScan(message.payload||{}));break;
       case 'CANCEL_BID_OPEN_SCAN': sendResponse(await cancelLookups('bidOpenScan'));break;
       case 'GET_ANALYTICS': await flushObservations();sendResponse(await getAnalytics(message.payload||{}));break;
       case 'OPEN_ANALYTICS': await chrome.tabs.create({url:chrome.runtime.getURL('analytics.html')});sendResponse({ok:true});break;
       case 'CLEAR_OBSERVATIONS': obsQueue=[];await save({[KEYS.observations]:[]});sendResponse({ok:true});break;
-      case 'GET_BID_OPEN_STATE': {const s=await getState();sendResponse({ok:true,scan:s.bidOpenScan});break;}
+      case 'GET_BID_OPEN_STATE': sendResponse({ok:true,scan:await getBidScan()});break;
+      case 'RETRY_BID_OPEN': sendResponse(await retryBidOpen(message.payload||{}));break;
       case 'CLEAR_BID_OPEN_SCAN': await save({[KEYS.bidOpenScan]:null});sendResponse({ok:true});break;
       case 'EXPORT_BID_OPEN_CSV': await exportBidOpenCsv();sendResponse({ok:true});break;
       case 'OPEN_BID_OPEN': await chrome.tabs.create({url:chrome.runtime.getURL('bidopen.html')});sendResponse({ok:true});break;
       case 'KQLCNT_DONE': sendResponse(await routeKqlcntDone(message.payload||{},sender));break;
-      case 'CONTENT_READY': sendResponse({ok:true});break;
+      case 'CONTENT_READY': sendResponse(await onBbmtContentReady(message.payload||{},sender.tab?.id));break;
       case 'GET_WINNER_STATE': {const s=await getState();sendResponse({ok:true,lookup:s.winnerLookup,cache:s.winnerCache});break;}
       case 'CANCEL_WINNER_LOOKUP': sendResponse(await cancelLookups('winnerLookup'));break;
       case 'CLEAR_WINNER_LOOKUP': await save({[KEYS.winnerLookup]:null});sendResponse({ok:true});break;
@@ -3595,3 +4231,5 @@ chrome.runtime.onMessage.addListener((message,sender,sendResponse)=>{
   })().catch(error=>sendResponse({ok:false,message:String(error?.message||error)}));
   return true;
 });
+
+chrome.commands.onCommand.addListener(command=>{if(command==='open-search')chrome.tabs.create({url:chrome.runtime.getURL('search.html')});});
