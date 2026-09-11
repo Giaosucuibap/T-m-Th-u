@@ -167,3 +167,30 @@ node tools/test/plans-ui.mjs     # trang Kế hoạch lựa chọn nhà thầu
 Không cần máy chủ giả lập. Kiểm rằng hai ô *Từ ngày / Đến ngày* chỉ hiện khi
 chọn *"Tự chọn khoảng ngày"*, tự điền sẵn giá trị hợp lý, và payload gửi đi
 đúng khoá. Kết quả mong đợi: `LỖI (0)`.
+
+## 9. Kích thước cửa sổ popup
+
+```bash
+node tools/test/popup-size.mjs    # chiều rộng
+node tools/test/popup-jump.mjs    # có nhảy khi nạp dữ liệu không
+```
+
+Không cần máy chủ giả lập.
+
+Người dùng báo: bấm vào biểu tượng tiện ích thì popup hiện ra **hẹp như sợi
+chỉ**, chữ vỡ dòng từng từ, nội dung nhảy loạn *"như tự động chạy"*.
+
+Nguyên nhân là `body{max-width:100vw}`. Cửa sổ popup của Chrome **tự co theo nội
+dung**, nên `100vw` tạo ra vòng lặp tự bóp: thân co lại → cửa sổ co theo →
+`100vw` nhỏ đi → thân co tiếp. Thêm một bẫy nữa: `100vw` **tính cả thanh cuộn
+dọc**, nên body luôn thừa ra đúng bề rộng thanh cuộn và đẻ thêm một thanh cuộn
+ngang không ai cần.
+
+`popup-size.mjs` khoá lại hai mặt: thân **không được co** theo cửa sổ dù hẹp đến
+đâu, và ở bề rộng Chrome thật sự cấp cho popup thì **không sinh thanh cuộn
+ngang**. Kết quả mong đợi: `KẾT LUẬN: ĐẠT`. Thử khôi phục `max-width:100vw` thì
+ba dòng đầu phải báo `✗ BỊ BÓP`.
+
+`popup-jump.mjs` nạp sẵn **3000 gói thầu** — đúng lượng dữ liệu trên máy người
+dùng — rồi đo kích thước mỗi 180ms. Kết quả mong đợi: `Số lần đổi kích thước: 0`
+và `Chiều rộng có đổi không: KHÔNG`.

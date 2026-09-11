@@ -2,6 +2,53 @@
 
 Tài liệu này ghi lại các thay đổi quan trọng của Giáo Sư Cùi Bắp. Cấu trúc tham khảo [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) và phiên bản tuân theo cách đánh số ngữ nghĩa ở mức sản phẩm.
 
+## [4.9.2] — 2026-09-11
+
+Sửa cửa sổ popup bị bóp hẹp và nội dung nhảy loạn.
+
+### Sửa lỗi
+
+- **Bấm vào biểu tượng tiện ích thì popup hiện ra hẹp như sợi chỉ**, chữ vỡ
+  dòng từng từ, nội dung nhảy loạn *"như tự động chạy"*.
+
+  Thủ phạm là một khai báo CSS duy nhất: `body{max-width:100vw}`.
+
+  Cửa sổ popup của Chrome **tự co theo nội dung**, nên `100vw` tạo ra một vòng
+  lặp tự bóp:
+
+  > thân co lại → cửa sổ co theo → `100vw` nhỏ đi → thân co tiếp
+
+  Đo được trước khi sửa: cửa sổ 320px → thân 320px; 240px → 240px; 200px →
+  200px. Sau khi sửa, thân giữ nguyên **420px** ở mọi bề rộng cửa sổ.
+
+  Thêm một cái bẫy nữa của `100vw`: nó **tính cả thanh cuộn dọc**. Ở cửa sổ
+  420px, thân là 420px trong khi vùng nhìn thấy chỉ 405px — dư đúng 15px, đủ
+  để đẻ ra một thanh cuộn **ngang** mà không ai cần. Đúng thanh cuộn thấy trong
+  ảnh người dùng gửi.
+
+  Popup của Chrome cho phép tới 800px nên 420px luôn vừa; nay chốt cứng bằng số
+  và chặn tràn ngang, không dùng đơn vị nào phụ thuộc khung nhìn.
+
+- **"Nhảy loạn như tự động chạy" không phải lỗi riêng.** Đã đo: nạp sẵn 3000
+  gói — đúng lượng dữ liệu trên máy người dùng — rồi theo dõi kích thước mỗi
+  180ms trong 2,5 giây. Kết quả `420x821`, **không đổi lần nào**. Cảm giác
+  "đang tự chạy" chính là trình duyệt đo đi đo lại trong lúc vòng lặp co bóp
+  chạy; hết vòng lặp thì hết nhảy.
+
+### Kiểm thử
+
+- `tools/test/popup-size.mjs` — khoá hai mặt: thân **không được co** theo cửa
+  sổ dù hẹp đến đâu, và ở bề rộng Chrome thật sự cấp cho popup thì **không
+  sinh thanh cuộn ngang**. Đã thử khôi phục `max-width:100vw`: ba dòng đầu báo
+  `✗ BỊ BÓP` ngay.
+- `tools/test/popup-jump.mjs` — nạp 3000 gói rồi đo kích thước liên tục.
+
+### Ghi chú
+
+Các chỗ `calc(100vw - N)` còn lại trong `workspace.css` nằm trên hộp thoại và
+khay nổi của **trang lớn**, không phải trên `body` của một cửa sổ tự co, nên
+không dính vòng lặp này. Đã rà và giữ nguyên.
+
 ## [4.9.1] — 2026-09-11
 
 Sửa lỗi gói **chỉ định thầu** bấm vào ra trang trắng, và mở đường về kế hoạch.
