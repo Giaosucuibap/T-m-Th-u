@@ -1,4 +1,4 @@
-# Giáo Sư Cùi Bắp 4.9.0
+# Giáo Sư Cùi Bắp 4.9.1
 
 **Trợ lý ra quyết định dự thầu ngay trên nguồn e-GP chính thức.**
 
@@ -121,6 +121,13 @@ Cách làm này giảm phụ thuộc vào URL, header, CAPTCHA hoặc token đã
    nhìn thấy. Kế hoạch không ghi ngày nào thì vẫn được giữ lại và bạn tự xét —
    loại bỏ chúng là bịa ra kết luận từ chỗ không có dữ liệu.
 3. Nếu e-GP yêu cầu đăng nhập/CAPTCHA, hoàn tất trực tiếp trên trang chính thức.
+
+   **Gói chỉ định thầu / không qua mạng:** e-GP thường không dựng được trang chi
+   tiết KQLCNT cho loại gói này — bấm vào chỉ ra trang trắng, và nút *Tải hồ sơ*
+   cũng không có gì để lấy. Khi đó dùng nút **📋 Xem KHLCNT** trên chính dòng
+   gói đó: nó mở Kế hoạch lựa chọn nhà thầu sinh ra gói, nơi có quyết định phê
+   duyệt kế hoạch và danh mục gói thầu. Mốc thời gian tự bỏ giới hạn, vì kế
+   hoạch có thể đã được duyệt từ lâu.
 4. Kiểm tra các trường quan trọng và liên kết nguồn trước khi đánh dấu **GO**.
 5. Gán người phụ trách, ghi chú và cập nhật trạng thái pipeline.
 6. Lưu bộ lọc, chạy lại để Radar phát hiện thay đổi.
@@ -185,7 +192,7 @@ npm test
 
 Bộ hiện tại kiểm tra chuẩn hoá văn bản/tiền/ngày, URL chính thức, request an toàn, safe backup theo danh sách trắng, claim/ACK/lease của tác vụ, pipeline quyết định, xếp hạng, Radar, CSP/manifest, cú pháp/import JavaScript, tài nguyên giao diện, hyperlink Excel và cách tính liên danh.
 
-Kết quả 4.9.0: **144/144 kiểm thử tự động đạt**. Kết quả này chỉ là bằng chứng hồi quy cục bộ, không thay thế kiểm thử trực tiếp trên e-GP, kiểm thử hiệu năng, rà soát Chrome Web Store hoặc kiểm toán bảo mật độc lập.
+Kết quả 4.9.0: **151/151 kiểm thử tự động đạt**. Kết quả này chỉ là bằng chứng hồi quy cục bộ, không thay thế kiểm thử trực tiếp trên e-GP, kiểm thử hiệu năng, rà soát Chrome Web Store hoặc kiểm toán bảo mật độc lập.
 
 #### Chạy lại ở nhiều múi giờ
 

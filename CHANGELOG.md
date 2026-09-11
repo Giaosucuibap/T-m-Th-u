@@ -2,6 +2,70 @@
 
 Tài liệu này ghi lại các thay đổi quan trọng của Giáo Sư Cùi Bắp. Cấu trúc tham khảo [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) và phiên bản tuân theo cách đánh số ngữ nghĩa ở mức sản phẩm.
 
+## [4.9.1] — 2026-09-11
+
+Sửa lỗi gói **chỉ định thầu** bấm vào ra trang trắng, và mở đường về kế hoạch.
+
+### Sửa lỗi
+
+- **Mã gói hiển thị sai: `IB2600501375-null` thay vì `IB2600501375-00`.**
+
+  e-GP trả về nguyên văn **chuỗi ký tự `'null'`** cho `notifyVersion` của gói
+  chỉ định thầu — loại không đi qua bước mở thầu nên thiếu hẳn nhiều trường.
+  `cleanText('null')` trả lại `'null'`, một chuỗi *có nội dung*, nên phép chống
+  đỡ `|| '00'` không bao giờ chạy.
+
+  Từ một chỗ nhận nhầm "không có dữ liệu" thành "dữ liệu", hỏng theo dây chuyền:
+  mã hiển thị sai → khoá chống trùng sai → **tham số link tra cứu mang chữ
+  `null`** → bấm vào thì e-GP mở ra trang trắng trơn, mọi ô đều rỗng.
+
+  Nay `cleanText()` coi `'null'` / `'undefined'` / `'NaN'` là **rỗng**. Không
+  trường nào của e-GP có giá trị thật đúng bằng mấy chữ đó.
+
+- **Nút "Tải hồ sơ" cũng hỏng theo, cùng một gốc.** Nó mở chính link đó rồi chờ
+  trang tự gọi endpoint tệp đính kèm; trang trắng thì không có gì để chờ.
+
+- **Tham số thiếu trong link để rỗng thay vì ghi `undefined`.** Link do chính
+  e-GP sinh ra ghi `bidOpenId=undefined`, không phải `bidOpenId=`. Gói chỉ định
+  thầu thiếu cả loạt trường như vậy, nên đây đúng là ca hay gặp. Đã thống nhất
+  theo quy ước của e-GP.
+
+- **Một bản ghi mang hai giá trị phiên bản khác nhau** — trường `version` ghi
+  `'1'` trong khi mã đầy đủ ghi `-01`, nên khoá chống trùng có thể lệch giữa
+  hai lần đọc cùng một gói. Ba màn hình nay dùng chung `normalizeVersion()`.
+
+### Tính năng mới
+
+- **Nút "📋 Xem KHLCNT" trên mỗi gói đã trúng thầu.** Mở thẳng Kế hoạch lựa
+  chọn nhà thầu sinh ra gói đó, điền sẵn mã kế hoạch và **bỏ giới hạn thời
+  gian** (kế hoạch có thể duyệt từ lâu, mốc mặc định 3 tháng sẽ cắt mất).
+
+  Đây là đường vòng **có chủ ý**. Bản ghi KQLCNT chỉ có `planNo`, không có id
+  nội bộ của kế hoạch, mà thiếu id thì trang chi tiết e-GP lại trắng — đúng thứ
+  đang phải chữa. Nên đi qua luồng tìm kiếm KHLCNT đã chạy được, chắc ăn hơn.
+
+- **Báo lỗi tải hồ sơ nói rõ ba khả năng** thay vì một câu chung chung, và với
+  gói không qua mạng thì chỉ thẳng sang nút "Xem KHLCNT".
+
+### Kiểm thử
+
+- `tests/chi-dinh-thau.test.js` — 7 bài dựng lại đúng bản ghi trong ảnh người
+  dùng gửi (`IB2600501375`, `notifyVersion: 'null'`), chốt rằng mã ra đúng
+  `IB2600501375-00`, link không còn chữ `null`, và **gói qua mạng bình thường
+  không bị đụng tới**. Đã thử khôi phục `cleanText` cũ: 5/7 bài báo đỏ.
+- `tools/test/plan-link.mjs` — chạy toàn trình trong Chromium: từ thẻ gói trúng
+  thầu bấm "Xem KHLCNT" → mở đúng `plans.html?planNo=…`, ô từ khoá điền sẵn mã
+  kế hoạch, mốc thời gian về "không giới hạn". `LỖI (0)`.
+- Tổng: **144 → 151 bài**, đạt hết ở bốn múi giờ.
+
+### Còn chưa xác nhận được
+
+- Đã sửa **nguyên nhân làm hỏng link** (kiểm chứng được: mã khớp đúng e-GP,
+  link sạch chữ `null`). Nhưng **chưa xác nhận được** trang chi tiết KQLCNT của
+  e-GP có dựng ra nội dung cho gói chỉ định thầu hay không — việc đó cần máy
+  chủ thật. Nếu e-GP vẫn trả trang trắng thì đó là phía e-GP, và nút
+  "Xem KHLCNT" là đường đi vòng đã chuẩn bị sẵn cho tình huống đó.
+
 ## [4.9.0] — 2026-09-11
 
 Hợp nhất bản 4.8.0 của tác giả vào nhánh này, và sửa hai lỗi lọc ngày mà bản

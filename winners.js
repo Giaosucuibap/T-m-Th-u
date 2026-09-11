@@ -241,8 +241,14 @@ function renderPackages(lk) {
            title="Mở kết quả lựa chọn nhà thầu trên e-GP">${esc(p.notifyNoStand)} ↗</a>
         <button class="btn light" style="width:auto;margin-top:6px;padding:4px 8px;font-size:12px"
                 data-dl data-no="${esc(p.notifyNo)}" data-url="${esc(p.detailUrl)}"
+                data-net="${p.isInternet ? '1' : '0'}"
                 title="Tải quyết định phê duyệt và báo cáo đánh giá (chấm thầu) qua phần mềm hỗ trợ e-GP"
         >📎 Tải hồ sơ</button>
+        ${p.planNo ? `
+        <button class="btn light" style="width:auto;margin-top:6px;padding:4px 8px;font-size:12px"
+                data-plan="${esc(p.planNo)}"
+                title="Mở Kế hoạch lựa chọn nhà thầu ${esc(p.planNo)} — đường chắc ăn khi trang chi tiết KQLCNT của e-GP trắng trơn, hay gặp với gói chỉ định thầu"
+        >📋 Xem KHLCNT</button>` : ''}
       </td>
       <td class="wrap">
         <a class="link" href="${esc(p.detailUrl)}" target="_blank" rel="noopener"
@@ -329,11 +335,11 @@ refresh();
  *  là gọi phần mềm hỗ trợ cài trên máy. Nút này làm hộ đúng cú bấm đó, nhưng
  *  tự mở trang gói ở tab nền, lấy hết tệp rồi tải một lượt.
  * ------------------------------------------------------------------------ */
-async function downloadDocs(btn, notifyNo, detailUrl) {
+async function downloadDocs(btn, notifyNo, detailUrl, isInternet) {
   const old = btn.textContent;
   btn.disabled = true;
   btn.textContent = '⏳ Đang lấy…';
-  const res = await send('FETCH_AND_DOWNLOAD', { notifyNo, detailUrl });
+  const res = await send('FETCH_AND_DOWNLOAD', { notifyNo, detailUrl, isInternet });
   btn.disabled = false;
   if (res && res.ok) {
     btn.textContent = `✅ ${res.downloaded} tệp`;
@@ -346,9 +352,18 @@ async function downloadDocs(btn, notifyNo, detailUrl) {
 }
 
 document.addEventListener('click', (e) => {
-  const b = e.target.closest('[data-dl]');
-  if (!b) return;
-  downloadDocs(b, b.dataset.no || '', b.dataset.url || '');
+  const dl = e.target.closest('[data-dl]');
+  if (dl) { downloadDocs(dl, dl.dataset.no || '', dl.dataset.url || '', dl.dataset.net === '1'); return; }
+
+  /* Mở Kế hoạch lựa chọn nhà thầu sinh ra gói này.
+     Đi qua màn hình KHLCNT của chính tiện ích, KHÔNG dựng link chi tiết e-GP:
+     bản ghi KQLCNT chỉ có `planNo`, không có id nội bộ của kế hoạch, mà thiếu
+     id thì trang chi tiết e-GP mở ra trắng trơn — đúng thứ đang phải chữa. */
+  const plan = e.target.closest('[data-plan]');
+  if (plan) {
+    const code = String(plan.dataset.plan || '').trim().toUpperCase();
+    if (code) chrome.tabs.create({ url: chrome.runtime.getURL(`plans.html?planNo=${encodeURIComponent(code)}`) });
+  }
 });
 
 /* Dọn các lượt còn kẹt "đang chạy" từ phiên trước trước khi vẽ trạng thái.

@@ -339,7 +339,35 @@ $('csv').addEventListener('click', async () => {
   $(id).addEventListener('keydown', (e) => { if (e.key === 'Enter') start(); });
 });
 
+/* --------------------------------------------------------------------------
+ *  MỞ THẲNG TỪ MỘT GÓI ĐÃ TRÚNG THẦU
+ *
+ *  Màn hình "Tra cứu nhà thầu trúng thầu" chuyển sang đây kèm ?planNo=PL…, để
+ *  người dùng đi thẳng từ một gói trúng thầu tới kế hoạch sinh ra nó.
+ *
+ *  Đây là đường vòng CÓ CHỦ Ý. Trang chi tiết KQLCNT của e-GP hay trắng trơn
+ *  với gói chỉ định thầu; còn tra KHLCNT theo mã kế hoạch thì đi đúng luồng tìm
+ *  kiếm đã chạy được, nên gần như luôn ra dữ liệu.
+ *
+ *  Bỏ giới hạn thời gian: kế hoạch sinh ra gói có thể đã được duyệt từ lâu, mà
+ *  mốc mặc định 3 tháng sẽ cắt mất đúng thứ người dùng đang đi tìm.
+ * ------------------------------------------------------------------------ */
+function openFromQuery() {
+  const planNo = new URLSearchParams(location.search).get('planNo');
+  if (!/^PL\d{6,}$/i.test(String(planNo || '').trim())) return false;
+  const code = planNo.trim().toUpperCase();
+  $('keyword').value = code;
+  $('period').value = '';          // '' = không giới hạn thời gian
+  syncDateRange();
+  alertBox(`Đang tra kế hoạch ${code} — mã lấy từ gói thầu bạn vừa xem. `
+    + 'Đã bỏ giới hạn thời gian vì kế hoạch có thể được duyệt từ lâu.');
+  start();
+  return true;
+}
+
 /* Dọn các lượt còn kẹt "đang chạy" từ phiên trước trước khi vẽ trạng thái.
    Không dọn thì trang hiện thanh tiến trình của một lượt đã chết —
    trông như phần mềm tự động chạy (xem reconcileStaleLookups). */
-send('RECONCILE_LOOKUPS').then(() => refresh()).catch(() => refresh());
+send('RECONCILE_LOOKUPS')
+  .then(() => { if (!openFromQuery()) refresh(); })
+  .catch(() => { if (!openFromQuery()) refresh(); });

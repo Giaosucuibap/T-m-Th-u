@@ -2008,8 +2008,18 @@ async function fetchAndDownloadAttachments(payload={}){
       if(entry&&entry.files&&entry.files.length)break;
     }
     if(!entry||!entry.files.length){
+      /* Nói rõ ba khả năng thay vì một câu chung chung, và chỉ đường đi tiếp.
+         Gói CHỈ ĐỊNH THẦU (không qua mạng) là ca hay gặp nhất ở đây: e-GP
+         thường không dựng được trang chi tiết KQLCNT cho chúng, nên không có
+         request tệp nào để mà bắt. Khi đó đường chắc ăn là qua KHLCNT. */
+      const goiChiDinh=!payload.isInternet;
       return {ok:false,message:`Không thấy tệp đính kèm nào cho ${notifyNo||'gói này'}. `
-        +'Có thể gói chưa đăng tệp, hoặc e-GP yêu cầu đăng nhập mới xem được.'};
+        +'Ba khả năng: gói chưa đăng tệp; e-GP yêu cầu đăng nhập mới tải được; '
+        +'hoặc e-GP không dựng được trang chi tiết cho gói này.'
+        +(goiChiDinh
+          ? ' Gói không qua mạng (chỉ định thầu, chào hàng rút gọn) hay rơi vào khả năng thứ ba —'
+            +' bấm nút "Xem KHLCNT" để đi vòng qua kế hoạch lựa chọn nhà thầu.'
+          : '')};
     }
     return downloadAttachments({notifyNo,files:entry.files.map(f=>({...f,notifyNo}))});
   }finally{
