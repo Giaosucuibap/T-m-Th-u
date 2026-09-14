@@ -4,6 +4,8 @@ import { formatDiscount, priceFacts } from './lib/kqlcnt.js';
 import { FIELD_OPTIONS, findBidder, bbmtReadStateOf, summarizeBidOpenings } from './lib/bbmt.js';
 import { safeSource } from './lib/workspace.js';
 import { openingTimeNotes } from './lib/bbmt-labels.js';
+import { coverageText } from './lib/match-gate.js';
+import { hardFilterReason } from './lib/hard-filter.js';
 
 const $ = id => document.getElementById(id);
 const send = (type, payload = {}) => chrome.runtime.sendMessage({ type, payload });
@@ -18,7 +20,7 @@ $('field').innerHTML=FIELD_OPTIONS.map(o=>`<option value="${esc(o.value)}">${esc
 function syncDateRange(){
   const custom=$('days').value==='custom';show($('dateRange'),custom);
   if(custom&&!$('fromDate').value&&!$('toDate').value){
-    const iso=d=>new Date(d.getTime()-d.getTimezoneOffset()*60000).toISOString().slice(0,10);
+    const iso=d=>new Date(d.getTime()+7*3600000).toISOString().slice(0,10);
     $('toDate').value=iso(new Date());$('fromDate').value=iso(new Date(Date.now()-30*86400000));
   }
 }
@@ -83,7 +85,7 @@ function bidderRow(b,me,basis){
     <td class="num final-price">${esc(formatMoney(b.finalPrice))}${b.finalPriceDerived?'<div class="small muted">Tính từ tỷ lệ giảm</div>':''}</td>
     <td class="num ${amount<0?'over-price':'saving'}">${comparison}<div>${percentage}</div>${b.multiLot?'<div class="small muted">Gói có nhiều phần/lô</div>':''}</td></tr>`;
 }
-function packageCard(p,me){
+function packageCard(p,me,insufficient=false){
   const bidders=p.bidders||[], state=bbmtReadStateOf(p), basis=p.priceBasis??p.bidPrice;
   const bidderCount=new Set(bidders.map(b=>b.taxCode||b.nameFold||b.name)).size;
   const basisLabel=(p.priceBasisLabel||'Giá gói thầu (e-GP)')+(p.comparisonPending?' · Chưa đủ căn cứ đối chiếu':'');
@@ -96,16 +98,20 @@ function packageCard(p,me){
     <div class="pkg-facts"><div><span>${esc(basisLabel)}</span><b>${esc(formatMoney(basis))}</b></div>
       <div><span>Mở thầu</span><b>${esc(formatDate(p.bidRealityOpenDate||p.publicDateKqmt))}</b></div>
       <div><span>Nhà thầu đã đọc / e-GP công bố</span><b>${bidderCount} / ${p.numBidderJoin??'—'}</b></div></div></div>
-    ${notes[state]?`<div class="empty-note ${state==='READING'?'reading':''}">${state==='READING'?'<span class="spin"></span>':''}${esc(state==='READING'?notes[state]:p.readIssue||notes[state])}${p.attempt>1&&state==='READING'?' (thử lại lần 2)':''}</div>`:''}
+    ${insufficient?`<div class="empty-note">Chưa đủ dữ liệu đối chiếu: ${esc(hardFilterReason({reason:p.filterReason,state:p.filterState||'INSUFFICIENT'}))} Chưa tính vào các gói khớp.</div>`:notes[state]?`<div class="empty-note ${state==='READING'?'reading':''}">${state==='READING'?'<span class="spin"></span>':''}${esc(state==='READING'?notes[state]:p.readIssue||notes[state])}${p.attempt>1&&state==='READING'?' (thử lại lần 2)':''}</div>`:''}
     ${bidders.length?`<div class="bidder-scroll" tabindex="0" role="region" aria-label="Bảng nhà thầu ${esc(p.notifyNoStand)}">
       <table><thead><tr><th>Hạng giá</th><th>Nhà thầu tham dự</th><th>Giá dự thầu</th><th>Giảm trên giá dự thầu</th><th>Giá sau giảm</th><th>Chênh lệch so mốc giá</th></tr></thead>
       <tbody>${bidders.map(b=>bidderRow(b,b===me,basis)).join('')}</tbody></table></div>`:''}
-    <div class="pkg-footer"><span class="small muted">${timeNotes.length?timeNotes.map(n=>`${esc(n.label)} · ${esc(formatDate(n.at))}`).join('<br>'):'Bảng sẽ hiện ngay khi nhận được dữ liệu.'}</span>
-      <button class="btn light retry-one" data-retry="${esc(p.key)}" ${running()?'disabled':''}>${bidders.length?'Cập nhật biên bản':'Đọc lại gói này'}</button></div></article>`;
+    <div class="pkg-footer"><span class="small muted">${insufficient?'Chưa đưa vào hàng đợi đọc; mở hồ sơ nguồn để kiểm tra tiêu chí.':timeNotes.length?timeNotes.map(n=>`${esc(n.label)} · ${esc(formatDate(n.at))}`).join('<br>'):'Bảng sẽ hiện ngay khi nhận được dữ liệu.'}</span>
+      ${insufficient?'':`<button class="btn light retry-one" data-retry="${esc(p.key)}" ${running()?'disabled':''}>${bidders.length?'Cập nhật biên bản':'Đọc lại gói này'}</button>`}</div></article>`;
 }
 function render(){
   if(!SCAN)return;
   const packages=SCAN.packages||[],s=summarizeBidOpenings(packages,SCAN.focusTaxCode,SCAN.contractorQuery);
+  const insufficient=SCAN.insufficientPackages||[];
+  show($('insufficient-wrap'),insufficient.length>0);
+  $('insufficient-title').textContent=`${insufficient.length} gói chưa đủ dữ liệu đối chiếu`;
+  $('insufficient-list').innerHTML=insufficient.map(p=>packageCard(p,null,true)).join('');
   const complete=packages.filter(p=>['OK','EMPTY'].includes(bbmtReadStateOf(p))).length;
   const missing=packages.length-complete,watching=Boolean(SCAN.focusTaxCode||SCAN.contractorQuery);
   show($('summary'),packages.length>0);show($('list-title'),packages.length>0);show($('only-wrap'),watching);
@@ -125,7 +131,8 @@ function render(){
   const cards=packages.flatMap(p=>{const me=watching?findBidder(p.bidders,SCAN.focusTaxCode,SCAN.contractorQuery):null;return only&&!me?[]:[packageCard(p,me)];});
   const html=cards.join('')||(packages.length?'<div class="notice">Chưa thấy nhà thầu theo dõi trong các bảng đã đọc. Bỏ chọn bộ lọc để xem tiến độ của toàn bộ gói.</div>':'');
   if(html!==listHtml){$('list').innerHTML=html;listHtml=html;}
-  if(!running())alertBox([['ERROR','PARTIAL'].includes(SCAN.status)?SCAN.message:'',s.ambiguityNote].filter(Boolean).join(' '),SCAN.status==='ERROR');
+  const coverage=SCAN.coverage?(SCAN.coverage.text||coverageText(SCAN.coverage)):'';
+  alertBox([coverage,['ERROR','PARTIAL'].includes(SCAN.status)?SCAN.message:'',s.ambiguityNote,insufficient.length?`${insufficient.length} gói chưa đủ dữ liệu được giữ ở nhóm riêng bên dưới.`:''].filter(Boolean).join(' '),SCAN.status==='ERROR');
 }
 async function retry(key){
   if(starting||running())return;starting=true;$('retry-missing').disabled=true;
@@ -137,7 +144,7 @@ $('only').addEventListener('change',render);
 $('retry-missing').addEventListener('click',()=>retry());
 $('list').addEventListener('click',e=>{const b=e.target.closest('[data-retry]');if(b)void retry(b.dataset.retry);});
 $('stop').addEventListener('click',async()=>{$('stop').disabled=true;await send('CANCEL_BID_OPEN_SCAN');await refresh();});
-$('csv').addEventListener('click',async()=>{try{const r=await send('EXPORT_BID_OPEN_CSV');if(!r?.ok)alertBox(r?.message||'Không xuất được Excel.',true);}catch(e){alertBox(e.message,true);}});
+$('csv').addEventListener('click',async()=>{try{const r=await send('EXPORT_BID_OPEN_CSV',{onlyFollowed:Boolean(SCAN?.focusTaxCode||SCAN?.contractorQuery)&&$('only').checked});if(!r?.ok)alertBox(r?.message||'Không xuất được Excel.',true);}catch(e){alertBox(e.message,true);}});
 chrome.storage.onChanged.addListener((changes,area)=>{if(area==='local'&&changes.bidOpenScan)void refresh();});
 window.addEventListener('pagehide',()=>{if(POLL)clearInterval(POLL);});
 void send('RECONCILE_LOOKUPS').then(refresh).catch(refresh);

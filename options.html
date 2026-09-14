@@ -51,12 +51,12 @@
         <div id="tgMsg" class="small full" role="status"></div>
         <div class="full"><label class="checkline"><input id="telegramEnabled" type="checkbox"><b>Bật gửi tự động</b> — gửi gói mới đạt ngưỡng</label><label class="checkline"><input id="telegramDailySummary" type="checkbox">Nhắn cả khi không có gói mới</label></div>
         <div class="full"><label for="notifyEmail">Email soạn thư (mailto — tiện ích không gửi SMTP hộ)</label><input id="notifyEmail" placeholder="thau@congty.vn"></div>
-        <div class="full"><label for="notifyWebhook">Webhook HTTPS cho Zalo/n8n</label><input id="notifyWebhook" placeholder="https://…" autocomplete="off"></div>
-        <div class="full"><label for="webhookSecret">Khóa HMAC webhook (header X-GSCB-Signature)</label><input id="webhookSecret" type="password" autocomplete="off"></div>
+        <input id="notifyWebhook" type="hidden" value="">
+        <div class="full"><label for="webhookSecret">Khóa ký gói đồng bộ JSON giữa các máy</label><input id="webhookSecret" type="password" autocomplete="off"><small class="muted">Dùng cùng khóa ở hai máy để kiểm tra gói có bị thay đổi. Đây không phải chữ ký số của cá nhân.</small></div>
         <div class="full"><label for="operatorName">Người dùng trên máy này</label><input id="operatorName" placeholder="Ví dụ: An — hồ sơ thầu" maxlength="80"></div>
         <div class="full"><label for="approvalSteps">Số bước duyệt Go</label>
-          <select id="approvalSteps"><option value="3">3 bước: đề xuất → kỹ thuật → giám đốc</option><option value="2">2 bước</option></select></div>
-        <div class="full"><label class="checkline"><input id="readOnlyMode" type="checkbox"><b>Chế độ chỉ xem (máy thanh tra)</b></label></div>
+          <select id="approvalSteps"><option value="1">1 bước: tự ghi quyết định</option><option value="2">2 bước: đề xuất → xác nhận</option><option value="3">3 bước: đề xuất → kỹ thuật → xác nhận</option></select><small class="muted">Tên người thao tác là thông tin ghi nhận trên máy, chưa được xác thực bằng tài khoản riêng.</small></div>
+        <div class="full"><label class="checkline"><input id="readOnlyMode" type="checkbox"><b>Chỉ xem — khóa chỉnh sửa và lịch tự động</b></label><small class="muted">Có thể tắt tại đây. Đây là khóa thao tác trên máy, không phải cơ chế phân quyền tài khoản.</small></div>
         <div class="full"><div class="row space"><b class="small">Nhật ký gửi gần đây</b><button id="tgRefresh" class="btn light" type="button">Làm mới</button></div><div id="tgLog" class="muted small" style="margin-top:6px">—</div></div>
       </div>
 

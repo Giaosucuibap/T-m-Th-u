@@ -26,13 +26,22 @@ const dateFilters = (q) => q.filters.filter((f) => f.fieldName === 'publicDate')
  *  1. Bộ lọc gửi lên máy chủ
  * ------------------------------------------------------------------------ */
 
-test('bộ lọc thời gian dùng range + epoch mili-giây', () => {
-  const fs = dateFilters(buildKhlcntQuery({ fromDate: '2026-06-01', toDate: '2026-09-02' }));
-  assert.equal(fs.length, 1, 'phải có đúng một bộ lọc khoảng thời gian');
-  assert.equal(fs[0].searchType, 'range');
-  assert.equal(typeof fs[0].from, 'number');
-  assert.equal(typeof fs[0].to, 'number');
-  assert.equal(fs[0].fieldValues, undefined, 'range không dùng fieldValues');
+test('KHÔNG gửi bộ lọc ngày lên máy chủ cho màn hình kế hoạch', () => {
+  /* Bài này trước đây đòi ngược lại: phải có một filter `range` trên publicDate,
+     nới biên 30 ngày. Đã đổi từ 4.10.1, và đổi đúng.
+
+     Máy chủ chỉ lọc được NGÀY ĐĂNG TẢI, còn người dùng chọn NGÀY PHÊ DUYỆT.
+     Nới biên 30 ngày chỉ che được phần lớn độ lệch chứ không che hết: kế hoạch
+     phê duyệt tháng 6 mà mãi tháng 8 mới đăng vẫn rơi ra ngoài biên và BỊ MẤT
+     — không một lời báo. Bỏ hẳn lớp máy chủ thì chậm hơn, đổi lại không bỏ sót.
+
+     Đây là cùng một kết luận đã áp dụng cho màn hình mở thầu: thà một lớp đúng
+     còn hơn hai lớp mà một lớp nói sai chuyện. */
+  for (const scope of [{ fromDate: '2026-06-01', toDate: '2026-09-02' }, { days: 90 }]) {
+    assert.equal(dateFilters(buildKhlcntQuery(scope)).length, 0,
+      `${JSON.stringify(scope)} không được sinh filter ngày gửi lên máy chủ`);
+  }
+  assert.equal(KHLCNT_SERVER_PAD_DAYS, 0, 'không còn nới biên vì không còn lớp máy chủ');
 });
 
 test('không còn greater_equal/less_equal — dạng e-GP bỏ qua lặng lẽ', () => {
@@ -48,30 +57,22 @@ test('không chọn thời gian thì không sinh bộ lọc khoảng', () => {
   assert.equal(dateFilters(buildKhlcntQuery({ investor: 'đức trọng' })).length, 0);
 });
 
-test('khoảng gửi lên máy chủ được NỚI BIÊN so với khoảng người dùng chọn', () => {
-  // Máy chủ soi ngày ĐĂNG TẢI, lớp tại chỗ soi ngày PHÊ DUYỆT. Hai mốc lệch
-  // nhau vài ngày; không nới biên thì máy chủ cắt mất kế hoạch mà lớp tại chỗ
-  // lẽ ra giữ — tức là BỎ SÓT.
-  const scope = { fromDate: '2026-06-01', toDate: '2026-09-02' };
-  const chon = dateRangeFrom(scope);
-  const [f] = dateFilters(buildKhlcntQuery(scope));
-  const padMs = KHLCNT_SERVER_PAD_DAYS * 86400000;
-
-  assert.equal(f.from, chon.from - padMs);
-  assert.equal(f.to, chon.to + padMs);
-  assert.ok(f.from < chon.from, 'biên dưới phải rộng hơn khoảng người dùng chọn');
-  assert.ok(f.to > chon.to, 'biên trên phải rộng hơn khoảng người dùng chọn');
+test('lớp tại chỗ vẫn khoanh đúng khoảng người dùng chọn', () => {
+  // Bỏ lớp máy chủ thì lớp tại chỗ là lớp DUY NHẤT — càng phải đúng.
+  const r = khlcntDateRange({ fromDate: '2026-06-01', toDate: '2026-09-02' });
+  assert.equal(khlcntInDateRange({ decisionDate: '2026-06-01T05:00:00+07:00' }, r), true);
+  assert.equal(khlcntInDateRange({ decisionDate: '2026-09-02T23:30:00+07:00' }, r), true);
+  assert.equal(khlcntInDateRange({ decisionDate: '2026-05-31T23:30:00+07:00' }, r), false);
+  assert.equal(khlcntInDateRange({ decisionDate: '2026-09-03T00:30:00+07:00' }, r), false);
 });
 
-test('bộ lọc ngày không thay thế bộ lọc địa bàn và loại bản ghi', () => {
-  const q = buildKhlcntQuery({
-    provinces: ['68', '703'], wards: ['23122'], days: 90
-  });
-  const names = q.filters.map((f) => f.fieldName);
-  assert.ok(names.includes('type'));
-  assert.ok(names.includes('locations.provCode'));
-  assert.ok(names.includes('locations.districtCode'));
-  assert.ok(names.includes('publicDate'));
+test('bỏ lọc ngày ở máy chủ KHÔNG được làm mất bộ lọc địa bàn', () => {
+  // Rủi ro khi gỡ một filter là gỡ nhầm cả các filter bên cạnh.
+  const names = buildKhlcntQuery({ provinces: ['68', '703'], wards: ['23122'], days: 90 })
+    .filters.map((f) => f.fieldName);
+  assert.ok(names.includes('type'), 'vẫn phải lọc đúng loại bản ghi kế hoạch');
+  assert.ok(names.includes('locations.provCode'), 'vẫn phải lọc tỉnh ở máy chủ');
+  assert.ok(names.includes('locations.districtCode'), 'vẫn phải lọc xã/phường ở máy chủ');
 });
 
 /* --------------------------------------------------------------------------
@@ -99,10 +100,21 @@ test('đối chiếu NGÀY PHÊ DUYỆT trước, vì đó là ngày hiển th�
     { decisionDate: '2025-08-15T09:00:00', publicDate: '2026-08-20T09:00:00' }, r), false);
 });
 
-test('thiếu ngày phê duyệt thì lùi về ngày đăng tải', () => {
+test('thiếu ngày phê duyệt thì GIỮ LẠI, không lấy ngày đăng tải thay thế', () => {
+  /* Đổi từ 4.10.1, và đổi đúng. Người dùng chọn "kế hoạch phê duyệt trong
+     khoảng"; lấy ngày ĐĂNG TẢI thay vào là trả lời một câu hỏi khác rồi dán
+     nhãn câu hỏi đã hỏi. Hai mốc này lệch nhau hàng tháng.
+
+     Không có ngày phê duyệt thì câu trả lời đúng là CHƯA BIẾT — giữ lại để
+     người dùng tự xem, chứ không tự quyết thay bằng một trường khác. */
   const r = khlcntDateRange({ fromDate: '2026-08-01', toDate: '2026-08-31' });
-  assert.equal(khlcntInDateRange({ publicDate: '2026-08-15T09:00:00' }, r), true);
-  assert.equal(khlcntInDateRange({ publicDate: '2025-08-15T09:00:00' }, r), false);
+  assert.equal(khlcntInDateRange({ publicDate: '2026-08-15T09:00:00+07:00' }, r), true,
+    'không có ngày phê duyệt -> giữ lại');
+  assert.equal(khlcntInDateRange({ publicDate: '2025-08-15T09:00:00+07:00' }, r), true,
+    'kể cả khi ngày ĐĂNG TẢI nằm ngoài khoảng, vẫn giữ vì chưa biết ngày phê duyệt');
+  // Có ngày phê duyệt thì mới được phép loại.
+  assert.equal(khlcntInDateRange(
+    { decisionDate: '2025-08-15T09:00:00+07:00', publicDate: '2026-08-20T09:00:00+07:00' }, r), false);
 });
 
 test('kế hoạch không có mốc thời gian nào thì GIỮ LẠI', () => {

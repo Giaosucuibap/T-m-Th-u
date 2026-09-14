@@ -2,6 +2,106 @@
 
 Tài liệu này ghi lại các thay đổi quan trọng của Giáo Sư Cùi Bắp. Cấu trúc tham khảo [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) và phiên bản tuân theo cách đánh số ngữ nghĩa ở mức sản phẩm.
 
+## [4.11.0] — 2026-09-14
+
+Nhận bản **4.10.1** của tác giả làm nền, rồi làm tiếp nhóm **B1 — Chính xác hơn nữa**.
+
+Bộ kiểm thử: **453 bài, xanh trên cả 4 múi giờ** (UTC, Asia/Ho_Chi_Minh,
+America/New_York, Pacific/Auckland). Mỗi mục dưới đây đều đã được kiểm bằng cách
+hoàn tác mã nguồn và xác nhận bài thử báo đỏ — một bài thử chưa từng đỏ thì chưa
+chứng minh được điều gì.
+
+### Khớp xã theo MÃ, không chỉ theo chữ *(B1.3)*
+
+`lib/area-match.js` thêm lớp đối chiếu theo `parentCode`. Trước đây tiêu chí
+"Đức Trọng" khớp bằng cụm chữ, nên một xã trùng tên ở tỉnh khác cũng lọt vào —
+và người dùng không có cách nào biết. Nay:
+
+1. Hai bên đều có mã → kết luận dứt khoát theo mã.
+2. Chỉ một bên có mã → đối chiếu tên, có giới hạn theo mã tỉnh.
+3. Không đủ căn cứ → **`Chưa đủ dữ liệu`**, giữ lại cho người dùng tự xét, chứ
+   không âm thầm vứt đi.
+
+`tests/ward-code.test.js` — 14 bài. Hoàn tác về khớp chữ làm đỏ 2 bài.
+
+### Canary sống — đối chứng với e-GP thật *(B1.1)*
+
+Toàn bộ 453 bài hiện chạy trên dữ liệu tự dựng. Chúng chứng minh phần mềm không
+tự hỏng, và **chỉ vậy**. Chúng không biết e-GP vừa đổi tên một trường hay vừa bỏ
+một mã tỉnh — đúng những thứ làm phần mềm trả kết quả thiếu mà vẫn xanh hết.
+
+`lib/canary-live.js` lấp chỗ đó, canh ba thứ: **trường biến mất**, **mã biến
+mất**, và **mã địa bàn trôi** (Lâm Đồng phải giữ cả `68` lẫn `703` — mất `703`
+là bỏ sót lặng lẽ toàn bộ hồ sơ trước 1/7/2025).
+
+Node không có token của trang e-GP nên không gọi được endpoint tìm kiếm. Vì vậy
+chia đôi: chạy thật trong tiện ích (**Chẩn đoán → "Chạy canary sống"**, sau 22h),
+ghi ra `canary-result.json`; `npm test` đọc tệp đó và **chặn bản dựng** nếu đỏ
+hoặc quá 10 ngày. Chưa chạy lần nào thì chỉ cảnh báo to — chặn ở đó thì không ai
+cài được lần đầu và người ta sẽ học cách bỏ qua bài thử.
+
+`tests/canary-live.test.js` (17 bài) + `tests/canary-gate.test.js` (2 bài).
+
+**Còn dở, nói rõ:** danh sách mới có 9 mã, trong đó 4 mã đã đọc được trên e-GP
+thật (`source:'observed'`), 5 mã mới lấy từ kết quả tìm kiếm chưa mở chi tiết
+(`source:'candidate'`). Yêu cầu là 20–30 mã. Phần tra từng mã **chưa tự động**;
+màn hình Chẩn đoán ghi thẳng `0/9 — chưa tự động` chứ không báo đạt.
+
+### Một cửa duy nhất cho lọc, thống kê và xuất *(B1.4)*
+
+Bản 4.10.1 đã gom về một cửa: `passesHardFilter()` chấm từng bản ghi trước khi
+lưu. `tests/mot-cua-duy-nhat.test.js` (11 bài) khoá lại điều đó, và bài quan
+trọng nhất **cắt đúng hàm `exportCsv` trong `background.js` ra chạy thật** với
+danh sách khoá y hệt cái màn hình gửi sang, trên 7 tổ hợp bộ lọc. Chèn thử một
+bộ lọc điểm riêng vào đường xuất → bài này đỏ ngay.
+
+Kèm theo: mọi lý do loại trừ phát ra đều phải có nhãn tiếng Việt; cổng phải
+thuần (đảo thứ tự chấm vẫn ra cùng kết quả, không sửa dữ liệu gốc); gói thiếu
+giá vẫn phải có trong tệp với ô giá **trống**, không phải "0 đ".
+
+### Bỏ chữ "tuyệt đối" khỏi giao diện *(B1.5)*
+
+Dữ liệu nằm ở một hệ thống bên ngoài mà phần mềm này không kiểm soát. Hứa "chính
+xác tuyệt đối" với người đi đấu thầu là có hại thật: họ sẽ thôi đối chiếu lại
+với e-GP, và một lần bỏ sót sẽ không ai phát hiện. Đã bỏ lời hứa còn sót trong
+`winners.js`. `tests/khong-hua-tuyet-doi.test.js` quét chuỗi người-dùng-đọc và
+chặn 5 mẫu hứa hẹn, kèm phép tự kiểm để bộ mẫu không xanh một cách vô nghĩa.
+
+### Loại gói theo `investField` *(B1.2)* — đã đúng sẵn
+
+Kiểm lại `matchesTenderCategory`: nó đã đọc `tenderFieldOf(record)` trước, tên
+gói chỉ dùng phụ để phân nhánh tư vấn. Không sửa gì.
+
+## [4.10.1] — 2026-09-14 · của tác giả
+
+Hợp nhất nguyên trạng. Những thay đổi đáng kể nhất, đã kiểm chứng lại:
+
+- **Cổng ba trạng thái** `Khớp / Chưa đủ dữ liệu / Ngoài tiêu chí` cùng 26 lý do
+  loại trừ đặt tên rõ ràng (`lib/hard-filter.js`, `lib/match-gate.js`).
+- **Đối soát số lượng trên thông báo kết thúc**: *"e-GP báo 137 · đã tải 137 ·
+  khớp 123 · ngoài tiêu chí 14 · trang 3/3"*.
+- **Bỏ hẳn bộ lọc ngày gửi lên máy chủ ở màn hình kế hoạch.** Máy chủ chỉ lọc
+  được ngày ĐĂNG TẢI còn người dùng chọn ngày PHÊ DUYỆT; nới biên 30 ngày chỉ
+  che được phần lớn độ lệch, kế hoạch phê duyệt tháng 6 mà tháng 8 mới đăng vẫn
+  bị mất. Bỏ hẳn thì chậm hơn, đổi lại không bỏ sót.
+- **Thiếu ngày phê duyệt thì GIỮ LẠI**, không lấy ngày đăng tải thay thế — lấy
+  mốc khác thay vào là trả lời một câu hỏi khác rồi dán nhãn câu hỏi đã hỏi.
+- **Từ chối chạy khi chưa tra được danh mục địa bàn**, thay vì âm thầm bỏ tiêu
+  chí tỉnh rồi tìm toàn quốc.
+- Bộ kiểm thử `node:vm` nạp thẳng `background.js` với `chrome` API giả lập.
+
+### Phép thử của nhánh này phải cập nhật theo
+
+Bốn bài về bộ lọc ngày KHLCNT đang khoá lại hành vi CŨ (nới biên máy chủ, lùi về
+ngày đăng tải). Hành vi mới đúng hơn, nên sửa bài chứ không sửa mã.
+
+Hai bài an toàn neo vào chuỗi mã nguồn cũng vỡ, **không phải vì mất điều kiện an
+toàn nào** mà vì mốc cắt đoạn và danh sách khoá đã đổi hợp lệ. Đã viết lại theo
+hướng kiểm *tính chất*: `PLAN_KEYS` nay được kiểm là danh sách trắng đóng không
+chứa `url`/`method`/`headers`/`token`, thay cho việc ghim cứng đúng ba phần tử —
+cách cũ khiến một bổ sung hợp lệ cũng báo đỏ, và người sửa sẽ học cách nới nó ra
+cho xong, mất luôn tác dụng bảo vệ.
+
 ## [4.9.2] — 2026-09-11
 
 Sửa cửa sổ popup bị bóp hẹp và nội dung nhảy loạn.

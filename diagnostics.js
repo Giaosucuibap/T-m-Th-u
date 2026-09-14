@@ -9,6 +9,12 @@ import {
 } from './lib/core.js';
 import { redactSettings, stripSecretsDeep } from './lib/redact.js';
 import { safeRunForBackup } from './lib/backup.js';
+import { canaryCheck } from './lib/canary.js';
+import { evaluateLiveCanary, canaryGate, inCanaryWindow, LIVE_CANARY_CODES } from './lib/canary-live.js';
+import { normalizeKhlcntPlan } from './lib/khlcnt.js';
+import { dateGate } from './lib/match-gate.js';
+import { matchesAreaCodes } from './lib/area-match.js';
+import { dateRangeFrom, firstStampMs } from './lib/core.js';
 
 const $ = (id) => document.getElementById(id);
 const msg = (type, payload = {}) => chrome.runtime.sendMessage({ type, payload });
@@ -43,7 +49,12 @@ $('test').onclick = () => {
   };
   const cand = normalizeCandidate(sample, { sourcePageUrl: 'https://muasamcong.mpi.gov.vn/' });
   const score = scoreTender(cand, DEFAULT_SETTINGS);
+  const canary=canaryCheck({tbmt:normalizeCandidate,khlcnt:normalizeKhlcntPlan},parseDate);
   const tests = {
+    canary: canary.ok,
+    vnDay: dateRangeFrom({fromDate:'2026-06-01',toDate:'2026-06-01'}).from===Date.parse('2026-05-31T17:00:00.000Z'),
+    gate: dateGate(firstStampMs({publicDate:'01/06/2026 05:00'},['publicDate']),dateRangeFrom({fromDate:'2026-06-01',toDate:'2026-06-01'}))==='MATCH',
+    area: matchesAreaCodes({provinceCode:'703'},'Lâm Đồng').ok===true,
     money: parseMoney('68.500.000.000 đồng') === 68500000000,
     date: Boolean(parseDate('20/08/2026 09:00')),
     version: normalizeVersion(1) === '01',
@@ -51,7 +62,7 @@ $('test').onclick = () => {
     normalize: cand?.notifyNo === 'IB2600123456',
     score: score.score > 0
   };
-  $('result').textContent = JSON.stringify(tests, null, 2);
+  $('result').textContent = JSON.stringify({...tests,allPassed:Object.values(tests).every(v=>v===true),canaryDetail:canary,_phạmVi:'Mẫu kiểm thử cục bộ; không xác nhận kết nối hay độ đầy đủ của dữ liệu e-GP hiện tại.'}, null, 2);
 };
 
 $('export').onclick = async () => {
@@ -140,3 +151,68 @@ document.getElementById('epCopy').onclick = async () => {
 };
 
 epLoad();
+
+
+/* ---------------------------------------------------------------------------
+ *  CANARY SỐNG
+ *
+ *  Nửa BẤT BIẾN ĐỊA BÀN chạy được ngay: danh mục địa bàn của e-GP gọi được mà
+ *  không cần token. Đây cũng là nửa nguy hiểm hơn — mã tỉnh trôi thì kết quả
+ *  thiếu đi một cách lặng lẽ, không ai thấy bằng mắt.
+ *
+ *  Nửa ĐỐI CHỨNG TỪNG MÃ GÓI cần một lượt quét qua tab e-GP; chưa nối. Giao
+ *  diện nói rõ điều đó thay vì để người dùng tưởng đã kiểm đủ.
+ * ------------------------------------------------------------------------- */
+let CANARY_KQ = null;
+
+$('canaryRun').onclick = async () => {
+  const btn = $('canaryRun');
+  btn.disabled = true;
+  $('canaryMsg').textContent = 'Đang tải danh mục địa bàn từ e-GP…';
+  $('canaryOut').textContent = '';
+
+  const gioVn = Number(new Date().toLocaleString('en-GB', { timeZone: 'Asia/Ho_Chi_Minh', hour: '2-digit', hour12: false }));
+  const ngoaiGio = !inCanaryWindow(gioVn);
+
+  const res = await msg('CANARY_AREAS').catch((e) => ({ ok: false, message: String(e.message || e) }));
+  if (!res || res.ok === false || !res.areas) {
+    btn.disabled = false;
+    $('canaryMsg').textContent = 'Chưa tải được danh mục địa bàn: ' + ((res && res.message) || 'không rõ nguyên nhân')
+      + ' — chưa kết luận được gì, KHÔNG coi là đạt.';
+    return;
+  }
+
+  // Chưa nối phần đọc từng mã gói -> không truyền quan sát nào, nên mọi mã ghi
+  // NOT_RUN. Đó là sự thật, và evaluateLiveCanary sẽ không báo đạt.
+  CANARY_KQ = { ...evaluateLiveCanary([], res.areas), runHourVn: gioVn, outOfHours: ngoaiGio };
+  const gate = canaryGate(CANARY_KQ);
+  const troi = CANARY_KQ.areaRows.filter((r) => r.status === 'AREA_DRIFT');
+
+  $('canaryMsg').textContent =
+    (troi.length
+      ? `⛔ MÃ ĐỊA BÀN ĐÃ TRÔI: ${troi.map((r) => `${r.name} thiếu mã ${r.missing.join(', ')}`).join('; ')}. `
+        + 'Mọi lượt tra địa bàn này đang bỏ sót dữ liệu cũ.'
+      : `✓ Bất biến địa bàn còn đúng (${CANARY_KQ.areaRows.length} tỉnh đã kiểm).`)
+    + ` · Đối chứng mã gói: 0/${LIVE_CANARY_CODES.length} — phần này CHƯA TỰ ĐỘNG, phải tra tay từng mã.`
+    + (ngoaiGio ? ` · Lưu ý: đang ${gioVn}h, nên chạy sau 22h.` : '');
+
+  $('canaryOut').textContent = JSON.stringify({
+    batBienDiaBan: CANARY_KQ.areaRows,
+    doiChungMaGoi: `0/${LIVE_CANARY_CODES.length} — chưa tự động`,
+    congChanBanDung: gate,
+    _phamVi: 'Mới kiểm bất biến địa bàn. Chưa đối chứng từng mã gói trên e-GP.'
+  }, null, 2);
+
+  $('canarySave').disabled = false;
+  btn.disabled = false;
+};
+
+$('canarySave').onclick = () => {
+  if (!CANARY_KQ) return;
+  const blob = new Blob([JSON.stringify(CANARY_KQ, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'canary-result.json';
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+};

@@ -183,6 +183,7 @@ async function refresh() {
   }
 
   clearInterval(POLL);
+  POLL = null;
   show($('progress'), false);
 
   if (scan.status === 'ERROR') { alertBox(esc(scan.message), 'error'); return; }
@@ -540,26 +541,33 @@ $('clear').addEventListener('click', clearFilters);
    chết từ đời nào — trông như phần mềm tự động chạy. */
 async function renderHeat() {
   try {
-    const { districtHeat, heatBar } = await import('./lib/heatmap.js');
+    const { districtHeat } = await import('./lib/heatmap.js');
     const s = await send('GET_STATE');
-    const rows = districtHeat(s.tenders || [], s.areas || []).slice(0, 20);
+    if (!s?.ok) throw new Error(s?.message || 'Chưa đọc được kho gói.');
+    const rows = districtHeat(s.tenders || [], s.areas || []);
     const box = $('heat-list');
     if (!box) return;
-    box.innerHTML = rows.map((r) => `<div style="margin:6px 0"><b>${esc(r.label)}</b> · ${r.count} gói · ${money(r.value)}<div class="bar"><i style="width:${Math.round(r.heat*100)}%;animation:none;margin:0"></i></div></div>`).join('') || 'Kho gói còn trống.';
-    if (window.L && $('heat-map') && rows.length) {
+    box.innerHTML = rows.map((r) => `<div style="margin:6px 0"><b>${esc(r.label)}</b> · ${r.count} gói · ${money(r.value)} (${r.knownPrices}/${r.count} gói có giá)${r.mapped ? ' · điểm tham chiếu tỉnh' : ' · không đặt điểm trên bản đồ'}<div class="bar"><i style="width:${Math.round(r.heat*100)}%;animation:none;margin:0"></i></div></div>`).join('') || 'Kho gói còn trống.';
+    const mapped = rows.filter((r) => r.mapped);
+    show($('heat-map'), Boolean(mapped.length));
+    if (window.L && $('heat-map') && mapped.length) {
       const map = window.L.map('heat-map').setView([12.2, 108.4], 6);
-      window.L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OSM', maxZoom: 12 }).addTo(map);
-      for (const r of rows) {
-        if (!r.lat) continue;
+      const tiles = window.L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>', maxZoom: 12 });
+      tiles.on('tileerror', () => { $('heat-detail').textContent = 'Nền bản đồ chưa tải được. Bảng số liệu theo tỉnh bên dưới vẫn xem được.'; });
+      tiles.addTo(map);
+      for (const r of mapped) {
         const marker = window.L.circleMarker([r.lat, r.lng], { radius: 6 + r.heat * 10, color: '#0f766e', fillOpacity: 0.5 });
         marker.on('click', () => {
-          $('heat-detail').innerHTML = `<b>${esc(r.label)}</b><br>` + (r.tenders || []).map((t) => `${esc(t.notifyNo || '')} · ${esc(t.bidName || '')}`).join('<br>');
+          $('heat-detail').innerHTML = `<b>${esc(r.label)} · điểm tỉnh gần đúng</b><br>` + (r.tenders || []).map((t) => `${esc(t.notifyNo || '')} · ${esc(t.bidName || '')}`).join('<br>') + (r.count > r.tenders.length ? `<br>Hiển thị ${r.tenders.length}/${r.count} gói; số đếm bao gồm cả nhóm.` : '');
         });
-        marker.bindTooltip(`${r.label} · ${r.count} gói`);
+        const tooltip = document.createElement('span');
+        tooltip.textContent = `${r.label} · ${r.count} gói · điểm tỉnh gần đúng`;
+        marker.bindTooltip(tooltip);
         marker.addTo(map);
       }
+      map.fitBounds(mapped.map((r) => [r.lat, r.lng]), { padding: [25, 25], maxZoom: 7 });
     }
-  } catch {}
+  } catch (error) { $('heat-list').textContent = error?.message || 'Chưa vẽ được bảng địa bàn.'; }
 }
 
 (async () => {

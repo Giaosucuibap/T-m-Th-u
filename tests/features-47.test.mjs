@@ -24,9 +24,10 @@ test('checklist đến hạn theo giờ còn lại', () => {
   assert.ok(!due.some((x) => x.id === 'hsmt'));
 });
 
-test('HĐ tương tự cửa sổ 5 năm', () => {
-  assert.equal(contractExpiryAlert({ year: 2018 }).level, 'het');
-  assert.equal(contractExpiryAlert({ year: new Date().getFullYear() }).level, 'con');
+test('HĐ tương tự chỉ nhắc mốc năm do người dùng cấu hình', () => {
+  assert.equal(contractExpiryAlert({ year: 2018, windowYears: 5 }).level, 'het');
+  assert.equal(contractExpiryAlert({ year: new Date().getFullYear(), windowYears: 5 }).level, 'con');
+  assert.equal(contractExpiryAlert({ year: 2018 }).level, '');
 });
 
 test('bản đồ ưu tiên mã tỉnh e-GP 68', () => {
@@ -44,7 +45,7 @@ test('diff DOM highlight token thêm/bớt', () => {
 });
 
 test('duyệt Go hai người', () => {
-  const a = applyApproval({ decisionState: 'REVIEW' }, 'An', 'GO');
+  const a = applyApproval({ decisionState: 'REVIEW' }, 'An', 'GO', 2);
   assert.equal(a.tender.decisionProposedBy, 'An');
   const same = applyApproval(a.tender, 'An', 'GO', 2);
   assert.equal(same.ok, false);
@@ -56,7 +57,7 @@ test('duyệt Go hai người', () => {
 
 test('phân vị giá bỏ cùng CĐT', () => {
   const tenders = [{ key: 'IB1::00', notifyNo: 'IB1', investorName: 'Ban QLDA Lâm Đồng', location: 'Lâm Đồng' }];
-  const parts = [8, 10, 12, 20].map((p) => ({ notifyNo: 'IB1', version: '00', bidPrice: p * 1e9, contractorName: 'X', taxCode: '1' }));
+  const parts = [8, 10, 12, 20].map((p, i) => ({ notifyNo: 'IB1', version: '00', bidPrice: p * 1e9, contractorName: `X${i}`, taxCode: String(i + 1) }));
   const pct = marketBidPercentiles(parts, tenders, { investor: 'Ban QLDA Lâm Đồng' });
   assert.equal(pct.n, 4);
   assert.ok(pct.p25 <= pct.p50 && pct.p50 <= pct.p75);

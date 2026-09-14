@@ -102,10 +102,10 @@
         Chủ đầu tư, từ khóa, tỉnh và xã/phường gửi đến bộ tìm kiếm e-GP.
         Loại gói thầu đối chiếu từng gói trong kế hoạch; các nhóm tư vấn thiết kế, giám sát… nhận diện theo tên gói.
         Khi chọn loại, bảng và tổng giá chỉ tính <b>các gói khớp</b> trong những kế hoạch đã tải.
-        Danh sách xã/phường lấy trực tiếp từ e-GP, gồm cả <b>tên huyện/xã trước sáp nhập</b>,
-        nên không bỏ sót kế hoạch đăng trước 01/7/2025.
-        Nếu <b>chỉ</b> chọn tỉnh, phần mềm lấy 2.000 kế hoạch gần nhất rồi báo lại —
-        thêm Xã/Phường hoặc Chủ đầu tư để lấy đủ.
+        Khoảng ngày được đối chiếu với <b>ngày phê duyệt</b> trong dữ liệu đã tải; kế hoạch thiếu ngày nằm ở nhóm riêng để xem lại.
+        Danh mục xã/phường lấy từ e-GP và có thể gồm tên huyện/xã trước sáp nhập.
+        Tối đa 2.000 kế hoạch trong một lượt. Khi chưa tải hết, phần đối soát sẽ ghi rõ kết quả một phần;
+        thêm Xã/Phường hoặc Chủ đầu tư để thu hẹp phạm vi.
       </div>
     </div>
 
@@ -144,6 +144,7 @@
     </label>
 
     <div id="list"></div>
+    <details id="insufficient-wrap" class="notice hidden"><summary id="insufficient-title">Kế hoạch chưa đủ dữ liệu</summary><p>Nhóm này chưa được tính vào kết quả khớp và tổng giá. Mở hồ sơ e-GP để đối chiếu phần còn thiếu.</p><div id="insufficient-list"></div></details>
   </main>
 
   <script type="module" src="plans.js"></script>

@@ -354,6 +354,14 @@
    * `plan.pageSize` trước khi request rời trình duyệt.
    */
   function kqTriggerFirstPage(){
+    // Changing page size does not reset e-GP's current page. A new query after
+    // page 2 would otherwise begin at pageNumber 1 and silently miss page 0.
+    // Click the native first page so its internal pager and request stay aligned.
+    const first=[...document.querySelectorAll('.el-pagination .el-pager li.number')]
+      .find(el=>el.offsetParent!==null&&clean(el.textContent)==='1');
+    if(first&&!first.classList.contains('active')){
+      const wait=kqAwaitPage();first.click();return wait;
+    }
     const sel=kqPageSizeSelect();
     if(!sel)return Promise.resolve(null);
     const values=[...sel.options].map(o=>o.value);
@@ -376,13 +384,17 @@
    *
    * Gửi lại tối đa 5 lần, mỗi lần chờ 400ms.
    */
+  function kqSameQuery(payload,plan){
+    return Boolean(plan)&&payload?.planId===plan.id&&(payload.queryIndex??0)===(plan.queryIndex??0);
+  }
+
   function kqSendPlanToHook(plan){
     return new Promise(resolve=>{
       let tries=0,settled=false;
       const onAck=event=>{
         if(event.source!==window||event.data?.source!==PAGE_SOURCE)return;
         if(event.data.type!=='KQLCNT_PLAN_ACK')return;
-        if(event.data.payload?.planId!==plan.id)return;
+        if(!kqSameQuery(event.data.payload,plan)||event.data.payload.accepted===false)return;
         settled=true;
         window.removeEventListener('message',onAck);
         clearInterval(timer);
@@ -397,7 +409,7 @@
           resolve(false);
           return;
         }
-        postPage('KQLCNT_PLAN',{id:plan.id,query:plan.query,pageSize:plan.pageSize||50});
+        postPage('KQLCNT_PLAN',{id:plan.id,queryIndex:plan.queryIndex??0,query:plan.query,pageSize:plan.pageSize||50});
       };
       const timer=setInterval(attempt,400);
       attempt();
@@ -433,31 +445,55 @@
       return;
     }
 
-    let collected=0,pageIndex=0,totalPages=1,totalElements=0,deliveryFailed=false;
+    let collected=0,pageIndex=0,totalPages=null,totalElements=null,deliveryFailed=false;
+    let schemaIssue=false,failureReason='';
+    const signatures=new Set();
+    const count=value=>value!==null&&value!==undefined&&value!==''
+      &&Number.isSafeInteger(Number(value))&&Number(value)>=0?Number(value):null;
     // maxPages = 0 nghĩa là KHÔNG giới hạn: lấy hết mọi trang e-GP trả về.
     const maxPages=Math.max(0,Number(plan.maxPages)||0);
     const pageLimit=maxPages||Infinity;
 
     while(page&&page.ok&&!kqCancelled){
       const envelope=page.data&&page.data.page;
-      const rows=envelope&&Array.isArray(envelope.content)?envelope.content:[];
-      totalPages=Number(envelope&&envelope.totalPages)||totalPages;
-      totalElements=Number(envelope&&envelope.totalElements)||totalElements;
+      if(!envelope||!Array.isArray(envelope.content)){
+        schemaIssue=true;failureReason='Phản hồi e-GP không có bảng kết quả hợp lệ.';break;
+      }
+      const rows=envelope.content;
+      const nextPages=count(envelope.totalPages),nextTotal=count(envelope.totalElements);
+      if(nextPages===null||nextTotal===null){
+        schemaIssue=true;failureReason='e-GP chưa cung cấp đủ số trang hoặc tổng số bản ghi để đối soát.';
+      }else if((totalPages!==null&&nextPages!==totalPages)||(totalElements!==null&&nextTotal!==totalElements)){
+        schemaIssue=true;failureReason='Tổng kết quả e-GP đã thay đổi trong khi đọc; cần quét lại để đối soát.';
+      }
+      totalPages=nextPages??totalPages;totalElements=nextTotal??totalElements;
+      if(page.sourcePageIndex!=null&&page.sourcePageIndex!==pageIndex){
+        schemaIssue=true;failureReason=`Trang e-GP trả về không đúng thứ tự (cần trang ${pageIndex+1}, nhận trang ${page.sourcePageIndex+1}). Hãy chạy lại để đối soát.`;break;
+      }
+      if(!rows.length&&!(pageIndex===0&&totalElements===0&&(totalPages===0||totalPages===1))){
+        schemaIssue=true;failureReason='e-GP trả trang rỗng trước khi lấy đủ số bản ghi đã công bố.';break;
+      }
+      if(rows.some(row=>!row||typeof row!=='object'||Array.isArray(row))){
+        schemaIssue=true;failureReason='Bảng kết quả chứa bản ghi sai cấu trúc.';break;
+      }
+      const signature=JSON.stringify(rows);
+      if(rows.length&&signatures.has(signature)){
+        schemaIssue=true;failureReason='e-GP trả lặp lại một trang; chưa thể xác nhận đã lấy đủ dữ liệu.';break;
+      }
 
       // Gửi cả trang rỗng để service worker kiểm chứng chuỗi pageIndex đầy đủ.
       // Chỉ chuyển trang sau khi nhận ACK; retry là an toàn vì background chống
       // trùng theo job + pageIndex.
       const ack=await kqSend('KQLCNT_RESULTS',{
-        planId:plan.id,mode:plan.mode,focusTaxCode:plan.focusTaxCode||'',
-        records:rows,totalElements,totalPages,pageIndex,done:false
+        planId:plan.id,queryIndex:plan.queryIndex??0,mode:plan.mode,focusTaxCode:plan.focusTaxCode||'',
+        records:rows,totalElements,totalPages,pageIndex,done:false,schemaIssue,failureReason
       },{requireAck:true,attempts:3});
       if(!ack?.ok){ deliveryFailed=true; break; }
       collected+=rows.length;
+      if(rows.length)signatures.add(signature);
 
       pageIndex+=1;
-      // Dừng khi hết trang, chạm trần (nếu có), hoặc trang rỗng — điều kiện
-      // cuối là chốt an toàn phòng khi e-GP báo totalPages sai.
-      if(pageIndex>=totalPages||pageIndex>=pageLimit||!rows.length)break;
+      if(schemaIssue||pageIndex>=totalPages||pageIndex>=pageLimit||!rows.length)break;
 
       const of=maxPages?Math.min(totalPages,maxPages):totalPages;
       kqReport(`Đã lấy ${collected}/${totalElements} kết quả (trang ${pageIndex}/${of})...`);
@@ -466,16 +502,19 @@
       page=await kqGoNextPage();
     }
 
-    const capped=Boolean(maxPages)&&totalPages>maxPages;
-    const expectedPages=Math.min(totalPages,pageLimit);
-    const incomplete=deliveryFailed||(!kqCancelled&&!capped&&pageIndex<expectedPages&&(!page||!page.ok));
+    const capped=Boolean(maxPages)&&totalPages!==null&&totalPages>maxPages&&pageIndex>=maxPages;
+    const expectedPages=totalPages===null?null:Math.min(totalPages,pageLimit);
+    const countMismatch=!capped&&totalElements!==null&&collected!==totalElements;
+    const incomplete=deliveryFailed||schemaIssue||(!kqCancelled&&!capped&&(
+      expectedPages===null||totalElements===null||pageIndex<expectedPages||countMismatch));
+    if(countMismatch&&!failureReason)failureReason='Số bản ghi nhận được khác tổng e-GP công bố.';
     const finalAck=await kqSend('KQLCNT_RESULTS',{
-      planId:plan.id,mode:plan.mode,focusTaxCode:plan.focusTaxCode||'',
+      planId:plan.id,queryIndex:plan.queryIndex??0,mode:plan.mode,focusTaxCode:plan.focusTaxCode||'',
       records:[],totalElements,totalPages,pageIndex,capped,
       // Báo lên tiêu chí nào đặt được, tiêu chí nào không — để giao diện nói
       // thật với người dùng thay vì trình bày kết quả thiếu như thể đủ.
       applied:plan.applied||null,
-      cancelled:kqCancelled,partial:incomplete,done:true
+      cancelled:kqCancelled,partial:incomplete,schemaIssue,failureReason,done:true
     },{requireAck:true,attempts:3});
     const transferFailed=!finalAck?.ok;
     kqFinish(!incomplete&&!transferFailed,kqCancelled
@@ -485,12 +524,12 @@
       :deliveryFailed
         ?`Mất kết nối khi chuyển một trang dữ liệu. Đã giữ ${collected} kết quả và đánh dấu chưa đầy đủ.`
       :incomplete
-        ?`e-GP ngừng trả dữ liệu sau ${pageIndex}/${totalPages} trang. Đã giữ ${collected} kết quả và đánh dấu là chưa đầy đủ.`
+        ?`${failureReason||'e-GP ngừng trả dữ liệu.'} Đã giữ ${collected} kết quả (${pageIndex}/${totalPages??'?'} trang) và đánh dấu chưa đầy đủ.`
         :`Xong: ${collected} kết quả của ${plan.label}${capped?` (mới lấy ${maxPages} trang đầu)`:''}.`);
   }
 
   function kqFinish(ok,message){
-    const donePlan=kqPlan?{planId:kqPlan.id,mode:kqPlan.mode||'',focusTaxCode:kqPlan.focusTaxCode||''}:{};
+    const donePlan=kqPlan?{planId:kqPlan.id,queryIndex:kqPlan.queryIndex??0,mode:kqPlan.mode||'',focusTaxCode:kqPlan.focusTaxCode||''}:{};
     const cancelled=kqCancelled;
     postPage('KQLCNT_PLAN',null);
     kqSaveState(null);
@@ -577,10 +616,10 @@
    * chính là triệu chứng "tìm mã số thuế mà không ra gì".
    */
   function kqWaitForResultsView(){
-    const planId=kqPlan&&kqPlan.id;
-    if(!planId)return;
+    const waitingPlan=kqPlan;
+    if(!waitingPlan)return;
     const boot=setInterval(()=>{
-      if(!kqPlan||kqPlan.id!==planId){clearInterval(boot);return;}
+      if(kqPlan!==waitingPlan){clearInterval(boot);return;}
       const pageError=kqNativePageError(document.readyState,document.title,document.body?.innerText);
       if(pageError){clearInterval(boot);kqFinish(false,kqPageErrorMessage(pageError));return;}
       if(!kqIsResultsView())return;
@@ -589,7 +628,7 @@
     },700);
     setTimeout(()=>{
       clearInterval(boot);
-      if(kqPlan&&kqPlan.id===planId&&!kqIsResultsView()){
+      if(kqPlan===waitingPlan&&!kqIsResultsView()){
         const pageError=kqNativePageError(document.readyState,document.title,document.body?.innerText);
         kqFinish(false,pageError?kqPageErrorMessage(pageError):'Trang e-GP không mở được màn hình kết quả trong 40 giây. '
           +'Hãy mở trang Tra cứu Lựa chọn nhà thầu, bấm "Tìm kiếm" một lần cho ra danh sách, rồi chạy lại.');
@@ -603,7 +642,7 @@
     const payload=event.data.payload||{};
 
     if(event.data.type==='KQLCNT_PAGE'){
-      if(!kqPlan||payload.planId!==kqPlan.id)return;
+      if(!kqSameQuery(payload,kqPlan))return;
       if(kqPageWaiter)kqPageWaiter(payload);
       return;
     }
@@ -639,7 +678,13 @@
     // không tải lại trang, và lượt tra cứu chạy luôn mà không qua chuỗi
     // điều-hướng → sessionStorage → khôi phục (chuỗi này là chỗ hay đứt nhất).
     if(message.type==='SNAPSHOT_DOM'){
-      sendResponse({ok:true,html:String(document.documentElement?.outerHTML||'').slice(0,250000),url:location.href});
+      const html=[...document.querySelectorAll('[id],[class]')].slice(0,1500).map(node=>{
+        const safe=document.createElement('div');
+        if(node.id)safe.id=String(node.id).slice(0,180);
+        const cls=node.getAttribute('class');if(cls)safe.setAttribute('class',cls.slice(0,300));
+        return safe.outerHTML;
+      }).join('');
+      sendResponse({ok:true,html:html.slice(0,250000),url:location.origin+location.pathname,structuralOnly:true});
       return true;
     }
     if(message.type==='KQLCNT_PROBE'){

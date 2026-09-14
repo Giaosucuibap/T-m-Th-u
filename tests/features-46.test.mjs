@@ -14,7 +14,7 @@ test('hợp đồng tương tự: đạt / lệch loại / thiếu', () => {
   const hd = normalizeContract({ name: 'Thi công kênh mương xã B', workType: 'thuy-loi', price: 8000000000, year: 2024 });
   assert.equal(matchContract({ bidName: 'Nạo vét kênh mương thủy lợi', price: 6000000000 }, hd).status, 'dat');
   assert.equal(matchContract({ bidName: 'Xây đường giao thông nông thôn', price: 6000000000 }, hd).status, 'lech-loai');
-  assert.equal(bestContractMatch({ bidName: 'Gói số 05' }, []).status, 'thieu');
+  assert.equal(bestContractMatch({ bidName: 'Gói số 05' }, []).status, 'chua');
   assert.equal(safeContracts([hd, { name: 'ab' }]).length, 1);
 });
 
@@ -34,10 +34,10 @@ test('HMAC-SHA256 khớp Node crypto', () => {
 });
 
 test('đối thủ có giá bỏ trung vị khi BBMT có giá', () => {
-  const tenders = [{ key: 'IB1::00', notifyNo: 'IB1', location: 'Lâm Đồng' }];
+  const tenders = [{ key: 'IB1::00', notifyNo: 'IB1', location: 'Lâm Đồng' }, { key: 'IB2::00', notifyNo: 'IB2', location: 'Lâm Đồng' }];
   const parts = [
     { notifyNo: 'IB1', version: '00', contractorName: 'A', taxCode: '1', bidPrice: 9e9, won: false },
-    { notifyNo: 'IB1', version: '00', contractorName: 'A', taxCode: '1', bidPrice: 11e9, won: true }
+    { notifyNo: 'IB2', version: '00', contractorName: 'A', taxCode: '1', bidPrice: 11e9, won: true }
   ];
   const rows = localRivals(parts, tenders, { province: 'Lâm Đồng' });
   assert.equal(rows[0].medianBid, 9e9);

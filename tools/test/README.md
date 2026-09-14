@@ -194,3 +194,59 @@ ba dòng đầu phải báo `✗ BỊ BÓP`.
 `popup-jump.mjs` nạp sẵn **3000 gói thầu** — đúng lượng dữ liệu trên máy người
 dùng — rồi đo kích thước mỗi 180ms. Kết quả mong đợi: `Số lần đổi kích thước: 0`
 và `Chiều rộng có đổi không: KHÔNG`.
+
+## 10. Canary sống — đối chứng với e-GP THẬT
+
+Đây là kịch bản **duy nhất** đụng tới dữ liệu thật, và nó **không chạy trong
+Node**. Node không có token của trang e-GP nên không gọi được endpoint tìm kiếm;
+canary phải chạy trong tiện ích, trên chính trang e-GP.
+
+### Chạy
+
+1. Mở e-GP, đăng nhập như bình thường.
+2. Mở tiện ích → **Chẩn đoán** → **"Chạy canary sống"**.
+3. Bấm **Lưu kết quả** → đặt `canary-result.json` vào **gốc kho mã**.
+4. `npm test` đọc tệp đó (`tests/canary-gate.test.js`).
+
+**Chạy sau 22h giờ Việt Nam.** e-GP là hệ thống công; đừng thêm tải vào giờ hành
+chính khi các đơn vị đang nộp hồ sơ. `inCanaryWindow()` trong
+`lib/canary-live.js` giữ khung 22h–5h.
+
+### Nó canh gì
+
+| Hỏng | Mã trạng thái | Vì sao nguy hiểm |
+|---|---|---|
+| Trường biến mất | `FIELD_LOST` | Mã từng trả `bidPrice` mà nay không còn. Phần mềm vẫn chạy, chỉ là cột giá trống. |
+| Mã biến mất | `GONE` | e-GP không trả bản ghi nào cho mã từng tra được. |
+| Mã địa bàn trôi | `AREA_DRIFT` | Lâm Đồng phải giữ cả `68` lẫn `703`. Mất `703` là **bỏ sót lặng lẽ** toàn bộ hồ sơ trước 1/7/2025 — không ai thấy bằng mắt. |
+
+Chuỗi `'null'` mà e-GP gửi cho trường trống được tính là **trường mất**, không
+phải trường có giá trị. Đây đúng lỗi đã gặp ở gói chỉ định thầu.
+
+### Cổng chặn bản dựng
+
+| Tình huống | Kết quả |
+|---|---|
+| Vừa chạy, sạch | `PASS` |
+| Có `FIELD_LOST` / `GONE` / `AREA_DRIFT` | **`BLOCK`** |
+| Kết quả quá 10 ngày | **`BLOCK`** — canary cũ không nói được gì về e-GP hôm nay |
+| Không ghi thời điểm chạy | **`BLOCK`** |
+| Chưa chạy lần nào | `WARN` — in to, không chặn |
+
+Chưa chạy lần nào mà chặn thì không ai cài được phần mềm lần đầu, và người ta sẽ
+học cách bỏ qua bài thử. Bài thử bị bỏ qua thì bằng không có.
+
+### Hiện trạng, nói thẳng
+
+Danh sách trong `lib/canary-live.js` mới có **9 mã**, yêu cầu là 20–30. Mỗi mã
+ghi rõ `source`:
+
+- `observed` (4 mã) — đã đọc được trên e-GP thật, có ghi chú kèm.
+- `candidate` (5 mã) — lấy từ kết quả tìm kiếm, **chưa mở chi tiết xác nhận**.
+
+Phần tra từng mã **chưa tự động**: màn hình Chẩn đoán hiện `0/9 — chưa tự động`
+và `evaluateLiveCanary()` trả `ok:false` khi chưa đối chứng đủ danh sách. Nó
+không báo đạt cho phần chưa làm. Phần bất biến mã địa bàn thì đã tự động đầy đủ.
+
+Khi danh sách đủ 20 mã, xoá bài `'danh sách mã chưa đủ 20'` trong
+`tests/canary-live.test.js` và nâng ngưỡng ở bài trên nó lên 20.

@@ -1,4 +1,4 @@
-# Giáo Sư Cùi Bắp 4.9.2
+# Giáo Sư Cùi Bắp 4.11.0
 
 **Trợ lý ra quyết định dự thầu ngay trên nguồn e-GP chính thức.**
 
@@ -190,9 +190,35 @@ Từ thư mục extension:
 npm test
 ```
 
-Bộ hiện tại kiểm tra chuẩn hoá văn bản/tiền/ngày, URL chính thức, request an toàn, safe backup theo danh sách trắng, claim/ACK/lease của tác vụ, pipeline quyết định, xếp hạng, Radar, CSP/manifest, cú pháp/import JavaScript, tài nguyên giao diện, hyperlink Excel và cách tính liên danh.
+Bộ hiện tại kiểm tra chuẩn hoá văn bản/tiền/ngày, URL chính thức, request an toàn, safe backup theo danh sách trắng, claim/ACK/lease của tác vụ, pipeline quyết định, xếp hạng, Radar, CSP/manifest, cú pháp/import JavaScript, tài nguyên giao diện, hyperlink Excel, cách tính liên danh, cổng ba trạng thái, khớp xã theo mã và đối chiếu bản xuất với danh sách đang hiện.
 
-Kết quả 4.9.0: **151/151 kiểm thử tự động đạt**. Kết quả này chỉ là bằng chứng hồi quy cục bộ, không thay thế kiểm thử trực tiếp trên e-GP, kiểm thử hiệu năng, rà soát Chrome Web Store hoặc kiểm toán bảo mật độc lập.
+Kết quả 4.11.0: **453/453 kiểm thử tự động đạt**, xanh trên cả bốn múi giờ.
+
+Xin nói rõ giới hạn: **toàn bộ 453 bài này chạy trên dữ liệu tự dựng.** Chúng
+chứng minh phần mềm không tự hỏng, và chỉ vậy. Chúng **không** biết e-GP vừa đổi
+tên một trường hay vừa bỏ một mã tỉnh — đúng loại hỏng làm phần mềm trả kết quả
+thiếu mà vẫn xanh hết. Đó là việc của canary sống ở mục dưới. Kết quả cục bộ
+không thay thế kiểm thử trực tiếp trên e-GP, kiểm thử hiệu năng, rà soát Chrome
+Web Store hay kiểm toán bảo mật độc lập.
+
+#### Canary sống — đối chứng với e-GP thật
+
+Node không có token của trang e-GP nên không gọi được endpoint tìm kiếm; canary
+sống phải chạy **trong tiện ích**, trên chính trang e-GP:
+
+1. Mở tiện ích → **Chẩn đoán** → **"Chạy canary sống"** (nên chạy sau 22h — e-GP
+   là hệ thống công, đừng thêm tải vào lúc các đơn vị đang nộp hồ sơ).
+2. Bấm **Lưu kết quả**, đặt tệp `canary-result.json` vào gốc kho mã.
+3. `npm test` đọc tệp đó. Đỏ hoặc quá 10 ngày → **chặn bản dựng**. Chưa chạy lần
+   nào → chỉ cảnh báo, không chặn.
+
+Canary canh ba thứ: trường biến mất, mã biến mất, và **mã địa bàn trôi** (Lâm
+Đồng phải giữ cả `68` lẫn `703`; mất `703` là bỏ sót lặng lẽ toàn bộ hồ sơ trước
+1/7/2025). Danh sách mã nằm ở `lib/canary-live.js`.
+
+**Hiện trạng thật:** mới có 9 mã, trong đó 4 mã đã xác nhận trên e-GP thật; mục
+tiêu là 20–30. Phần tra từng mã **chưa tự động** — màn hình Chẩn đoán ghi thẳng
+`0/9 — chưa tự động` chứ không báo đạt. Phần bất biến mã địa bàn thì đã tự động.
 
 #### Chạy lại ở nhiều múi giờ
 

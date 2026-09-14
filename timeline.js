@@ -48,7 +48,7 @@ $('dom').onclick = async () => {
 };
 
 $('audit').onclick = async () => {
-  const r = await send('EXPORT_AUDIT');
+  const r = await send('EXPORT_AUDIT', {operator:$('audit-who')?.value,from:$('audit-from')?.value,to:$('audit-to')?.value,key:$('audit-key')?.value});
   $('alert').textContent = r.ok ? `Đã xuất ${r.count} dòng nhật ký.` : (r.message || 'Lỗi');
   $('alert').className = `notice ${r.ok ? 'ok' : 'error'}`;
 };
@@ -57,12 +57,13 @@ $('pack-file').onchange = async (e) => {
   const file = e.target.files?.[0];
   if (!file) return;
   try {
+    if(file.size>30_000_000)throw new Error('Gói JSON vượt quá 30 MB.');
     const pack = JSON.parse(await file.text());
     const r = await send('IMPORT_SYNC_PACK', { pack });
-    $('alert').textContent = r.ok ? `Đã nhập ${r.checklistCount} checklist, ${r.decisionCount} quyết định.` : (r.message || 'Lỗi');
+    $('alert').textContent = r.ok ? `Đã nhập ${r.checklistCount} checklist, ${r.decisionCount} quyết định. ${r.conflicts?.length?`Giữ dữ liệu đang có cho ${r.conflicts.length} mục xung đột.`:''}` : (r.message || 'Lỗi');
     $('alert').className = `notice ${r.ok ? 'ok' : 'error'}`;
-  } catch {
-    $('alert').textContent = 'Tệp JSON không đọc được.';
+  } catch (error) {
+    $('alert').textContent = error.message||'Tệp JSON không đọc được.';
     $('alert').className = 'notice error';
   }
 };

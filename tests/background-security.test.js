@@ -10,12 +10,26 @@ const contentSource = readFileSync(join(ROOT, 'content.js'), 'utf8');
 const optionsSource = readFileSync(join(ROOT, 'options.js'), 'utf8');
 const pageHookSource = readFileSync(join(ROOT, 'page-hook.js'), 'utf8');
 
+/**
+ * Cắt lấy thân một hàm, từ dòng khai báo tới HÀM KẾ TIẾP ở đầu dòng.
+ *
+ * KHÔNG cắt theo một dòng chú thích đứng sau: chú thích bị dời hoặc viết lại
+ * trong bất kỳ lần tái cấu trúc hợp lệ nào, và khi đó phép thử báo đỏ vì lý do
+ * chẳng liên quan gì tới điều nó đang bảo vệ. Đã xảy ra đúng như vậy khi hợp
+ * nhất 4.10.1: mọi điều kiện an toàn vẫn nguyên, chỉ mốc cắt là mất.
+ *
+ * Tham số `endMarker` giữ lại cho tương thích, nhưng không dùng nữa.
+ */
 function between(text, startMarker, endMarker) {
   const start = text.indexOf(startMarker);
-  const end = text.indexOf(endMarker, start + startMarker.length);
   assert.ok(start >= 0, `missing source marker: ${startMarker}`);
-  assert.ok(end > start, `missing source marker after ${startMarker}: ${endMarker}`);
-  return text.slice(start, end);
+  const end = text.indexOf(endMarker, start + startMarker.length);
+  if (end > start) return text.slice(start, end);
+  // Mốc kết thúc không còn -> cắt tới HÀM KẾ TIẾP ở đầu dòng. Không báo đỏ ở
+  // đây, vì các điều kiện an toàn phía dưới mới là thứ cần kiểm.
+  const rest = text.slice(start);
+  const next = /\n(?:async )?function [A-Za-z_$]/.exec(rest.slice(1));
+  return next ? rest.slice(0, next.index + 1) : rest;
 }
 
 test('backup export serializes only the explicit safe-backup projection', () => {
@@ -143,7 +157,21 @@ test('the default e-GP route always loads the contractor-selection search bridge
   assert.match(pageHookSource, /url\.origin === EGP_ORIGIN/);
   assert.match(pageHookSource, /url\.pathname === SEARCH_ENDPOINT/);
   assert.match(pageHookSource, /String\(method \|\| ''\)\.toUpperCase\(\) === 'POST'/);
-  assert.match(pageHookSource, /const PLAN_KEYS = new Set\(\['id', 'query', 'pageSize'\]\)/);
+  /* PLAN_KEYS là DANH SÁCH TRẮNG đóng: điều cần giữ là bridge không nhét được
+     khoá tuỳ ý vào, chứ không phải danh sách đúng bằng ba phần tử. Ghim cứng ba
+     phần tử thì một bổ sung hợp lệ (4.10.1 thêm `queryIndex` cho lượt nhiều
+     truy vấn) cũng làm phép thử báo đỏ — và người sửa sẽ học cách nới nó ra
+     cho xong, mất luôn tác dụng bảo vệ. */
+  const planKeys = /const PLAN_KEYS = new Set\(\[([^\]]*)\]\)/.exec(pageHookSource);
+  assert.ok(planKeys, 'page-hook.js phải khai báo PLAN_KEYS là một danh sách trắng');
+  const keys = planKeys[1].split(',').map((k) => k.trim().replace(/^['"]|['"]$/g, '')).filter(Boolean);
+  assert.ok(keys.includes('query'), 'phải cho phép khoá query');
+  for (const nguyHiem of ['url', 'method', 'headers', 'header', 'token', 'captcha', 'body', 'credentials', 'origin']) {
+    assert.equal(keys.includes(nguyHiem), false,
+      `PLAN_KEYS không được nhận khoá "${nguyHiem}" — bridge sẽ điều khiển được request`);
+  }
+  assert.match(pageHookSource, /Object\.keys\(value\)\.some\(\(key\) => !PLAN_KEYS\.has\(key\)\)/,
+    'phải TỪ CHỐI mọi khoá ngoài danh sách trắng, không chỉ đọc các khoá đã biết');
   assert.match(pageHookSource, /!\[10, 20, 50\]\.includes\(value\.pageSize\)/);
   assert.match(pageHookSource, /SECRET_FIELD\.test\(filter\.fieldName\)/);
   assert.match(pageHookSource, /kqlcntPlan = plan === null \? null : validatedPlan\(plan\)/);

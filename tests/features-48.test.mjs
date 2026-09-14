@@ -11,19 +11,21 @@ import { methodOutline } from '../lib/method-outline.js';
 import { filterAuditLog, guaranteeReminder } from '../lib/audit-filter.js';
 import { coordsForCode } from '../lib/province-codes.js';
 
-test('đọc HSMT tô cửa rồi để người xác nhận', () => {
+test('HSMT chỉ nhận diện từ khóa; không tự xác nhận năng lực', () => {
   const g = inferGatesFromHsmt('Yêu cầu hợp đồng tương tự và nhân sự chủ chốt, thiết bị thi công, năng lực tài chính.');
-  assert.equal(g.similar, 'dat');
-  assert.equal(g.staff, 'dat');
+  assert.equal(g.similar, 'chua');
+  assert.equal(g.staff, 'chua');
+  assert.equal(g.hits.similar, true);
+  assert.equal(g.hits.staff, true);
   assert.equal(g.needsConfirm, true);
   const pdf = extractPdfStrings('%PDF (Hop dong tuong tu) Tj BT /F1 12 Tf ET');
-  assert.ok(pdf.toLowerCase().includes('hop dong') || pdf.length >= 0);
+  assert.equal(pdf, '');
 });
 
-test('cửa sổ 5 năm xây lắp / 3 năm tư vấn', () => {
-  assert.equal(contractWindowYears('thuy-loi'), 5);
-  assert.equal(contractWindowYears('tv'), 3);
-  assert.equal(contractExpiryAlert({ year: 2023, workType: 'tv' }).years, 3);
+test('không suy ra mốc hợp đồng từ lĩnh vực', () => {
+  assert.equal(contractWindowYears('thuy-loi'), null);
+  assert.equal(contractWindowYears('tv'), null);
+  assert.equal(contractExpiryAlert({ year: 2023, workType: 'tv', windowYears: 3 }).years, 3);
 });
 
 test('duyệt 3 bước không trùng người', () => {

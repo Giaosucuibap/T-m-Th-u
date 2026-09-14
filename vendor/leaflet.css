@@ -356,13 +356,12 @@ svg.leaflet-image-layer.leaflet-interactive path {
 	border-radius: 5px;
 	}
 .leaflet-control-layers-toggle {
-	/* Ảnh gốc của Leaflet đã bỏ: bản đồ ở đây chỉ dùng circleMarker, không
-	   dùng L.marker hay control.layers, nên ba tệp images/*.png không bao giờ
-	   hiển thị. Giữ tham chiếu là ship sẵn ba yêu cầu tải hỏng. */
+	background-image: none;
 	width: 36px;
 	height: 36px;
 	}
 .leaflet-retina .leaflet-control-layers-toggle {
+	background-image: none;
 	background-size: 26px 26px;
 	}
 .leaflet-touch .leaflet-control-layers-toggle {
@@ -405,6 +404,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
 
 /* Default icon URLs */
 .leaflet-default-icon-path { /* used only in path-guessing heuristic, see L.Icon.Default */
+	background-image: none;
 	}
 
 

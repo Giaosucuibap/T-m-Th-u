@@ -2,3 +2,11 @@ node_modules/
 dist/
 tools/test/certs/
 *.zip
+
+# Do phép thử tự sinh khi chạy (tests/bbmt-public-dom-replay.test.mjs), không
+# phải dữ liệu nguồn — commit vào thì mỗi lần chạy lại đẻ ra một diff giả.
+test-results/
+
+# Kết quả canary sống: gắn với MỘT máy, MỘT thời điểm. Commit vào thì người
+# khác kéo về sẽ tưởng đã đối chứng với e-GP, trong khi chưa hề chạy.
+canary-result.json

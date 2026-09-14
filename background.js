@@ -1,7 +1,9 @@
+import { passesHardFilter, hardFilterReason } from './lib/hard-filter.js';
+import { dateGate, coverageOf, GATE_LABEL } from './lib/match-gate.js';
 import { openingFingerprint, restoreOpening, cacheOpening, trimOpeningCache } from './lib/bbmt-cache.js';
 import { validateCriteria, safeSavedSearches, matchesAdditionalKeyword, matchesLocalFilters, splitProvinceNames } from './lib/workspace.js';
 import { safeHunts, validateHunt, huntAlarmName, parseHuntAlarm, MAX_HUNTS_ALLOWED, safeWatches } from './lib/hunts.js';
-import { touchLifecycle, inferLifecycleEvent, shouldRemindDeadline, investorWatchHit, schemaHealthOf } from './lib/lifecycle.js';
+import { touchLifecycle, inferLifecycleEvent, shouldRemindDeadline, investorWatchHit, schemaHealthOf, findPriorTenderVersion, newTenderChanges, deadlineReminderState } from './lib/lifecycle.js';
 import { normalizeCapability, checklistProgress, emptyChecklist, checklistItemsFor } from './lib/capability.js';
 import { safeHttpsWebhook, safeEmail, safeChatId, channelPayload } from './lib/channels.js';
 import { webhookHeaders } from './lib/hmac.js';
@@ -16,12 +18,12 @@ import { inferGatesFromHsmt, extractPdfStrings } from './lib/hsmt-read.js';
 import { buildOutlineDocx, docxDataUrl } from './lib/docx-lite.js';
 import { filterAuditLog, guaranteeReminder } from './lib/audit-filter.js';
 import {DEFAULT_SETTINGS,extractCandidateObjects,normalizeCandidate,mergeTender,scoreTender,sanitizeRequestTemplate,extractParticipations,dedupeParticipations,mergeParticipation,formatMoney,formatDate,safeFilename,migrateTenderCodes,canonicalEgpUrl,EGP_SCAN_PAGE,hasContentScript,scanTargetUrl,BID_STATUS_LABEL} from './lib/core.js';
-import {buildSafeBackupState,safeRunForBackup} from './lib/backup.js';
+import {buildSafeBackupState,safeRunForBackup,sanitizeBackupFeatures,sanitizeBackupTenderMetadata} from './lib/backup.js';
 import {EGP_SEARCH_PAGE,PAGE_SIZE,normalizeTaxCodeForEgp,normalizeKqlcntRecord,extractContractorCandidates,dedupeKqlcnt,summarizeWinner,buildKqlcntQuery,buildWardMarketQuery,buildTbmtQuery,tbmtMatchesWard} from './lib/kqlcnt.js';
-import {buildBbmtQuery,bbmtDateRange,bbmtInDateRange,bbmtReadState,bbmtReadStateOf,READ_STATE,normalizeBbmtPackage,normalizeBidderTable,notifyNoFromUrl,summarizeBidOpenings,STEPS_DECIDED,sameBbmtDetailPage} from './lib/bbmt.js';
-import {normalizeKhlcntPlan,dedupeKhlcnt,summarizeKhlcnt,auditPlans,buildKhlcntQuery,filterPlansByArea,filterPlansByCategory,khlcntDateRange,khlcntInDateRange} from './lib/khlcnt.js';
+import {buildBbmtQuery,bbmtDateRange,bbmtInDateRange,bbmtStamp,bbmtReadState,bbmtReadStateOf,READ_STATE,normalizeBbmtPackage,normalizeBidderTable,findBidder,notifyNoFromUrl,summarizeBidOpenings,STEPS_DECIDED,sameBbmtDetailPage} from './lib/bbmt.js';
+import {normalizeKhlcntPlan,dedupeKhlcnt,summarizeKhlcnt,auditPlans,buildKhlcntQuery,filterPlansByArea,filterPlansByCategory,filterPlansByLocalCriteria,khlcntDateRange,khlcntInDateRange,khlcntStamp,classifyPlansByCriteria} from './lib/khlcnt.js';
 import {normalizeCategory,categoryLabel,matchesTenderCategory} from './lib/tender-categories.js';
-import {fetchProvinces,fetchAllAreas,currentProvinceNames,wardNamesForProvince,provinceCodesByName,wardCodesByName} from './lib/areas.js';
+import {fetchProvinces,fetchWards,fetchAllAreas,currentProvinceNames,wardNamesForProvince,provinceCodesByName,wardCodesByName} from './lib/areas.js';
 import {buildXlsx,xlsxDataUrl,XLSX_MIME} from './lib/xlsx.js';
 import {summarizeArea,AREA_DISCLAIMER,AREA_SCOPE_NOTE} from './lib/localmarket.js';
 import {summarizePricing,priceReference,PRICING_DISCLAIMER,PRICING_METHOD_NOTE} from './lib/pricing.js';
@@ -36,6 +38,7 @@ const KEYS={settings:'settings',tenders:'tenders',runs:'runs',template:'searchTe
 const SAVED_SEARCHES = 'savedSearches';
 const DAILY_ALARM='gscb-daily';
 const DEADLINE_ALARM='gscb-deadlines';
+const HUNT_RETRY_PREFIX='gscb-hunt-wait:';
 const TIMEOUT_PREFIX='gscb-timeout:';
 // Mọi tác vụ cần content script, vì vậy URL mặc định phải nằm đúng route mà
 // manifest cho phép. Trang home không nạp bridge và làm lượt quét thủ công treo.
@@ -62,6 +65,7 @@ async function getState(){
 
 async function appendAudit(kind,detail,operator){
   const s=await getState();
+  if(s.settings.readOnlyMode)return;
   const auditLog=[auditEntry(kind,detail,operator||s.settings.operatorName),[...(s.auditLog||[])]].flat().slice(0,800);
   await save({[KEYS.auditLog]:auditLog});
 }
@@ -78,22 +82,21 @@ function publicSettings(settings={}){
   out.notifyEmail=settings.notifyEmail||'';
   out.operatorName=settings.operatorName||'';
   out.readOnlyMode=Boolean(settings.readOnlyMode);
-  out.approvalSteps=Number(settings.approvalSteps)===2?2:3;
+  out.approvalSteps=[1,2,3].includes(Number(settings.approvalSteps))?Number(settings.approvalSteps):1;
   out.hasWebhook=Boolean(safeHttpsWebhook(settings.notifyWebhook));
   out.capability=normalizeCapability(settings.capability||{});
   return out;
 }
 
 function senderIsOptions(sender){
-  const url=String(sender?.url||'');
-  return url.startsWith(chrome.runtime.getURL('options.html'));
+  try{const url=new URL(sender?.url||'');const options=new URL(chrome.runtime.getURL('options.html'));return url.origin===options.origin&&url.pathname===options.pathname;}catch{return false;}
 }
 
 async function resolveProvinceCodes(provinceText){
   const names=splitProvinceNames(provinceText);
   if(!names.length)return {ok:true,names:[],codes:[],unknown:[]};
-  const areas=(await getAreas({})).areas;
-  if(!areas)return {ok:true,names,codes:[],unknown:[]};
+  const areas=(await getProvincesOnly()).areas;
+  if(!areas)return {ok:false,names,codes:[],unknown:names,unavailable:true};
   const codes=[],unknown=[];
   for(const name of names){
     const found=provinceCodesByName(areas.provinces,name);
@@ -164,7 +167,7 @@ function rescoreStoredTenders(tenders,settings){
       decisionNote:String(t.decisionNote||'').slice(0,1000),
       decisionUpdatedAt:t.decisionUpdatedAt||null,
       changeLog:Array.isArray(t.changeLog)?t.changeLog.slice(-20):[],
-      ...scoreTender(t,settings)
+      ...scoredWithGate(t,settings,t.filterCriteria||settings)
     }))
     .sort((a,b)=>new Date(b.lastSeenAt)-new Date(a.lastSeenAt));
 }
@@ -178,11 +181,16 @@ async function updateRun(runId,patch){
   });
 }
 async function finishRun(runId,status,message){
+  const pending=(await getState()).runs.find(r=>r.id===runId);
+  if(status==='SUCCESS'&&(pending?.partial||pending?.schemaIssue||pending?.coverage?.complete===false)){
+    status='PARTIAL';message=pending.partialMessage||pending.coverage?.text||'Dữ liệu chưa đầy đủ.';
+  }
   const run=await updateRun(runId,{status,message,finishedAt:new Date().toISOString()});
   await chrome.alarms.clear(TIMEOUT_PREFIX+runId);
   const s=await getState();
   if(s.activeRun?.id===runId)await save({[KEYS.activeRun]:null});
-  if(status==='SUCCESS'||status==='PARTIAL'){
+  await recordHuntOutcome(run);
+  if(!s.settings.readOnlyMode&&(status==='SUCCESS'||status==='PARTIAL')){
     const partial=status==='PARTIAL';
     chrome.notifications.create({type:'basic',iconUrl:'icons/icon128.png',
       title:partial?'Giáo Sư Cùi Bắp — dữ liệu chưa đầy đủ':'Giáo Sư Cùi Bắp',
@@ -191,7 +199,7 @@ async function finishRun(runId,status,message){
     await pushTelegramMatches(s.settings,run?.pendingMatches||[],run);
     if(s.settings.autoExportMobileReport)await exportMobileReport(false);
     await reviewDeadlines();
-    if(s.schemaHealth&&s.schemaHealth.ok===false){
+    if(s.schemaHealth?.runId===runId&&s.schemaHealth.ok===false){
       chrome.notifications.create({type:'basic',iconUrl:'icons/icon128.png',title:'Giáo Sư Cùi Bắp — schema e-GP lạ',
         message:'Lượt vừa rồi thiếu trường notifyNo/bidName quen thuộc. Đừng tin đây là toàn bộ dữ liệu; mở Chẩn đoán để xem.'}).catch(()=>{});
       compareOpenEgpDom().catch(()=>{});
@@ -353,18 +361,15 @@ function telegramTenderLine(t){
 }
 
 async function dispatchOutbound(settings,text,opts={}){
-  const hook=safeHttpsWebhook(settings.notifyWebhook);
-  if(hook){
-    try{
-      const body=JSON.stringify(channelPayload(opts.kind||'notice',text,{email:safeEmail(settings.notifyEmail)}));
-      await fetch(hook,{method:'POST',headers:webhookHeaders(settings.webhookSecret,body),body});
-    }catch{}
-  }
+  // External webhook delivery is not enabled in this release: arbitrary hosts
+  // need separate permission and a verified receiving service. Keep the
+  // existing user-configured Telegram channel; JSON signing stays local.
+  if((await getState()).settings.readOnlyMode)return {ok:false,message:'Đang khóa chỉnh sửa và tự động hóa.'};
   return sendTelegram(settings,text,opts);
 }
 
 async function pushTelegramMatches(settings,matches,run){
-  if(!settings.telegramEnabled && !safeHttpsWebhook(settings.notifyWebhook))return;
+  if(!settings.telegramEnabled||settings.readOnlyMode)return;
   const list=matches||[];
   const partial=run?.status==='PARTIAL'||Boolean(run?.partial);
   const scopeNote=partial?'\n⚠️ <b>DỮ LIỆU CHƯA ĐẦY ĐỦ</b>: lượt quét bị giới hạn hoặc gián đoạn.':' ';
@@ -372,6 +377,7 @@ async function pushTelegramMatches(settings,matches,run){
   // Không có gói mới: chỉ nhắn khi người dùng bật "báo cả khi không có gì mới",
   // để biết hệ thống vẫn sống chứ không phải đã chết âm thầm.
   const hunt=(run?.huntId?((await getState()).hunts||[]).find(h=>h.id===run.huntId):null);
+  if(hunt&&!hunt.telegram)return;
   const chatId=safeChatId(hunt?.telegramChatId);
   if(!list.length){
     if(!settings.telegramDailySummary)return;
@@ -396,11 +402,45 @@ async function pushTelegramMatches(settings,matches,run){
 function makeTemplateId(){return 't'+Date.now().toString(36)+Math.random().toString(36).slice(2,6);}
 function templateName(tpl){try{const u=new URL(tpl.sourcePageUrl||tpl.url);const seg=u.pathname.split('/').filter(Boolean).pop()||'e-GP';return `${seg} · ${new Date(tpl.capturedAt||Date.now()).toLocaleDateString('vi-VN')}`;}catch{return 'Bộ lọc '+new Date().toLocaleDateString('vi-VN');}}
 
+/** One rule evaluation feeds storage, per-run counters and alerts. Scores never
+ * authorize a record that fails a requested criterion. */
+function scoredWithGate(record,settings,criteria){
+  const score=scoreTender(record,settings);
+  const gate=passesHardFilter(record,criteria||{});
+  return {...score,matched:gate.ok&&score.matched,filterState:gate.state,
+    filterReason:gate.reason||'',filterReasons:gate.reasons||[]};
+}
+function publicFilterCriteria(criteria={}){
+  const out={};
+  for(const key of ['investor','province','ward','keyword','mustKeywords','excludeKeywords','minPrice','maxPrice','category','fromDate','toDate','fromYear','toYear','requireConstruction'])
+    if(Object.hasOwn(criteria,key))out[key]=criteria[key];
+  for(const key of ['provinces','requiredKeywords','dateFields'])if(Array.isArray(criteria[key]))out[key]=criteria[key].slice(0,100);
+  return out;
+}
+function extendSourceKeys(previous,keys){
+  const seen=new Set(previous||[]);let duplicates=0;
+  for(const key of keys){if(seen.has(key))duplicates++;else seen.add(key);}
+  return {keys:[...seen],duplicates};
+}
+function pageCoverage(job,payload,{fetched,match=0,insufficient=0,outOfRange=0,invalid=0}={}){
+  const pages=receivedPageIndexes(job);
+  if(!payload.done&&Number.isInteger(payload.pageIndex))pages.add(payload.pageIndex);
+  const serverTotal=payload.totalElements??job.totalElements??job.totalCandidates??null;
+  const totalPages=payload.totalPages??job.totalPages??null;
+  const empty=serverTotal===0&&totalPages===0&&fetched===0;
+  return coverageOf({serverTotal,totalPages,fetched,match,insufficient,outOfRange,
+    pageIndexes:empty?[]:[...pages],pagesRead:empty?0:pages.size,done:payload.done===true,
+    partial:Boolean(job.partial||payload.partial||payload.capped||payload.cancelled||payload.schemaIssue||invalid)});
+}
+
 async function ingest(records,meta={}){
   return withLock(async()=>{
     const s=await getState();
     const existing=new Map(s.tenders.map(t=>[t.key,t]));
     const ingestedKeys=[];
+    const run=meta.runId?s.runs.find(r=>r.id===meta.runId):null;
+    const criteria=publicFilterCriteria(run?.criteria||s.settings);
+    const resultStates={...(run?.resultStates||{})};
     const alertMin=Number(s.settings.alertMinScore||85);
     const teleMin=Number(s.settings.telegramMinScore||70);
     const freshAlerts=[],freshMatches=[];
@@ -410,8 +450,21 @@ async function ingest(records,meta={}){
     const amendmentEvents=[];
     for(const raw of records.slice(0,1000)){
       const normalized=normalizeCandidate(raw,meta);if(!normalized)continue;valid++;ingestedKeys.push(normalized.key);
-      const before=existing.get(normalized.key);
+      const before=existing.get(normalized.key)||findPriorTenderVersion([...existing.values()],normalized);
       let merged=mergeTender(before||{},normalized,s.settings);
+      const scored=scoredWithGate({...raw,...normalized},s.settings,criteria);
+      merged={...merged,...scored,filterCriteria:criteria};
+      // This is a result from this query at this time, independent of later runs.
+      resultStates[merged.key]={filterState:scored.filterState,filterReason:scored.filterReason,
+        score:scored.score,matched:scored.matched,checkedAt:merged.lastSeenAt,
+        bidName:normalized.bidName,price:normalized.price,publicDate:normalized.publicDate,closeDate:normalized.closeDate,
+        investorName:normalized.investorName,location:normalized.location,fieldRaw:normalized.fieldRaw,detailUrl:normalized.detailUrl};
+      if(before&&before.key!==normalized.key){
+        // A new notice version retains history and tracking, but requires
+        // a fresh decision on the changed requirements.
+        merged.decisionState=before.decisionState&&before.decisionState!=='NEW'?'REVIEW':'NEW';
+        for(const key of Object.keys(merged))if(/^decision(Proposed|Tech|Confirmed|Approval|Director)/.test(key))delete merged[key];
+      }
       const event=inferLifecycleEvent(merged);
       merged={...merged,lifecycle:touchLifecycle(before||merged,event,merged.lastSeenAt)};
       const watch=investorWatchHit(merged,watches);
@@ -421,26 +474,28 @@ async function ingest(records,meta={}){
       }
       if(before){
         updatedCount++;
-        const prevLog=Array.isArray(before.changeLog)?before.changeLog.length:0;
-        const fresh=(merged.changeLog||[]).slice(prevLog);
+        const fresh=newTenderChanges(before,merged);
+        if(before.version!==merged.version&&!fresh.some(ch=>ch.field==='version'))fresh.push({field:'version',before:before.version,after:merged.version,at:merged.lastSeenAt});
         if((merged.watchlisted||watch)&&fresh.some(ch=>ch.field==='closeDate'||ch.field==='version'||ch.field==='bidName')){
           merged.amendment = true;
-          freshAlerts.push({...merged,alertKind:'amendment'});
-          freshMatches.push({...merged,alertKind:'amendment'});
+          if(scored.filterState==='MATCH'){
+            freshAlerts.push({...merged,alertKind:'amendment'});
+            freshMatches.push({...merged,alertKind:'amendment'});
+          }
           for(const ch of fresh){
             amendmentEvents.push({at:ch.at||new Date().toISOString(),key:merged.key,notifyNo:merged.notifyNo,bidName:merged.bidName,field:ch.field,before:ch.before,after:ch.after});
           }
         }
       }else{
         newCount++;
-        if(merged.score>=alertMin||watch)freshAlerts.push(merged);
-        if((merged.matched&&merged.score>=teleMin)||watch)freshMatches.push(merged);
+        if(scored.filterState==='MATCH'&&(merged.score>=alertMin||watch))freshAlerts.push(merged);
+        if(scored.filterState==='MATCH'&&((merged.matched&&merged.score>=teleMin)||watch))freshMatches.push(merged);
       }
       if(merged.matched)matchedCount++;
       existing.set(merged.key,merged);
     }
     const tenders=[...existing.values()].sort((a,b)=>new Date(b.lastSeenAt)-new Date(a.lastSeenAt)).slice(0,Number(s.settings.maxStoredTenders||3000));
-    const patch={[KEYS.tenders]:tenders,[KEYS.schemaHealth]:{...health,at:new Date().toISOString(),source:meta.captureType||''}};
+    const patch={[KEYS.tenders]:tenders,[KEYS.schemaHealth]:{...health,at:new Date().toISOString(),source:meta.captureType||'',runId:meta.runId||null}};
     if(amendmentEvents.length){
       patch[KEYS.amendmentLog]=[...amendmentEvents,...(s.amendmentLog||[])].slice(0,500);
     }
@@ -457,11 +512,15 @@ async function ingest(records,meta={}){
       }
     }catch(e){ /* bỏ qua để không ảnh hưởng luồng chính */ }
     if(meta.runId){
-      const run=s.runs.find(r=>r.id===meta.runId);
       if(run){
-        const captured=Number(run.captured||0)+valid;
+        const foundKeys=[...new Set([...(run.foundKeys||[]),...ingestedKeys])];
+        const captured=foundKeys.length;
+        const values=Object.values(resultStates);
+        const matchCount=values.filter(r=>r.filterState==='MATCH').length;
+        const insufficientCount=values.filter(r=>r.filterState==='INSUFFICIENT').length;
+        const outOfRangeCount=values.filter(r=>r.filterState==='OUT_OF_RANGE').length;
         const progress=meta.total?`Đã lấy ${captured} bản ghi${meta.page?` (trang ${meta.page}`:''}${meta.page&&meta.total?` · tổng ~${meta.total} gói)`:meta.page?')':''}; đang chấm điểm...`:`Đã nhận ${captured} bản ghi; đang chống trùng và chấm điểm...`;
-        const updatedRun={...run,foundKeys:[...new Set([...(run.foundKeys||[]),...ingestedKeys])],status:'RUNNING',message:progress,captured,newCount:Number(run.newCount||0)+newCount,updatedCount:Number(run.updatedCount||0)+updatedCount,matchedCount:Number(run.matchedCount||0)+matchedCount,pendingAlerts:[...(run.pendingAlerts||[]),...freshAlerts].slice(0,50),pendingMatches:[...(run.pendingMatches||[]),...freshMatches].slice(0,50)};
+        const updatedRun={...run,foundKeys,resultStates,matchCount,insufficientCount,outOfRangeCount,status:'RUNNING',message:progress,captured,newCount:Number(run.newCount||0)+newCount,updatedCount:Number(run.updatedCount||0)+updatedCount,matchedCount:values.filter(r=>r.matched).length,pendingAlerts:[...new Map([...(run.pendingAlerts||[]),...freshAlerts].filter(t=>resultStates[t.key]?.filterState==='MATCH').map(t=>[t.key,t])).values()].slice(0,50),pendingMatches:[...new Map([...(run.pendingMatches||[]),...freshMatches].filter(t=>resultStates[t.key]?.filterState==='MATCH').map(t=>[t.key,t])).values()].slice(0,50)};
         patch[KEYS.runs]=s.runs.map(r=>r.id===meta.runId?updatedRun:r).slice(0,100);
         if(s.activeRun?.id===meta.runId)patch[KEYS.activeRun]={...s.activeRun,...updatedRun};
       }
@@ -472,13 +531,28 @@ async function ingest(records,meta={}){
 }
 
 async function waitForTab(tabId,timeout=30000){
-  const tab=await chrome.tabs.get(tabId);if(tab.status==='complete')return tab;
   return new Promise((resolve,reject)=>{
-    const timer=setTimeout(()=>{chrome.tabs.onUpdated.removeListener(listener);reject(new Error('Quá thời gian mở trang e-GP.'));},timeout);
-    function listener(id,info,tab){if(id===tabId&&info.status==='complete'){clearTimeout(timer);chrome.tabs.onUpdated.removeListener(listener);resolve(tab);}}
-    chrome.tabs.onUpdated.addListener(listener);
+    let settled=false;
+    const finish=(error,tab)=>{
+      if(settled)return;settled=true;
+      clearTimeout(timer);
+      chrome.tabs.onUpdated.removeListener(updated);
+      chrome.tabs.onRemoved.removeListener(removed);
+      if(error)reject(error);else resolve(tab);
+    };
+    function updated(id,info,tab){if(id===tabId&&info.status==='complete')finish(null,tab);}
+    function removed(id){if(id===tabId)finish(new Error('Tab e-GP đã bị đóng trước khi tải xong.'));}
+    const timer=setTimeout(()=>finish(new Error('Quá thời gian mở trang e-GP.')),timeout);
+    // Subscribe before reading: completion may occur between Chrome's snapshot
+    // and delivery of tabs.get(). A later loading snapshot must not lose it.
+    chrome.tabs.onUpdated.addListener(updated);
+    chrome.tabs.onRemoved.addListener(removed);
+    try{
+      Promise.resolve(chrome.tabs.get(tabId)).then(tab=>{if(tab.status==='complete')finish(null,tab);},error=>finish(error));
+    }catch(error){finish(error);}
   });
 }
+
 async function sendToTab(tabId,message,retries=8){
   let last;
   for(let i=0;i<retries;i++){
@@ -529,13 +603,14 @@ async function dispatchRunQueryToTab(tabId,run,template,settings){
   const total=Math.max(1,(run.queue||[]).length);
   const label=template?.name||templateName(template||{})||'TBMT công khai';
   return dispatchLookupToTab(tabId,{
-    id:run.id,mode:'tbmt',label:total>1?`${label} (${index+1}/${total})`:label,
+    id:run.id,mode:'tbmt',queryIndex:index,label:total>1?`${label} (${index+1}/${total})`:label,
     query:nativeTbmtQueryFromTemplate(template),pageSize:PAGE_SIZE,
     maxPages:Math.max(1,Number(settings.maxPagesHint)||DEFAULT_SETTINGS.maxPagesHint)
   });
 }
 
 async function startScan(mode='manual',opts={}){
+  if((await getState()).settings.readOnlyMode)return {ok:false,message:'Đang khóa chỉnh sửa và tự động hóa.'};
   const s=await getState();
   if(s.activeRun) return {ok:false,message:'Một lượt quét khác đang chạy.',run:s.activeRun};
   const templates=s.templates||[];
@@ -572,7 +647,7 @@ async function advanceOrFinish(runId,ok,message){
   if(qi<queue.length-1){
     const nextQi=qi+1;const tpl=queue[nextQi];
     await chrome.alarms.clear(TIMEOUT_PREFIX+runId);
-    await updateRun(runId,{qi:nextQi,status:'RUNNING',pageDone:false,completionMessage:null,message:runningMessage(queue,nextQi)});
+    await updateRun(runId,{qi:nextQi,status:'RUNNING',pageDone:false,completionMessage:null,receivedPages:[],querySourceCount:0,queryInvalidCount:0,queryKeys:[],queryDuplicateCount:0,queryTotalElements:null,queryTotalPages:null,message:runningMessage(queue,nextQi)});
     try{
       await chrome.tabs.get(run.tabId);
       await dispatchRunQueryToTab(run.tabId,{...run,qi:nextQi},tpl,s.settings);
@@ -588,6 +663,7 @@ function nextDailyTime(hhmm){const [h,m]=String(hhmm||'06:05').split(':').map(Nu
 async function ensureDailyAlarm(){
   const s=await getState();
   await chrome.alarms.clear(DAILY_ALARM);
+  if(s.settings.readOnlyMode){await chrome.alarms.clear(DEADLINE_ALARM);await ensureHuntAlarms([]);return;}
   if(s.settings.autoScan)await chrome.alarms.create(DAILY_ALARM,{when:nextDailyTime(s.settings.dailyTime),periodInMinutes:1440});
   await chrome.alarms.create(DEADLINE_ALARM,{periodInMinutes:30});
   await ensureHuntAlarms(s.hunts);
@@ -596,7 +672,7 @@ async function ensureDailyAlarm(){
 async function ensureHuntAlarms(hunts){
   const all=await chrome.alarms.getAll();
   for(const alarm of all){
-    if(parseHuntAlarm(alarm.name))await chrome.alarms.clear(alarm.name);
+    if(parseHuntAlarm(alarm.name)||alarm.name.startsWith(HUNT_RETRY_PREFIX))await chrome.alarms.clear(alarm.name);
   }
   for(const hunt of safeHunts(hunts)){
     if(!hunt.enabled)continue;
@@ -608,11 +684,13 @@ async function ensureHuntAlarms(hunts){
 
 async function reviewDeadlines(){
   const s=await getState();
+  if(s.settings.readOnlyMode)return;
   const sent={...s.deadlineAlerts};
   const now=Date.now();
   const targets=(s.tenders||[]).filter(t=>t.watchlisted||t.decisionState&&t.decisionState!=='NEW'||Number(t.score||0)>=Number(s.settings.alertMinScore||85));
   let changed=false;
   for(const tender of targets.slice(0,80)){
+    sent[tender.key]=deadlineReminderState(tender,sent[tender.key]);
     const window=shouldRemindDeadline(tender,sent,now);
     if(!window)continue;
     const nid=`gscb-deadline:${tender.key}:${window.key}`;
@@ -693,13 +771,35 @@ async function compareOpenEgpDom(){
 
 async function runHuntById(huntId){
   const s=await getState();
+  if(s.settings.readOnlyMode)return {ok:false,message:'Đang khóa chỉnh sửa và tự động hóa.'};
   const hunt=(s.hunts||[]).find(h=>h.id===huntId);
   if(!hunt||!hunt.enabled)return {ok:false,message:'Bộ săn không tồn tại hoặc đang tắt.'};
+  const busy=hunt.kind==='plan'?s.planLookup?.status==='RUNNING':Boolean(s.activeRun&&['STARTING','OPENING','RUNNING'].includes(s.activeRun.status));
+  if(busy){
+    await withLock(async()=>{const latest=await getState();await save({[KEYS.hunts]:latest.hunts.map(h=>h.id===huntId?{...h,lastStatus:'QUEUED',lastMessage:'Đang chờ lượt cùng chức năng hoàn tất.'}:h)});});
+    await chrome.alarms.create(HUNT_RETRY_PREFIX+huntId,{when:Date.now()+60_000});
+    return {ok:true,queued:true,message:'Đã xếp hàng; sẽ thử lại khi chức năng rảnh.'};
+  }
+  await chrome.alarms.clear(HUNT_RETRY_PREFIX+huntId);
+  await withLock(async()=>{const latest=await getState();await save({[KEYS.hunts]:latest.hunts.map(h=>h.id===huntId?{...h,lastRunAt:new Date().toISOString(),lastStatus:'RUNNING',lastMessage:'Đang tra cứu...'}:h)});});
   const payload={...hunt.criteria,focusTab:false,huntId:hunt.id};
   const result=hunt.kind==='plan'?await startPlanLookup(payload):await startTbmtSearch(payload);
-  const hunts=s.hunts.map(h=>h.id===hunt.id?{...h,lastRunAt:new Date().toISOString(),lastStatus:result.ok?'RUNNING':'ERROR',lastMessage:result.message||''}:h);
-  await save({[KEYS.hunts]:hunts});
+  if(!result.ok)await withLock(async()=>{const latest=await getState();await save({[KEYS.hunts]:latest.hunts.map(h=>h.id===huntId?{...h,lastStatus:'ERROR',lastMessage:result.message||'Không bắt đầu được.'}:h)});});
   return result;
+}
+
+async function recordHuntOutcome(job){
+  if(!job?.huntId||!['SUCCESS','PARTIAL','ERROR','TIMEOUT','CANCELLED'].includes(job.status))return;
+  const result=await withLock(async()=>{
+    const latest=await getState();const hunt=latest.hunts.find(h=>h.id===job.huntId);
+    if(!hunt)return null;
+    const duplicate=hunt.lastCompletedJobId===job.id&&hunt.lastStatus===job.status;
+    await save({[KEYS.hunts]:latest.hunts.map(h=>h.id===job.huntId?{...h,lastCompletedJobId:job.id,lastStatus:job.status,lastMessage:String(job.message||'').slice(0,300)}:h)});
+    return {hunt,settings:latest.settings,duplicate};
+  });
+  if(result&&!result.duplicate&&result.hunt.kind==='plan'&&result.hunt.telegram&&result.settings.telegramEnabled&&!result.settings.readOnlyMode){
+    await sendTelegram(result.settings,`📋 <b>${escapeHtml(result.hunt.name)}</b>\n${escapeHtml(job.message||job.status)}`,{kind:'plan-hunt',chatId:safeChatId(result.hunt.telegramChatId)});
+  }
 }
 
 async function saveObservedTemplate(payload){
@@ -757,8 +857,16 @@ const stamp=()=>new Date().toISOString().slice(0,10);
 
 /** Số hoặc null — để ô thiếu giá là ô TRỐNG, không phải "0 đ". */
 const numOrNull=v=>(v===null||v===undefined||v===''||typeof v==='boolean'||!Number.isFinite(Number(v)))?null:Number(v);
-async function exportCsv(saveAs=true,keys=null){
+async function exportCsv(saveAs=true,keys=null,runId=''){
   const s=await getState();
+  let selectedRun=null;
+  if(runId){
+    selectedRun=s.runs.find(r=>r.id===runId);
+    if(!selectedRun)throw new Error('Không tìm thấy lượt tra cứu cần xuất.');
+    const found=new Set(selectedRun.foundKeys||[]);
+    if(Array.isArray(keys)&&keys.some(key=>!found.has(key)))throw new Error('Gói xuất không thuộc lượt tra cứu đã chọn.');
+    s.tenders=s.tenders.filter(t=>found.has(t.key)).map(t=>({...t,...(selectedRun.resultStates?.[t.key]||{})}));
+  }
   if(keys!==null){
     if(!Array.isArray(keys)||keys.length>10000||keys.some(k=>typeof k!=='string'))throw new Error('Phạm vi xuất không hợp lệ.');
     const selected=new Set(keys);
@@ -770,6 +878,10 @@ async function exportCsv(saveAs=true,keys=null){
     columns:[
       {header:'Điểm',key:'score',type:'number',width:8},
       {header:'Khuyến nghị',key:'recommendation',width:30},
+      {header:'Đối chiếu tiêu chí',key:'filterState',width:28},
+      {header:'Lý do đối chiếu',key:'filterReason',width:38},
+      {header:'Thời điểm ghi nhận',key:'checkedAt',width:22},
+      {header:'Phạm vi dữ liệu',key:'coverage',width:60},
       {header:'Trạng thái',key:'statusLabel',width:16},
       {header:'Mã TBMT',key:'notifyNo',width:16},
       {header:'Mã gói thầu (KHLCNT)',key:'bidNo',width:18},
@@ -791,6 +903,8 @@ async function exportCsv(saveAs=true,keys=null){
     ],
     rows:s.tenders.map(t=>({
       score:numOrNull(t.score),recommendation:t.recommendation,statusLabel:BID_STATUS_LABEL[statusOf(t)],
+      filterState:GATE_LABEL[t.filterState]||'Chưa kiểm tra',filterReason:hardFilterReason({reason:t.filterReason,state:t.filterState}),
+      checkedAt:t.checkedAt||t.lastSeenAt||'',coverage:selectedRun?.coverage?.text||'',
       notifyNo:t.notifyNo||'',bidNo:t.bidNo||'',version:t.version,
       bidName:t.bidName,projectName:t.projectName,location:t.location,
       price:numOrNull(t.price),publicDate:t.publicDate,closeDate:t.closeDate,
@@ -1268,38 +1382,47 @@ async function startBidOpenScan(payload={}){
 /** Nhận từng trang danh sách của giai đoạn 1. */
 async function ingestBidOpenList(payload={}){
   const done=await withLock(async()=>{
-    const s=await getState();
-    const scan=s.bidOpenScan;
+    const s=await getState(),scan=s.bidOpenScan;
     if(!scan||scan.id!==payload.planId)return false;
-
     const rows=Array.isArray(payload.records)?payload.records:[];
-    // The server query deliberately has no publication-date range: the user
-    // selects opening dates, and publication can precede opening by many days.
-    // Normalize first so the local range uses actual Vietnamese opening time.
-    const range=bbmtDateRange(scan.scope||{});
     const all=rows.map(normalizeBbmtPackage).filter(Boolean);
+    const sourceKeys=extendSourceKeys(Object.keys(scan.resultStates||{}),all.map(p=>p.key));
+    const duplicateCount=Number(scan.duplicateCount||0)+sourceKeys.duplicates;
+    const range=bbmtDateRange(scan.scope||{});
+    const criteria={...(scan.scope||{}),category:scan.scope?.field||'',fromDate:'',toDate:'',fromYear:0,toYear:0,days:0};
     const cache=(await chrome.storage.local.get('bidOpenCache')).bidOpenCache||{};
-    const found=all.filter(p=>bbmtInDateRange(p,range)&&matchesAdditionalKeyword(p,scan.scope||{}))
-      .map(p=>restoreOpening(p,cache[p.key]));
-    const dropped=Number(scan.outOfRangeCount||0)+(all.length-found.length);
-
-    const map=new Map((scan.packages||[]).map(p=>[p.key,p]));
-    for(const p of found)if(!map.has(p.key))map.set(p.key,p);
-
+    const matched=[],unknown=[],resultStates={...(scan.resultStates||{})};
+    for(const p of all){
+      const hard=passesHardFilter(p,criteria),date=dateGate(bbmtStamp(p),range);
+      const state=hard.state==='OUT_OF_RANGE'||date==='OUT_OF_RANGE'?'OUT_OF_RANGE':hard.state==='INSUFFICIENT'||date==='INSUFFICIENT'?'INSUFFICIENT':'MATCH';
+      const reason=hard.state!=='MATCH'?hard.reason:date==='INSUFFICIENT'?'insufficient-date':date==='OUT_OF_RANGE'?'date':'';
+      const row={...p,filterState:state,filterReason:reason};
+      resultStates[p.key]={filterState:state,filterReason:reason};
+      if(state==='MATCH')matched.push(restoreOpening(row,cache[p.key]));
+      if(state==='INSUFFICIENT')unknown.push(row);
+    }
+    const pageKeys=new Set(all.map(p=>p.key));
+    const map=new Map((scan.packages||[]).filter(p=>!pageKeys.has(p.key)).map(p=>[p.key,p]));
+    for(const p of matched)map.set(p.key,p);
     const packages=[...map.values()].slice(0,scan.maxPackages);
-    const listingCapped=Boolean(scan.listingCapped||payload.capped);
-    const next={...scan,packages,outOfRangeCount:dropped,
-      totalCandidates:Number(payload.totalElements||scan.totalCandidates||0),
-      totalPages:Number(payload.totalPages||scan.totalPages||0),
-      pagesRead:Math.max(Number(scan.pagesRead)||0,(Number(payload.pageIndex)||0)+(payload.done?0:1)),
-      listedRows:Number(scan.listedRows||0)+rows.length,listingCapped,
-      // Persist the scope limit before detail phase can finish an empty queue.
-      partial:Boolean(scan.partial||payload.partial||listingCapped),
-      message:`Đã tìm được ${packages.length} gói đang chờ kết quả`
-        +(dropped?` (đã bỏ ${dropped} gói ngoài khoảng thời gian đã chọn)`:'')+'...'};
+    const insufficientPackages=[...new Map([...(scan.insufficientPackages||[]).filter(p=>!pageKeys.has(p.key)),...unknown].map(p=>[p.key,p])).values()];
+    const states=Object.values(resultStates);
+    const outOfRangeCount=states.filter(p=>p.filterState==='OUT_OF_RANGE').length;
+    const dateUnknown=insufficientPackages.filter(p=>dateGate(bbmtStamp(p),range)==='INSUFFICIENT').length;
+    const listedRows=Number(scan.listedRows||0)+rows.length;
+    const invalidCount=Number(scan.invalidCount||0)+rows.length-all.length;
+    const listingCapped=Boolean(scan.listingCapped||payload.capped||map.size>packages.length);
+    const coverage=pageCoverage(scan,{...payload,capped:listingCapped,partial:Boolean(payload.partial||duplicateCount)},{fetched:listedRows,
+      match:states.filter(p=>p.filterState==='MATCH').length,
+      insufficient:states.filter(p=>p.filterState==='INSUFFICIENT').length+invalidCount,
+      outOfRange:outOfRangeCount,invalid:invalidCount});
+    const partial=Boolean(scan.partial||payload.partial||listingCapped||payload.schemaIssue||invalidCount||duplicateCount||(payload.done&&!coverage.complete));
+    const next={...scan,packages,insufficientPackages,resultStates,outOfRangeCount,dateUnknown,invalidCount,duplicateCount,coverage,
+      totalCandidates:coverage.serverTotal,totalPages:coverage.totalPages,pagesRead:coverage.pagesRead,
+      listedRows,listingCapped,partial,schemaIssue:Boolean(scan.schemaIssue||payload.schemaIssue||invalidCount),
+      message:`Đã tìm ${packages.length} gói chờ kết quả; ${insufficientPackages.length} gói chưa đủ dữ liệu đối chiếu. ${coverage.text}`};
     if(payload.done)next.listingDone=true;
-    await save({[KEYS.bidOpenScan]:next});
-    return Boolean(payload.done&&!scan.listingDone);
+    await save({[KEYS.bidOpenScan]:next});return Boolean(payload.done&&!scan.listingDone);
   });
   if(done)void startBidOpenDetailPhase(payload.planId).catch(e=>failLookupJob('bidOpenScan',payload.planId,String(e.message||e)));
   return {ok:true};
@@ -1655,7 +1778,7 @@ async function finalizeBidOpenScan(scanId){
     const summary=summarizeBidOpenings(scan.packages,scan.focusTaxCode,scan.contractorQuery);
     const failed=scan.packages.filter(p=>!['OK','EMPTY'].includes(bbmtReadStateOf(p))).length;
     const complete=scan.packages.length-failed;
-    const partial=Boolean(scan.partial||scan.listingCapped);
+    const partial=Boolean(scan.partial||scan.listingCapped||scan.coverage?.complete===false||scan.insufficientPackages?.length);
     const scopeNote=scan.listingCapped
       ?` Danh sách chưa đầy đủ: đã lấy ${scan.pagesRead||0}/${scan.totalPages||'?'} trang (${scan.listedRows||0}/${scan.totalCandidates||'?'} bản ghi), đạt giới hạn quét. Có thể thu hẹp bộ lọc hoặc tăng số gói tối đa.`
       :partial?' Danh sách tìm kiếm chưa đầy đủ.':'';
@@ -1674,9 +1797,10 @@ async function finalizeBidOpenScan(scanId){
   await chrome.alarms.clear(TIMEOUT_PREFIX+scanId).catch(()=>{});
 }
 
-async function exportBidOpenCsv(){
+async function exportBidOpenCsv(payload={}){
   const s=await getState();
-  const list=(s.bidOpenScan&&s.bidOpenScan.packages)||[];
+  const scan=s.bidOpenScan;
+  const list=(scan?.packages||[]).filter(p=>!payload.onlyFollowed||findBidder(p.bidders||[],scan.focusTaxCode,scan.contractorQuery));
   const rows=[];
   for(const p of list){
     for(const b of (p.bidders||[])){
@@ -1757,6 +1881,43 @@ async function getProvincesOnly(){
   })();return provincesInFlight;
 }
 
+const wardsInFlight=new Map();
+/** Load only the current/legacy codes of the selected province. A partial
+ * ward catalogue must never masquerade as the complete national catalogue. */
+async function getWardAreas(province,{refresh=false}={}){
+  const resolved=await resolveProvinceCodes(province);
+  if(!resolved.ok||!resolved.codes.length)return {ok:false,message:'Hãy chọn đầy đủ tên tỉnh/thành trong danh sách trước khi lấy xã/phường.'};
+  const catalog=(await getProvincesOnly()).areas;
+  const stored=await chrome.storage.local.get({wardCatalog:{},areas:null});
+  const results=await Promise.allSettled(resolved.codes.map(async code=>{
+    const full=stored.areas;
+    const cached=stored.wardCatalog?.[code]||(Object.hasOwn(full?.wardsByProvince||{},code)?{rows:full.wardsByProvince[code],fetchedAt:full.fetchedAt}:null);
+    const fresh=cached&&Array.isArray(cached.rows)&&Date.now()-Date.parse(cached.fetchedAt)<AREAS_TTL_MS;
+    if(fresh&&!refresh)return {code,rows:cached.rows};
+    if(wardsInFlight.has(code))return wardsInFlight.get(code);
+    const promise=(async()=>{
+      try{
+        const rows=await fetchWards(code);
+        const entry={rows,fetchedAt:new Date().toISOString()};
+        await withLock(async()=>{
+          const current=(await chrome.storage.local.get({wardCatalog:{}})).wardCatalog;
+          await save({wardCatalog:{...current,[code]:entry}});
+        });
+        return {code,rows};
+      }catch(error){
+        if(cached&&Array.isArray(cached.rows))return {code,rows:cached.rows,stale:true};
+        throw error;
+      }finally{wardsInFlight.delete(code);}
+    })();
+    wardsInFlight.set(code,promise);return promise;
+  }));
+  const failed=results.find(r=>r.status==='rejected');
+  if(failed)return {ok:false,message:'Chưa lấy đủ danh mục xã/phường của tỉnh đã chọn: '+String(failed.reason?.message||failed.reason)};
+  const values=results.map(r=>r.value);
+  return {ok:true,stale:values.some(r=>r.stale),areas:{provinces:catalog.provinces,
+    wardsByProvince:Object.fromEntries(values.map(r=>[r.code,r.rows])),fetchedAt:catalog.fetchedAt}};
+}
+
 async function getAreas({refresh=false}={}){
   const store=await chrome.storage.local.get({[KEYS.areas]:null});
   const cached=store[KEYS.areas];
@@ -1778,8 +1939,8 @@ async function getAreas({refresh=false}={}){
 
 /** Trả về danh sách tên cho ô chọn: tỉnh hiện hành, và xã/phường theo tỉnh. */
 async function getAreaOptions(payload={}){
-  if(payload.provincesOnly){const r=await getProvincesOnly();return {...r,provinces:r.areas?currentProvinceNames(r.areas):[]};}
-  const res=await getAreas({refresh:Boolean(payload.refresh)});
+  if(payload.provincesOnly||!String(payload.province||'').trim()){const r=await getProvincesOnly();return {...r,provinces:r.areas?currentProvinceNames(r.areas):[]};}
+  const res=await getWardAreas(payload.province,{refresh:Boolean(payload.refresh)});
   if(!res.ok)return res;
   return {
     ok:true,
@@ -1787,7 +1948,7 @@ async function getAreaOptions(payload={}){
     stale:Boolean(res.stale),
     fetchedAt:res.areas.fetchedAt,
     provinces:currentProvinceNames(res.areas),
-    wards:wardNamesForProvince(res.areas,payload.province||'')
+    wards:[...new Set(splitProvinceNames(payload.province).flatMap(name=>wardNamesForProvince(res.areas,name)))]
   };
 }
 
@@ -2008,18 +2169,8 @@ async function fetchAndDownloadAttachments(payload={}){
       if(entry&&entry.files&&entry.files.length)break;
     }
     if(!entry||!entry.files.length){
-      /* Nói rõ ba khả năng thay vì một câu chung chung, và chỉ đường đi tiếp.
-         Gói CHỈ ĐỊNH THẦU (không qua mạng) là ca hay gặp nhất ở đây: e-GP
-         thường không dựng được trang chi tiết KQLCNT cho chúng, nên không có
-         request tệp nào để mà bắt. Khi đó đường chắc ăn là qua KHLCNT. */
-      const goiChiDinh=!payload.isInternet;
       return {ok:false,message:`Không thấy tệp đính kèm nào cho ${notifyNo||'gói này'}. `
-        +'Ba khả năng: gói chưa đăng tệp; e-GP yêu cầu đăng nhập mới tải được; '
-        +'hoặc e-GP không dựng được trang chi tiết cho gói này.'
-        +(goiChiDinh
-          ? ' Gói không qua mạng (chỉ định thầu, chào hàng rút gọn) hay rơi vào khả năng thứ ba —'
-            +' bấm nút "Xem KHLCNT" để đi vòng qua kế hoạch lựa chọn nhà thầu.'
-          : '')};
+        +'Có thể gói chưa đăng tệp, hoặc e-GP yêu cầu đăng nhập mới xem được.'};
     }
     return downloadAttachments({notifyNo,files:entry.files.map(f=>({...f,notifyNo}))});
   }finally{
@@ -2656,6 +2807,9 @@ function priceRow(x){
 }
 
 async function startPlanLookup(payload={}){
+  const validation=validateCriteria(payload);
+  if(!validation.ok)return validation;
+  const localCriteria=validation.criteria;
   const investor=String(payload.investor||'').trim();
   const province=String(payload.province||'').trim();
   const ward=String(payload.ward||'').trim();
@@ -2676,7 +2830,8 @@ async function startPlanLookup(payload={}){
   // Quy TÊN địa bàn ra MÃ. Tỉnh phải lấy đủ mọi mã cùng tên (68 + 703).
   let provinces=[],wards=[];
   if(province||ward){
-    const areas=(await getAreas({})).areas;
+    const areas=(await (ward&&province?getWardAreas(province):ward?getAreas({}):getProvincesOnly())).areas;
+    if(!areas)return {ok:false,message:'Chưa tải được danh mục địa bàn e-GP. Hãy thử lại; tiêu chí tỉnh/xã chưa được bỏ qua.'};
     if(areas){
       if(province){
         const resolved=await resolveProvinceCodes(province);
@@ -2686,7 +2841,7 @@ async function startPlanLookup(payload={}){
         provinces=resolved.codes;
       }
       if(ward){
-        wards=wardCodesByName(areas,province,ward);
+        wards=[...new Set((splitProvinceNames(province).length?splitProvinceNames(province):['']).flatMap(name=>wardCodesByName(areas,name,ward)))];
         if(!wards.length&&!investor&&!keyword&&!provinces.length){
           return {ok:false,message:`Không nhận ra xã/phường "${ward}". Hãy chọn tỉnh trước rồi chọn từ danh sách gợi ý.`};
         }
@@ -2699,7 +2854,7 @@ async function startPlanLookup(payload={}){
     .filter(Boolean).join(' · ')||`từ khoá "${keyword}"`;
 
   const lookup={
-    id,criteria:{investor,province,ward,keyword,category,provinces,wards,fromDate,toDate,days},label,
+    id,huntId:String(payload.huntId||''),criteria:{...localCriteria,investor,province,ward,keyword,category,provinces,wards,fromDate,toDate,days},label,
     status:'RUNNING',message:'Đang hỏi e-GP các kế hoạch theo tiêu chí đã chọn...',
     startedAt:new Date().toISOString(),finishedAt:null,
     plans:[],totalElements:0,serverCount:0,areaDropped:0,dateDropped:0,categoryDropped:0,categoryUnknownPackages:0,
@@ -2733,71 +2888,59 @@ async function startPlanLookup(payload={}){
 
 async function ingestPlanPage(payload={}){
   return withLock(async()=>{
-    const s=await getState();
-    const lookup=s.planLookup;
+    const s=await getState(),lookup=s.planLookup;
     if(!lookup||lookup.id!==payload.planId)return {ok:false};
-
     const rows=Array.isArray(payload.records)?payload.records:[];
     const all=rows.map(normalizeKhlcntPlan).filter(Boolean);
-    // Lọc tỉnh/xã ngay tại đây thay vì nhờ biểu mẫu e-GP. `dropped` được đếm
-    // để giao diện nói rõ đã bỏ bao nhiêu bản ghi lệch địa bàn.
-    const {kept,dropped}=filterPlansByArea(all,lookup.criteria||{});
-
-    /* LỌC NGÀY TẠI CHỖ — lớp bảo đảm.
-     *
-     * Bộ lọc gửi lên máy chủ soi `publicDate` và đã được nới biên, nên nó chỉ
-     * thu hẹp cho nhanh. Ranh giới chính xác nằm ở đây, đối chiếu NGÀY PHÊ
-     * DUYỆT — đúng cái ngày người dùng nhìn thấy trên thẻ kết quả. */
-    const range=khlcntDateRange(lookup.criteria||{});
-    const inRange=kept.filter(p=>khlcntInDateRange(p,range));
-    const dateDropped=Number(lookup.dateDropped||0)+(kept.length-inRange.length);
-    const categoryResult=filterPlansByCategory(inRange,lookup.criteria?.category);
-
-    const next={...lookup,
-      plans:dedupeKhlcnt([...(lookup.plans||[]),...categoryResult.kept]),
-      serverCount:Number(lookup.serverCount||0)+all.length,
-      areaDropped:Number(lookup.areaDropped||0)+dropped.length,
-      dateDropped,
-      categoryDropped:Number(lookup.categoryDropped||0)+categoryResult.dropped,
-      categoryUnknownPackages:Number(lookup.categoryUnknownPackages||0)+categoryResult.unknownPackages,
-      totalElements:Number(payload.totalElements||lookup.totalElements||0)};
-    next.message=`Đã xét ${next.serverCount}/${next.totalElements||next.serverCount} kế hoạch, khớp ${next.plans.length}...`;
-
+    const sourceKeys=extendSourceKeys(Object.keys(lookup.resultStates||{}),all.map(p=>p.key));
+    const duplicateCount=Number(lookup.duplicateCount||0)+sourceKeys.duplicates;
+    const classified=classifyPlansByCriteria(all,lookup.criteria||{});
+    const pageKeys=new Set(all.map(p=>p.key));
+    const plans=dedupeKhlcnt([...(lookup.plans||[]).filter(p=>!pageKeys.has(p.key)),...classified.match]);
+    const insufficientPlans=dedupeKhlcnt([...(lookup.insufficientPlans||[]).filter(p=>!pageKeys.has(p.key)),...classified.insufficient]);
+    const resultStates={...(lookup.resultStates||{})};
+    // Plan-level totals are disjoint, even if a plan contains both a matching
+    // child and a child that cannot yet be assessed. Child counts stay separate.
+    for(const state of ['outOfRange','insufficient','match'])for(const plan of classified[state])
+      resultStates[plan.key]={filterState:plan.filterState,filterReason:plan.filterReason};
+    const states=Object.values(resultStates);
+    const matchCount=states.filter(r=>r.filterState==='MATCH').length;
+    const insufficientCount=states.filter(r=>r.filterState==='INSUFFICIENT').length;
+    const outOfRangeCount=states.filter(r=>r.filterState==='OUT_OF_RANGE').length;
+    const invalidCount=Number(lookup.invalidCount||0)+rows.length-all.length;
+    const serverCount=Number(lookup.serverCount||0)+rows.length;
+    const dateUnknown=insufficientPlans.filter(p=>dateGate(khlcntStamp(p),khlcntDateRange(lookup.criteria||{}))==='INSUFFICIENT').length;
+    const coverage=pageCoverage(lookup,{...payload,partial:Boolean(payload.partial||duplicateCount)},{fetched:serverCount,match:matchCount,
+      insufficient:insufficientCount+invalidCount,outOfRange:outOfRangeCount,invalid:invalidCount});
+    const partial=Boolean(lookup.partial||payload.partial||payload.capped||payload.schemaIssue||invalidCount||duplicateCount||(payload.done&&!coverage.complete));
+    const unknownPrices=insufficientPlans.reduce((n,p)=>n+(p.packages||[]).filter(pkg=>(pkg.filterReasons||[]).some(r=>r.field==='price')).length,0);
+    const next={...lookup,plans,insufficientPlans,resultStates,serverCount,invalidCount,duplicateCount,dateUnknown,unknownPrices,
+      matchCount,insufficientCount,outOfRangeCount,coverage,partial,
+      totalElements:coverage.serverTotal,totalPages:coverage.totalPages,pagesRead:coverage.pagesRead,
+      schemaIssue:Boolean(lookup.schemaIssue||payload.schemaIssue||invalidCount),
+      areaDropped:states.filter(r=>['area','ward','investor'].includes(r.filterReason)).length,
+      dateDropped:states.filter(r=>r.filterReason==='date').length,
+      categoryDropped:states.filter(r=>r.filterReason==='category').length,
+      categoryUnknownPackages:insufficientPlans.reduce((n,p)=>n+(p.packages||[]).filter(pkg=>(pkg.filterReasons||[]).some(r=>r.field==='category')).length,0),
+      localDropped:outOfRangeCount,
+      message:`Đã xét ${serverCount}/${coverage.serverTotal??'?'} kế hoạch; khớp ${matchCount}, chưa đủ dữ liệu ${insufficientCount}.`};
     if(payload.done){
-      next.status='SUCCESS';
-      next.finishedAt=new Date().toISOString();
-      next.cancelled=Boolean(payload.cancelled);
-      next.applied=payload.applied||null;
-      next.summary=summarizeKhlcnt(next.plans);
-      // Soát lại: bản ghi nào e-GP trả về mà lệch tiêu chí thì nêu rõ.
-      next.mismatched=auditPlans(next.plans,lookup.criteria).map(p=>p.planNoStand);
-      const drops=[];
-      if(next.areaDropped)drops.push(`${next.areaDropped} lệch địa bàn`);
-      if(next.dateDropped)drops.push(`${next.dateDropped} ngoài khoảng ngày`);
-      if(next.categoryDropped)drops.push(`${next.categoryDropped} không có gói khớp loại đã chọn`);
-      const dropNote=drops.length?` (đã bỏ ${drops.join(', ')})`:'';
-      const c2=next.criteria||{};
-      const broad=!c2.investor&&!c2.keyword&&!(c2.wards&&c2.wards.length);
-      const capNote=(broad&&next.serverCount>=2000)
-        ? ' Phạm vi rộng nên mới lấy 2.000 kế hoạch đầu — thêm Xã/Phường, Chủ đầu tư hoặc từ khoá để lấy đủ.'
-        : '';
-      next.message=next.plans.length
-        ?`${next.plans.length} kế hoạch · ${next.summary.packageCount} gói thầu${dropNote}.${capNote}`
-        // Nói rõ e-GP CÓ trả dữ liệu nhưng bộ lọc địa bàn loại hết — khác hẳn
-        // với việc chủ đầu tư không có kế hoạch nào.
-        : next.serverCount
-          ?`Đã đối chiếu ${next.serverCount} kế hoạch; chưa thấy gói khớp các tiêu chí trong dữ liệu đã tải${dropNote}. Có thể nới loại gói, địa bàn hoặc khoảng ngày.`
-          :'e-GP không trả kế hoạch nào cho chủ đầu tư/từ khoá này.';
+      next.status=payload.cancelled?'CANCELLED':partial?'PARTIAL':'SUCCESS';
+      next.finishedAt=new Date().toISOString();next.cancelled=Boolean(payload.cancelled);
+      next.applied=payload.applied||null;next.summary=summarizeKhlcnt(plans);
+      next.mismatched=[];
+      next.message=`${matchCount} kế hoạch khớp · ${next.summary.packageCount} gói thầu. ${coverage.text}`;
+      if(payload.failureReason||payload.deliveryMessage)next.message+=' '+(payload.failureReason||payload.deliveryMessage);
+      if(duplicateCount)next.message+=` Có ${duplicateCount} bản ghi trùng giữa các trang; cần tra lại để xác nhận đầy đủ.`;
     }
-    if(next.categoryUnknownPackages)next.message+=` Có ${next.categoryUnknownPackages} gói chưa đủ thông tin phân loại; chọn Tất cả loại gói thầu để xem thêm.`;
-    await save({[KEYS.planLookup]:next});
-    return {ok:true};
+    if(insufficientPlans.length)next.message+=` Giữ ${insufficientPlans.length} kế hoạch có gói thiếu dữ liệu để kiểm tra riêng; không cộng các gói này vào giá trị khớp.`;
+    await save({[KEYS.planLookup]:next});return {ok:true};
   });
 }
 
-async function exportPlansCsv(){
+async function exportPlansCsv(payload={}){
   const s=await getState();
-  const list=(s.planLookup&&s.planLookup.plans)||[];
+  const list=((s.planLookup&&s.planLookup.plans)||[]).filter(p=>!payload.onlyUnannounced||p.hasUnannounced);
   const rows=[];
   for(const p of list){
     const base={
@@ -2994,6 +3137,7 @@ async function failLookupJob(key,id,message,status='ERROR'){
     return true;
   });
   if(changed)await chrome.alarms.clear(TIMEOUT_PREFIX+id).catch(()=>{});
+  if(changed&&key==='planLookup')await recordHuntOutcome((await getState()).planLookup);
   return changed;
 }
 
@@ -3265,7 +3409,7 @@ async function startTbmtSearch(payload={}){
     const tab=await ensureEgpSearchTab(payload.focusTab!==false);
     await updateRun(run.id,{tabId:tab.id,status:'RUNNING'});
     await dispatchLookupToTab(tab.id,{
-      id:run.id,mode:'tbmt',label,
+      id:run.id,mode:'tbmt',queryIndex:0,label,
       /* TỰ DỰNG truy vấn, không chạm biểu mẫu e-GP nữa. Cách cũ không lọc được
          khi người dùng CHỈ chọn tỉnh mà bỏ trống chủ đầu tư và xã/phường.
          Đã đo thật: chỉ lọc tỉnh Lâm Đồng -> 579 gói; thêm giá ≥3 tỷ -> 186. */
@@ -3285,75 +3429,45 @@ async function startTbmtSearch(payload={}){
 
 /** Nhận từng trang TBMT: đưa thẳng vào kho gói thầu để chấm điểm như thường. */
 async function ingestTbmtPage(payload={}){
-  const all=Array.isArray(payload.records)?payload.records:[];
-
-  /* Lọc XÃ/PHƯỜNG tại chỗ. e-GP không lọc được theo mã xã — đã đo:
-     locations.districtCode in ["23122"] trả về 0 dù mã đúng dạng và có thật.
-     Tỉnh thì đã lọc ở phía máy chủ nên tới đây chỉ còn thu hẹp theo xã. */
   const st=await getState();
-  const criteria=st.activeRun?.id===payload.planId?st.activeRun.criteria||{}:{};
-  const ward=String(criteria.ward||'').trim();
-  const byWard=ward?all.filter(r=>tbmtMatchesWard(r,ward)):all;
-  // e-GP has one keyword block; investor takes that block. Apply the package
-  // keyword locally in this combination so no requested criterion disappears.
-  const keywordRows=byWard.filter(r=>matchesLocalFilters(r,criteria));
-  const rows=keywordRows.filter(r=>matchesTenderCategory(r,criteria.category));
-  if(rows.length<keywordRows.length){
-    await withLock(async()=>{
-      const state=await getState();
-      if(state.activeRun?.id!==payload.planId)return;
-      const categoryDropped=Number(state.activeRun.categoryDropped||0)+keywordRows.length-rows.length;
-      await save({[KEYS.activeRun]:{...state.activeRun,categoryDropped},
-        [KEYS.runs]:state.runs.map(run=>run.id===payload.planId?{...run,categoryDropped}:run)});
-    });
-  }
-  if(ward&&all.length>byWard.length){
-    await withLock(async()=>{
-      const cur=await getState();
-      const add=all.length-byWard.length;
-      const runs=cur.runs.map(r=>r.id===payload.planId
-        ?{...r,wardDropped:Number(r.wardDropped||0)+add}:r);
-      const patch={[KEYS.runs]:runs.slice(0,100)};
-      if(cur.activeRun?.id===payload.planId){
-        patch[KEYS.activeRun]={...cur.activeRun,wardDropped:Number(cur.activeRun.wardDropped||0)+add};
-      }
-      await save(patch);
-    });
-  }
-
-  if(rows.length){
-    await ingest(rows,{runId:payload.planId,captureType:'form',
-      total:payload.totalElements,page:(Number(payload.pageIndex)||0)+1});
-
-
-  }
-  if(payload.done){
-    const s=await getState();
-    if(s.activeRun&&s.activeRun.id===payload.planId){
-      const ap=payload.applied||{};
-      const c=(s.activeRun.criteria)||{};
-      const dropped=Number((await getState()).activeRun?.wardDropped||s.activeRun.wardDropped||0);
-      const wardNote=dropped
-        ? ` Đã bỏ ${dropped} gói không thuộc xã/phường "${c.ward}".`
-        : '';
-      const categoryNote=c.category?` Loại gói: ${categoryLabel(c.category)}; đã lọc ${Number(s.activeRun.categoryDropped||0)} gói không khớp trong dữ liệu tải về.`:'';
-      const receivedPages=Math.max(0,Number(payload.pageIndex)||0);
-      const totalPages=Math.max(receivedPages,Number(payload.totalPages)||0);
-      const isPartial=Boolean(payload.partial||payload.capped||s.activeRun.partial);
-      const partialMessage=payload.capped
-        ?`Phạm vi lớn: mới lấy ${receivedPages}/${totalPages||receivedPages} trang đầu theo giới hạn cấu hình.${wardNote}${categoryNote}`
-        :payload.partial
-          ?`e-GP dừng sớm sau ${receivedPages}/${totalPages||receivedPages} trang; kết quả chưa đầy đủ.${wardNote}${categoryNote}`
-          :s.activeRun.partialMessage||'';
-      // Chưa finish ở đây: content script sẽ xoá kqPlan rồi mới gửi
-      // KQLCNT_DONE. Chỉ lúc đó mới an toàn giao bộ lọc kế tiếp cho cùng tab.
-      await updateRun(payload.planId,{applied:ap,pageDone:true,capped:Boolean(payload.capped),partial:isPartial,
-        partialMessage:partialMessage||s.activeRun.partialMessage||'',
-        completionMessage:isPartial?(partialMessage||'Hoàn tất một phần.'):'Hoàn tất.'+wardNote+categoryNote,
-        message:'Đã nhận trang cuối; đang chốt lượt tra cứu...'});
-    }
-  }
-  return {ok:true};
+  if(st.activeRun?.id!==payload.planId)return {ok:false};
+  const all=Array.isArray(payload.records)?payload.records:[];
+  const invalid=all.filter(raw=>!normalizeCandidate(raw,{captureType:'form'})).length;
+  if(all.length)await ingest(all,{runId:payload.planId,captureType:'form',
+    total:payload.totalElements,page:(Number(payload.pageIndex)||0)+1});
+  return withLock(async()=>{
+    const s=await getState(),run=s.activeRun;
+    if(run?.id!==payload.planId)return {ok:false};
+    const sourceKeys=extendSourceKeys(run.queryKeys,all.map(raw=>normalizeCandidate(raw,{captureType:'form'})?.key).filter(Boolean));
+    const queryKeys=sourceKeys.keys;
+    const queryDuplicateCount=Number(run.queryDuplicateCount||0)+sourceKeys.duplicates;
+    const duplicateCount=Number(run.duplicateCount||0)+sourceKeys.duplicates;
+    const querySourceCount=Number(run.querySourceCount||0)+all.length;
+    const queryInvalidCount=Number(run.queryInvalidCount||0)+invalid;
+    const sourceCount=Number(run.sourceCount||0)+all.length;
+    const invalidCount=Number(run.invalidCount||0)+invalid;
+    const queryJob={...run,totalElements:run.queryTotalElements??null,totalPages:run.queryTotalPages??null};
+    const current=pageCoverage(queryJob,{...payload,partial:Boolean(payload.partial||queryDuplicateCount)},{fetched:querySourceCount,invalid:queryInvalidCount});
+    const queryCoverage={...(run.queryCoverage||{}),[Number(run.qi)||0]:current};
+    const parts=Object.values(queryCoverage);
+    const summed=key=>parts.every(c=>c[key]!==null)?parts.reduce((n,c)=>n+c[key],0):null;
+    const coverage=coverageOf({serverTotal:summed('serverTotal'),totalPages:summed('totalPages'),
+      pagesRead:parts.reduce((n,c)=>n+c.pagesRead,0),fetched:sourceCount,
+      match:run.matchCount||0,insufficient:(run.insufficientCount||0)+invalidCount,outOfRange:run.outOfRangeCount||0,
+      done:payload.done===true&&Number(run.qi||0)>=Math.max(0,(run.queue||[]).length-1),
+      partial:Boolean(run.partial||payload.partial||payload.capped||payload.schemaIssue||invalidCount||duplicateCount||parts.some(c=>c.done&&c.complete===false))});
+    const partial=Boolean(run.partial||payload.partial||payload.capped||payload.schemaIssue||invalidCount||duplicateCount||(payload.done&&!current.complete));
+    const note=payload.failureReason||payload.deliveryMessage||(duplicateCount?`Có ${duplicateCount} bản ghi trùng giữa các trang của cùng truy vấn; chưa xác nhận lấy đủ. `:'')+coverage.text;
+    const patch={sourceCount,invalidCount,duplicateCount,queryKeys,queryDuplicateCount,querySourceCount,queryInvalidCount,queryCoverage,coverage,
+      queryTotalElements:current.serverTotal,queryTotalPages:current.totalPages,
+      partial,schemaIssue:Boolean(run.schemaIssue||payload.schemaIssue||invalidCount),
+      message:payload.done?'Đã nhận trang cuối; đang chốt lượt tra cứu...':coverage.text};
+    if(payload.done)Object.assign(patch,{applied:payload.applied||{},pageDone:true,capped:Boolean(payload.capped),
+      partialMessage:partial?note:'',completionMessage:partial?note:'Hoàn tất. '+coverage.text});
+    const next={...run,...patch};
+    await save({[KEYS.activeRun]:next,[KEYS.runs]:s.runs.map(r=>r.id===payload.planId?{...r,...patch}:r)});
+    return {ok:true};
+  });
 }
 
 /* ==========================================================================
@@ -3442,6 +3556,9 @@ function importedSettings(raw={}){
   out.maxPrice=Math.max(out.minPrice,Math.min(1e15,Number(out.maxPrice)||Number.MAX_SAFE_INTEGER));
   if(!/^([01]\d|2[0-3]):[0-5]\d$/.test(String(out.dailyTime)))out.dailyTime=DEFAULT_SETTINGS.dailyTime;
   out.telegramBotToken='';out.telegramChatId='';out.telegramEnabled=false;
+  out.notifyWebhook='';out.notifyEmail='';out.webhookSecret='';
+  out.capability=normalizeCapability(raw.capability||{});
+  out.approvalSteps=[1,2,3].includes(Number(raw.approvalSteps))?Number(raw.approvalSteps):1;
   out.autoScan=false;out.scanOnStartup=false;out.autoExportMobileReport=false;
   return out;
 }
@@ -3468,7 +3585,7 @@ function importedTender(raw,settings){
   const sourcePageUrl=canonicalEgpUrl(raw.sourcePageUrl,EGP_DEFAULT_URL);
   const base=normalizeCandidate(raw,{sourcePageUrl,capturedAt:raw.capturedAt||new Date().toISOString()});
   if(!base)return null;
-  const allowedChanges=new Set(['price','closeDate','bidName','location','investorName']);
+  const allowedChanges=new Set(['price','closeDate','bidName','location','investorName','version']);
   const changeLog=(Array.isArray(raw.changeLog)?raw.changeLog:[]).slice(-20).flatMap(c=>{
     if(!c||!allowedChanges.has(String(c.field||'')))return [];
     return [{field:String(c.field),label:String(c.label||c.field).slice(0,80),
@@ -3476,6 +3593,7 @@ function importedTender(raw,settings){
       at:Number.isFinite(Date.parse(c.at))?new Date(c.at).toISOString():new Date().toISOString()}];
   });
   const merged={...base,
+    ...sanitizeBackupTenderMetadata(raw),
     detailUrl:canonicalEgpUrl(raw.detailUrl,base.detailUrl),
     capturedAt:Number.isFinite(Date.parse(raw.capturedAt))?new Date(raw.capturedAt).toISOString():base.capturedAt,
     firstSeenAt:Number.isFinite(Date.parse(raw.firstSeenAt))?new Date(raw.firstSeenAt).toISOString():base.firstSeenAt,
@@ -3517,7 +3635,7 @@ function sanitizeBackupImport(data){
     .filter(p=>p&&typeof p==='object'&&p.key).map(p=>({...p,
       key:String(p.key).slice(0,220),contractorName:String(p.contractorName||'').slice(0,300),
       taxCode:String(p.taxCode||'').replace(/\D/g,'').slice(0,14),detailUrl:canonicalEgpUrl(p.detailUrl,'')}));
-  return {settings,tenders:rescoreStoredTenders(tenders,settings),runs,templates,
+  return {...sanitizeBackupFeatures(data,{disableHunts:true}),settings,tenders:rescoreStoredTenders(tenders,settings),runs,templates,
     template:active||templates[0]||null,lastTemplate:last,participations};
 }
 
@@ -3550,6 +3668,9 @@ function runtimeSenderKind(sender){
 }
 
 function shortString(value,max=500){return String(value??'').slice(0,max);}
+function nullableCount(value,max=1_000_000){
+  return typeof value==='number'&&Number.isInteger(value)&&value>=0&&value<=max?value:null;
+}
 function safeCount(value,max=1_000_000){
   const n=Number(value);
   return Number.isFinite(n)?Math.max(0,Math.min(max,Math.trunc(n))):0;
@@ -3597,13 +3718,14 @@ function sanitizeContentPayload(type,input){
   if(type==='SCAN_DONE')return {runId:shortString(p.runId,120),ok:p.ok!==false,
     message:shortString(p.message,1000),captured:safeCount(p.captured,100_000)};
   if(type==='KQLCNT_RESULTS')return {
-    planId:shortString(p.planId,120),mode:shortString(p.mode,30),focusTaxCode:shortString(p.focusTaxCode,20),
-    records:assertObjectRows(p.records||[],200),totalElements:safeCount(p.totalElements,10_000_000),
-    totalPages:safeCount(p.totalPages,200_000),pageIndex:safeCount(p.pageIndex,200_000),
+    planId:shortString(p.planId,120),mode:shortString(p.mode,30),queryIndex:nullableCount(p.queryIndex,100),focusTaxCode:shortString(p.focusTaxCode,20),
+    records:assertObjectRows(p.records||[],200),totalElements:nullableCount(p.totalElements,10_000_000),
+    totalPages:nullableCount(p.totalPages,200_000),pageIndex:safeCount(p.pageIndex,200_000),
     capped:Boolean(p.capped),cancelled:Boolean(p.cancelled),partial:Boolean(p.partial),done:Boolean(p.done),
+    schemaIssue:Boolean(p.schemaIssue),failureReason:shortString(p.failureReason,1000),
     applied:p.applied&&typeof p.applied==='object'&&!Array.isArray(p.applied)?p.applied:null
   };
-  if(type==='KQLCNT_DONE')return {planId:shortString(p.planId,120),mode:shortString(p.mode,30),
+  if(type==='KQLCNT_DONE')return {planId:shortString(p.planId,120),mode:shortString(p.mode,30),queryIndex:nullableCount(p.queryIndex,100),
     ok:p.ok!==false,partial:Boolean(p.partial),message:shortString(p.message,1000)};
   if(type==='BBMT_BIDDERS')return {url:isEgpUrl(p.url)?shortString(p.url,2000):'',
     rows:assertObjectRows(p.rows||[],500,'rows'),status:safeCount(p.status,999),kind:p.kind==='package'?'package':'lot'};
@@ -3651,13 +3773,54 @@ async function resolveKqlcntJob(payload,sender){
     if(payload.planId&&job.id!==payload.planId)return false;
     const mode=kqlcntModeForJob(key,job);
     if(payload.mode&&mode!==payload.mode)return false;
+    if((payload.queryIndex??0)!==Number(job.qi||0))return false;
     return true;
   });
   return matches.length===1?matches[0]:null;
 }
 
+function finalPageFingerprint(payload){
+  return JSON.stringify([payload.planId,payload.mode,payload.pageIndex,payload.totalElements,payload.totalPages,
+    Boolean(payload.capped),Boolean(payload.cancelled),Boolean(payload.partial),Boolean(payload.schemaIssue)]);
+}
+async function finalPageReplay(payload,sender){
+  if(!payload.done||(payload.records||[]).length)return null;
+  const s=await getState();
+  const jobs=[{key:'activeRun',job:s.activeRun},...LOOKUP_KINDS.map(k=>({key:k.key,job:s[k.key]}))];
+  for(const {key,job} of jobs){
+    const receipt=job?.finalPageReceipt;
+    if(!receipt||job.cancelled||job.status==='CANCELLED'||receipt.id!==payload.planId||receipt.mode!==payload.mode||receipt.tabId!==sender.tab?.id)continue;
+    if(receipt.queryIndex!==Number(job.qi||0)||receipt.queryIndex!==(payload.queryIndex??0))continue;
+    if(receipt.fingerprint!==finalPageFingerprint(payload))continue;
+    if(!receipt.doneAcknowledged)pendingKqlcntDoneByTab.set(sender.tab.id,{key,id:job.id,mode:receipt.mode,queryIndex:receipt.queryIndex,at:Date.now()});
+    return {ok:true,duplicate:true,done:true,pageIndex:payload.pageIndex};
+  }
+  return null;
+}
+async function saveFinalPageReceipt(key,id,payload,tabId){
+  return withLock(async()=>{
+    const s=await getState(),job=key==='activeRun'?s.activeRun:s[key];
+    if(job?.id!==id||job.cancelled)return false;
+    const finalPageReceipt={id,mode:kqlcntModeForJob(key,job),tabId,queryIndex:Number(job.qi||0),
+      fingerprint:finalPageFingerprint(payload),receivedAt:new Date().toISOString(),doneAcknowledged:false};
+    if(key==='activeRun')await save({activeRun:{...job,finalPageReceipt},runs:s.runs.map(r=>r.id===id?{...r,finalPageReceipt}:r)});
+    else await save({[key]:{...job,finalPageReceipt}});
+    return true;
+  });
+}
+async function acknowledgeFinalPage(key,id,queryIndex){
+  return withLock(async()=>{
+    const s=await getState(),job=key==='activeRun'?s.activeRun:s[key];
+    if(job?.id!==id||job.finalPageReceipt?.queryIndex!==queryIndex)return;
+    const finalPageReceipt={...job.finalPageReceipt,doneAcknowledged:true};
+    if(key==='activeRun')await save({activeRun:{...job,finalPageReceipt},runs:s.runs.map(r=>r.id===id?{...r,finalPageReceipt}:r)});
+    else await save({[key]:{...job,finalPageReceipt}});
+  });
+}
+
 async function routeKqlcntResults(payload,sender){
   if(!payload.planId||!payload.mode)return {ok:false,message:'Thiếu mode hoặc mã job KQLCNT.'};
+  const replay=await finalPageReplay(payload,sender);if(replay)return replay;
   const target=await resolveKqlcntJob(payload,sender);
   if(!target)return {ok:false,message:'Kết quả không khớp job/tab đang chạy.'};
   if(!payload.done&&receivedPageIndexes(target.job).has(payload.pageIndex)){
@@ -3669,9 +3832,11 @@ async function routeKqlcntResults(payload,sender){
     const expected=Math.max(0,Number(payload.pageIndex)||0);
     const missing=[];
     for(let i=0;i<expected;i++)if(!received.has(i))missing.push(i+1);
-    if(missing.length){
+    const unknownTotals=payload.totalElements===null||payload.totalPages===null;
+    const stoppedEarly=payload.totalPages!==null&&received.size<payload.totalPages;
+    if(missing.length||unknownTotals||stoppedEarly||payload.schemaIssue){
       effective={...payload,partial:true,
-        deliveryMessage:`Thiếu ${missing.length} trang dữ liệu khi chuyển từ tab e-GP (${missing.slice(0,8).join(', ')}${missing.length>8?', …':''}).`};
+        deliveryMessage:payload.failureReason||(missing.length?`Thiếu ${missing.length} trang dữ liệu khi chuyển từ tab e-GP (${missing.slice(0,8).join(', ')}${missing.length>8?', …':''}).`:unknownTotals?'e-GP chưa cung cấp đủ tổng số trang/bản ghi để xác nhận hoàn tất.':`Mới nhận ${received.size}/${payload.totalPages} trang e-GP.`)};
     }
   }
   let result;
@@ -3688,12 +3853,13 @@ async function routeKqlcntResults(payload,sender){
     await renewProgressLease(target.key,target.job.id);
   }
   if(effective.done){
+    await saveFinalPageReceipt(target.key,target.job.id,payload,sender.tab.id);
     pendingKqlcntDoneByTab.set(sender.tab.id,{key:target.key,id:target.job.id,
-      mode:kqlcntModeForJob(target.key,target.job),at:Date.now()});
+      mode:kqlcntModeForJob(target.key,target.job),queryIndex:Number(target.job.qi||0),at:Date.now()});
     if(target.key!=='activeRun'&&target.key!=='bidOpenScan'){
       await chrome.alarms.clear(TIMEOUT_PREFIX+target.job.id).catch(()=>{});
     }
-    if(effective.partial||(target.key==='activeRun'&&effective.capped)){
+    if(effective.partial||effective.capped||effective.schemaIssue){
       if(target.key==='activeRun')await updateRun(target.job.id,{partial:true,
         partialMessage:effective.deliveryMessage||target.job.partialMessage||''});
       else await markLookupPartial(target.key,target.job.id,effective.deliveryMessage||'');
@@ -3706,10 +3872,13 @@ async function routeKqlcntDone(payload,sender){
   const tabId=sender.tab?.id;
   const pending=pendingKqlcntDoneByTab.get(tabId);
   if(pending&&(Date.now()-pending.at)<=60_000&&
-     (!payload.planId||payload.planId===pending.id)&&(!payload.mode||payload.mode===pending.mode)){
+     (!payload.planId||payload.planId===pending.id)&&(!payload.mode||payload.mode===pending.mode)&&
+     (payload.queryIndex??0)===pending.queryIndex){
     pendingKqlcntDoneByTab.delete(tabId);
     const s=await getState();
     const job=pending.key==='activeRun'?s.activeRun:s[pending.key];
+    if(!job||job.id!==pending.id||job.cancelled||job.status==='CANCELLED'||Number(job.qi||0)!==pending.queryIndex)return {ok:true,ignored:true};
+    await acknowledgeFinalPage(pending.key,job.id,pending.queryIndex);
     if(job?.id===pending.id&&payload.ok===false){
       if(pending.key==='activeRun')await finishRun(job.id,
         Number(job.captured||0)>0?'PARTIAL':'ERROR',
@@ -3724,6 +3893,7 @@ async function routeKqlcntDone(payload,sender){
     // Các lookup khác đã chốt bằng KQLCNT_RESULTS(done). Riêng bbmt-list có
     // thể đang SCANNING chi tiết; DONE của giai đoạn liệt kê chỉ là ACK và
     // tuyệt đối không được đổi phase đó thành ERROR.
+    if(pending.key==='planLookup')await recordHuntOutcome((await getState()).planLookup);
     return {ok:true,acknowledged:true};
   }
   if(pending&&(Date.now()-pending.at)>60_000)pendingKqlcntDoneByTab.delete(tabId);
@@ -3741,6 +3911,8 @@ async function routeKqlcntDone(payload,sender){
     return {ok:true};
   }
   if(key==='activeRun'){
+    if(!job.pageDone)return {ok:true,ignored:true,message:'Chưa nhận trang kết thúc của truy vấn hiện tại.'};
+    await acknowledgeFinalPage(key,job.id,Number(job.qi||0));
     if(payload.partial)await updateRun(job.id,{partial:true});
     await advanceOrFinish(job.id,true,job.completionMessage||payload.message||'Hoàn tất.');
     return {ok:true};
@@ -3819,8 +3991,10 @@ chrome.runtime.onStartup.addListener(async()=>{
   if(!successFresh&&!partialCooling)startScan('startup');
 });
 chrome.alarms.onAlarm.addListener(async alarm=>{
+  if((await getState()).settings.readOnlyMode&&!alarm.name.startsWith(TIMEOUT_PREFIX))return;
   if(alarm.name===DAILY_ALARM)await startScan('scheduled');
   else if(alarm.name===DEADLINE_ALARM)await reviewDeadlines();
+  else if(alarm.name.startsWith(HUNT_RETRY_PREFIX))await runHuntById(alarm.name.slice(HUNT_RETRY_PREFIX.length));
   else if(alarm.name.startsWith(TIMEOUT_PREFIX)){
     await handleJobTimeout(alarm.name.slice(TIMEOUT_PREFIX.length));
   }else{
@@ -3845,12 +4019,11 @@ chrome.runtime.onMessage.addListener((message,sender,sendResponse)=>{
     }else if(CONTENT_MESSAGE_TYPES.has(type)){
       sendResponse({ok:false,message:'Message dữ liệu chỉ được nhận từ content script e-GP.'});return;
     }
-    const WRITE_TYPES=new Set(['SAVE_NAMED_SEARCH','DELETE_NAMED_SEARCH','SAVE_HUNT','DELETE_HUNT','SAVE_WATCH','DELETE_WATCH','SAVE_CHECKLIST','SAVE_CONTRACT','DELETE_CONTRACT','IMPORT_SYNC_PACK','SET_WATCH','SET_DECISION','DELETE_TENDER','CLEAR_DATA','FACTORY_RESET','START_SCAN','SCAN_ALL']);
-    if(WRITE_TYPES.has(message.type)){
-      const cur=await getState();
-      if(cur.settings?.readOnlyMode && message.type!=='UPDATE_SETTINGS'){
-        sendResponse({ok:false,message:'Máy đang chế độ chỉ xem (thanh tra). Không sửa checklist hay quyết định.'});return;
-      }
+    const WRITE_TYPES=new Set(['FACTORY_RESET','START_SCAN','SCAN_ALL','SCAN_CURRENT_TAB','RUN_HUNT','TBMT_SEARCH','PLAN_LOOKUP','WINNER_LOOKUP','BID_OPEN_SCAN','RETRY_BID_OPEN','AREA_SCAN','INVESTOR_SCAN','COMPARE_EGP_DOM','TELEGRAM_TEST','TELEGRAM_DETECT_CHAT','FETCH_AND_DOWNLOAD']);
+    const mutating=/^(SAVE_|DELETE_|CLEAR_|SET_|IMPORT_)/.test(type)||WRITE_TYPES.has(type)||CONTENT_MESSAGE_TYPES.has(type)||type==='UPDATE_SETTINGS';
+    if(mutating&&(await getState()).settings.readOnlyMode){
+      const unlock=type==='UPDATE_SETTINGS'&&senderIsOptions(sender)&&message.payload?.readOnlyMode===false;
+      if(!unlock){sendResponse({ok:false,message:'Đang khóa chỉnh sửa và tự động hóa. Mở Cấu hình để tắt chế độ chỉ xem.'});return;}
     }
     switch(message.type){
       case 'SAVE_NAMED_SEARCH': {
@@ -3936,7 +4109,7 @@ chrome.runtime.onMessage.addListener((message,sender,sendResponse)=>{
         break;
       }
       case 'SAVE_CONTRACT': {
-        const row=normalizeContract({...message.payload,id:message.payload?.id||crypto.randomUUID()});
+        const row=normalizeContract({...message.payload,id:message.payload?.id||crypto.randomUUID(),updatedAt:new Date().toISOString()});
         if(!row){sendResponse({ok:false,message:'Nhập tên hợp đồng tương tự (ít nhất 4 ký tự).'});break;}
         const rows=await withLock(async()=>{
           const s=await getState();
@@ -3975,6 +4148,7 @@ chrome.runtime.onMessage.addListener((message,sender,sendResponse)=>{
       case 'COMPARE_EGP_DOM': sendResponse(await compareOpenEgpDom());break;
       case 'EXPORT_AUDIT': {
         const s=await getState();
+        const filtered=filterAuditLog(s.auditLog||[],message.payload||{});
         const id=await downloadXlsx(`GiaoSuCuiBap/Nhat-ky-noi-bo-${new Date().toISOString().slice(0,10)}.xlsx`,{
           sheetName:'Audit',
           columns:[
@@ -3984,10 +4158,10 @@ chrome.runtime.onMessage.addListener((message,sender,sendResponse)=>{
             {header:'Mã gói',key:'key',width:22},
             {header:'Nội dung',key:'detail',width:60}
           ],
-          rows:s.auditLog||[]
+          rows:filtered
         },true);
         await appendAudit('export',{text:'Xuất nhật ký nội bộ'});
-        sendResponse({ok:true,id,count:(s.auditLog||[]).length});break;
+        sendResponse({ok:true,id,count:filtered.length});break;
       }
       case 'EXPORT_SYNC_PACK': {
         const s=await getState();
@@ -3998,6 +4172,7 @@ chrome.runtime.onMessage.addListener((message,sender,sendResponse)=>{
         sendResponse({ok:true});break;
       }
       case 'IMPORT_SYNC_PACK': {
+        if(JSON.stringify(message.payload?.pack||{}).length>30_000_000)throw new Error('Gói đồng bộ vượt quá 30 MB.');
         const merged=await withLock(async()=>{
           const s=await getState();
           const result=mergeChecklistPack(s,message.payload?.pack||{},s.settings.operatorName||'',s.settings.webhookSecret||'');
@@ -4025,7 +4200,9 @@ chrome.runtime.onMessage.addListener((message,sender,sendResponse)=>{
         sendResponse({ok:true,id});break;
       }
       case 'PARSE_HSMT': {
-        const text=message.payload?.text||extractPdfStrings(message.payload?.latin1||'');
+        const text=String(message.payload?.text||'');
+        if(text.length>1_000_000)throw new Error('Văn bản HSMT vượt quá một triệu ký tự; hãy chọn phần yêu cầu cần đối chiếu.');
+        if(message.payload?.latin1&&!text){sendResponse({ok:false,message:'Hãy trích văn bản từ PDF hoặc OCR rồi dán vào. Chưa hỗ trợ đọc trực tiếp PDF.'});break;}
         const guess=inferGatesFromHsmt(text);
         sendResponse({ok:true,...guess,text:text.slice(0,2000)});break;
       }
@@ -4037,7 +4214,7 @@ chrome.runtime.onMessage.addListener((message,sender,sendResponse)=>{
         const s=await chrome.storage.local.get({settings:DEFAULT_SETTINGS,tenders:[],runs:[],activeRun:null,savedSearches:[],schemaHealth:null,checklists:{},pastContracts:[],participations:[]});
         // The workspace never needs integration credentials or analytics caches.
         const settings={...DEFAULT_SETTINGS,...s.settings};
-        sendResponse({ok:true,tenders:s.tenders,runs:s.runs.map(r=>safeRunForBackup(r)),activeRun:s.activeRun?{id:s.activeRun.id,mode:s.activeRun.mode,status:s.activeRun.status,message:s.activeRun.message,foundKeys:s.activeRun.foundKeys}:null,
+        sendResponse({ok:true,tenders:s.tenders,runs:s.runs.map(r=>safeRunForBackup(r)),activeRun:s.activeRun?safeRunForBackup(s.activeRun):null,
           savedSearches:safeSavedSearches(s.savedSearches),settings:{provinces:settings.provinces,minPrice:settings.minPrice,maxPrice:settings.maxPrice,operatorName:settings.operatorName||'',readOnlyMode:Boolean(settings.readOnlyMode)},schemaHealth:s.schemaHealth||null,checklists:s.checklists||{},pastContracts:safeContracts(s.pastContracts),participations:(s.participations||[]).slice(0,800)});break;
       }
       case 'GET_STATE': {
@@ -4084,22 +4261,23 @@ chrome.runtime.onMessage.addListener((message,sender,sendResponse)=>{
           // Backup imports disable integrations; ordinary settings preserve intent.
           for(const k of ['telegramBotToken','telegramChatId']){
             const next=String(raw[k]||'').trim().slice(0,500);
-            clean[k]=(!next||/^•+$/.test(next))?String(s.settings[k]||''):next;
+            clean[k]=/^•+$/.test(next)?String(s.settings[k]||''):next;
           }
           for(const k of ['telegramEnabled','autoScan','scanOnStartup','autoExportMobileReport'])clean[k]=Boolean(raw[k]);
           clean.capability=normalizeCapability(raw.capability||s.settings.capability||{});
           clean.notifyEmail=safeEmail(raw.notifyEmail);
-          clean.notifyWebhook=safeHttpsWebhook(raw.notifyWebhook);
+          clean.notifyWebhook='';
           const secret=String(raw.webhookSecret||'').trim().slice(0,200);
-          clean.webhookSecret=(!secret||/^•+$/.test(secret))?String(s.settings.webhookSecret||''):secret;
+          clean.webhookSecret=/^•+$/.test(secret)?String(s.settings.webhookSecret||''):secret;
           clean.operatorName=String(raw.operatorName||'').trim().slice(0,80);
           clean.readOnlyMode=Boolean(raw.readOnlyMode);
-          clean.approvalSteps=Number(raw.approvalSteps)===2?2:3;
+          clean.approvalSteps=[1,2,3].includes(Number(raw.approvalSteps))?Number(raw.approvalSteps):1;
           clean.minPrice=prices.criteria.minPrice;clean.maxPrice=prices.criteria.maxPrice||Number.MAX_SAFE_INTEGER;
           const tenders=rescoreStoredTenders(s.tenders,clean);
           await save({[KEYS.settings]:clean,[KEYS.tenders]:tenders});return clean;
         });
-        await ensureDailyAlarm();sendResponse({ok:true,settings});break;
+        if(settings.readOnlyMode){await cancelActiveRun();await cancelLookups(null,'Đã dừng khi bật khóa chỉnh sửa.');}
+        await ensureDailyAlarm();sendResponse({ok:true,settings:publicSettings(settings)});break;
       }
       case 'SET_WATCH': {await withLock(async()=>{const s=await getState();const tenders=s.tenders.map(t=>t.key===message.payload.key?{...t,watchlisted:Boolean(message.payload.value)}:t);await save({[KEYS.tenders]:tenders});});sendResponse({ok:true});break;}
       case 'SET_DECISION': {await withLock(async()=>{
@@ -4118,7 +4296,7 @@ chrome.runtime.onMessage.addListener((message,sender,sendResponse)=>{
         const tenders=s.tenders.map(t=>{
           if(t.key!==key)return t;
           found=true;
-          const applied=applyApproval({...t,decisionState:state},operator,state,s.settings.approvalSteps||3);
+          const applied=applyApproval(t,operator,state,s.settings.approvalSteps||1);
           const next={...applied.tender,decisionState:applied.tender.decisionState||state,decisionUpdatedAt:new Date().toISOString()};
           approvalNote=applied.message||'';
           if(!applied.ok){found='blocked';return t;}
@@ -4133,7 +4311,8 @@ chrome.runtime.onMessage.addListener((message,sender,sendResponse)=>{
         await save({[KEYS.tenders]:tenders});
         const auditLog=[auditEntry('decision',{key,text:`${state} ${approvalNote}`.trim()},operator),...(s.auditLog||[])].slice(0,800);
         await save({[KEYS.auditLog]:auditLog});
-        sendResponse({ok:true,state,label:DECISION_STATE_LABEL[state],message:approvalNote});
+        const stored=tenders.find(t=>t.key===key)?.decisionState||state;
+        sendResponse({ok:true,state:stored,label:DECISION_STATE_LABEL[stored],message:approvalNote});
         });break;
       }
       case 'DELETE_TENDER': {const s=await getState();await save({[KEYS.tenders]:s.tenders.filter(t=>t.key!==message.payload.key)});sendResponse({ok:true});break;}
@@ -4146,7 +4325,7 @@ chrome.runtime.onMessage.addListener((message,sender,sendResponse)=>{
         sendResponse({ok:true});
         break;
       }
-      case 'EXPORT_CSV': await exportCsv(message.payload?.saveAs!==false,message.payload?.keys??null);sendResponse({ok:true});break;
+      case 'EXPORT_CSV': await exportCsv(message.payload?.saveAs!==false,message.payload?.keys??null,message.payload?.runId||'');sendResponse({ok:true});break;
       case 'EXPORT_MOBILE': await exportMobileReport(message.payload?.saveAs!==false);sendResponse({ok:true});break;
       case 'EXPORT_BACKUP_SAFE': await exportBackup();sendResponse({ok:true});break;
       // Tương thích lệnh cũ nhưng luôn xuất định dạng an toàn.
@@ -4165,7 +4344,9 @@ chrome.runtime.onMessage.addListener((message,sender,sendResponse)=>{
           [KEYS.template]:clean.template,[KEYS.templates]:clean.templates,[KEYS.lastTemplate]:clean.lastTemplate,
           [KEYS.activeRun]:null,[KEYS.participations]:clean.participations,[KEYS.winnerLookup]:null,
           [KEYS.winnerCache]:{},[KEYS.bidOpenScan]:null,[KEYS.planLookup]:null,[KEYS.areaScan]:null,
-          [KEYS.investorScan]:null});
+          [KEYS.investorScan]:null,[KEYS.hunts]:clean.hunts,[KEYS.watchedInvestors]:clean.watchedInvestors,
+          [KEYS.checklists]:clean.checklists,[KEYS.pastContracts]:clean.pastContracts,[KEYS.amendmentLog]:clean.amendmentLog,
+          [KEYS.auditLog]:clean.auditLog,[KEYS.deadlineAlerts]:{},[KEYS.domSnapshots]:[]});
         await ensureDailyAlarm();
         sendResponse({ok:true,imported:clean.tenders.length,
           message:`Đã nhập ${clean.tenders.length} gói. Telegram và lịch tự động đang tắt để bảo đảm an toàn.`});
@@ -4183,6 +4364,16 @@ chrome.runtime.onMessage.addListener((message,sender,sendResponse)=>{
       }
       case 'PLAN_LOOKUP': sendResponse(await startPlanLookup(message.payload||{}));break;
       case 'AREA_OPTIONS': sendResponse(await getAreaOptions(message.payload||{}));break;
+      /* CANARY SỐNG — phần bất biến ĐỊA BÀN.
+         Chạy được ngay vì danh mục địa bàn của e-GP gọi được không cần token
+         (xem lib/areas.js). Đây cũng là nửa nguy hiểm nhất: mã tỉnh trôi thì
+         phần mềm bỏ sót lặng lẽ, không ai thấy bằng mắt. Nửa đối chứng từng mã
+         gói cần một lượt quét qua tab e-GP — chưa nối, và giao diện nói rõ. */
+      case 'CANARY_AREAS': {
+        const got=await getAreas({});
+        sendResponse({ok:true,areas:got.areas||null,message:got.message||''});
+        break;
+      }
       case 'AREA_SCAN': sendResponse(await startAreaScan(message.payload||{}));break;
       case 'CANCEL_AREA_SCAN': sendResponse(await cancelLookups('areaScan'));break;
       case 'PRICE_REFERENCE': sendResponse(await getPriceReference(message.payload||{}));break;
@@ -4208,7 +4399,7 @@ chrome.runtime.onMessage.addListener((message,sender,sendResponse)=>{
       case 'GET_PLAN_STATE': {const s=await getState();sendResponse({ok:true,lookup:s.planLookup});break;}
       case 'CANCEL_PLAN_LOOKUP': sendResponse(await cancelLookups('planLookup'));break;
       case 'CLEAR_PLAN_LOOKUP': await save({[KEYS.planLookup]:null});sendResponse({ok:true});break;
-      case 'EXPORT_PLANS_CSV': await exportPlansCsv();sendResponse({ok:true});break;
+      case 'EXPORT_PLANS_CSV': await exportPlansCsv(message.payload||{});sendResponse({ok:true});break;
       case 'OPEN_PLANS': await chrome.tabs.create({url:chrome.runtime.getURL('plans.html')});sendResponse({ok:true});break;
       case 'OPEN_IPHONE': await chrome.tabs.create({url:chrome.runtime.getURL('mobile/iphone.html')});sendResponse({ok:true});break;
       case 'EGP_ENDPOINT_SEEN': sendResponse(await recordEndpointSeen(message.payload||{}));break;
@@ -4224,7 +4415,7 @@ chrome.runtime.onMessage.addListener((message,sender,sendResponse)=>{
       case 'GET_BID_OPEN_STATE': sendResponse({ok:true,scan:await getBidScan()});break;
       case 'RETRY_BID_OPEN': sendResponse(await retryBidOpen(message.payload||{}));break;
       case 'CLEAR_BID_OPEN_SCAN': await save({[KEYS.bidOpenScan]:null});sendResponse({ok:true});break;
-      case 'EXPORT_BID_OPEN_CSV': await exportBidOpenCsv();sendResponse({ok:true});break;
+      case 'EXPORT_BID_OPEN_CSV': await exportBidOpenCsv(message.payload||{});sendResponse({ok:true});break;
       case 'OPEN_BID_OPEN': await chrome.tabs.create({url:chrome.runtime.getURL('bidopen.html')});sendResponse({ok:true});break;
       case 'KQLCNT_DONE': sendResponse(await routeKqlcntDone(message.payload||{},sender));break;
       case 'CONTENT_READY': sendResponse(await onBbmtContentReady(message.payload||{},sender.tab?.id));break;

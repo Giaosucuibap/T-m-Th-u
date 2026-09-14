@@ -1,8 +1,10 @@
+import { passesHardFilter, hardFilterReason } from './lib/hard-filter.js';
+import { GATE_LABEL, coverageText } from './lib/match-gate.js';
 import { formatMoney, formatDate, BID_STATUS_LABEL } from './lib/core.js';
 import { statusOf, filterAndSort, missingFields, dataConfidence, actionFor } from './lib/decision.js';
-import { validateCriteria, CRITERIA_FIELDS, runTenders, safeSource, deadlineInfo, freshness, buildDeadlineCalendar } from './lib/workspace.js';
+import { validateCriteria, CRITERIA_FIELDS, runTenders, safeSource, deadlineInfo, freshness, buildDeadlineCalendar, splitProvinceNames } from './lib/workspace.js';
 import { icon } from './lib/icons.js';
-import { TENDER_CATEGORIES, normalizeCategory, categoryLabel } from './lib/tender-categories.js';
+import { TENDER_CATEGORIES, normalizeCategory, categoryLabel, tenderFieldOf, matchesTenderCategory } from './lib/tender-categories.js';
 import { lifecycleLabel } from './lib/lifecycle.js';
 import { checklistItemsFor, checklistProgress } from './lib/capability.js';
 import { bestContractMatch, MATCH_LABEL } from './lib/contracts.js';
@@ -18,6 +20,7 @@ const show=(id,on)=>$(id).classList.toggle('hidden',!on);
 const LAST='gscb_last_search', RUN='gscb_search_run';
 let STATE={tenders:[],runs:[],savedSearches:[]}, runId='', page=1, timer=null, refreshing=false, starting=false;
 let filtered=[], selected=new Set(), toastTimer=null, wardRequest=0, pendingCriteria=null;
+const checklistDrafts=new Map(), checklistSaving=new Set();
 const PAGE_SIZE=30;
 const readLocal=(k,fallback)=>{try{return JSON.parse(localStorage.getItem(k))??fallback;}catch{return fallback;}};
 const writeLocal=(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v));}catch{}}
@@ -31,7 +34,14 @@ async function send(type,payload={}){
 function notify(message,error=false){clearTimeout(toastTimer);$('toast').textContent=message;$('toast').className=`toast${error?' error':''}`;toastTimer=setTimeout(()=>show('toast',false),5500);}
 function alertMessage(message){$('alert').textContent=message;$('alert').className='notice error'+(message?'':' hidden');}
 function chosenRun(){return STATE.runs.find(r=>r.id===runId)||(STATE.activeRun?.id===runId?STATE.activeRun:null);}
-function currentRows(){return runTenders(STATE.tenders,chosenRun());}
+function currentRows(){
+  const run=chosenRun();
+  return runTenders(STATE.tenders,run).map(t=>{
+    const saved=run?.resultStates?.[t.key];
+    const gate=saved?.filterState?null:run?.criteria?passesHardFilter(t,run.criteria):{state:'INSUFFICIENT',reason:'Bản lưu cũ chưa ghi tiêu chí để đối chiếu'};
+    return {...t,...(saved||{}),filterState:saved?.filterState||gate.state,filterReason:hardFilterReason(saved?.filterState?{reason:saved.filterReason,state:saved.filterState}:gate),matched:(saved?.matched??t.matched) && (saved?.filterState||gate.state)==='MATCH'};
+  });
+}
 function selectedRows(){return currentRows().filter(t=>selected.has(t.key));}
 
 async function loadProvinces(){
@@ -43,8 +53,10 @@ async function loadWards(){
   const request=++wardRequest, province=$('province').value.trim();
   $('ward-list').innerHTML='';
   if(!province)return;
+  if(splitProvinceNames(province).length>1){$('ward-hint').textContent='Đang chọn nhiều tỉnh; nhập tên xã/phường để lọc tiếp nếu cần.';return;}
   const r=await send('AREA_OPTIONS',{province});
   if(request!==wardRequest)return;
+  $('ward-hint').textContent='';
   if(r.ok)$('ward-list').innerHTML=(r.wards||[]).map(n=>`<option value="${esc(n)}"></option>`).join('');
 }
 async function start(){
@@ -90,7 +102,7 @@ function renderScope(run,all){
   const localKeyword=Boolean(run.criteria?.investor&&run.criteria?.keyword);
   const category=normalizeCategory(run.criteria?.category);
   const description=run.criteria?[category?categoryLabel(category):'',run.criteria.keyword,run.criteria.investor,run.criteria.province,run.criteria.ward].filter(Boolean).join(' · '):'';
-  $('run-scope').innerHTML=`${icon(incomplete?'info':'check',18)}<div><b>${esc(RUN_LABEL[run.status]||run.status)}</b>${description?` · ${esc(description)}`:''}<span class="run-date">${esc(formatDate(run.finishedAt||run.startedAt))} · Giờ Việt Nam · Chỉ dữ liệu của lượt này</span>${incomplete?`<div>${esc(run.message||'Lượt bị gián đoạn.')} Không xem đây là toàn bộ kết quả thị trường.</div>`:''}${localKeyword?'<div>Từ khóa tên gói lọc tại máy trên các trang đã tải theo chủ đầu tư.</div>':''}${category.startsWith('TV_')?'<div>Chuyên môn tư vấn nhận diện theo tên gói trong các trang đã tải.</div>':''}${lost?`<div>${lost} gói của lượt này không còn trong kho (đã xóa hoặc vượt giới hạn lưu).</div>`:''}${!hasKeys?'<div>Bản lưu cũ không có liên kết kết quả. Cần chạy lại để xác định đúng phạm vi.</div>':''}${historySelect()}</div>`;
+  $('run-scope').innerHTML=`${icon(incomplete?'info':'check',18)}<div><b>${esc(RUN_LABEL[run.status]||run.status)}</b>${description?` · ${esc(description)}`:''}<span class="run-date">${esc(formatDate(run.finishedAt||run.startedAt))} · Giờ Việt Nam · Chỉ dữ liệu của lượt này</span>${incomplete?`<div>${esc(run.message||'Lượt bị gián đoạn.')} Không xem đây là toàn bộ kết quả thị trường.</div>`:''}${!run.resultStates?'<div>Bản lưu cũ chưa lưu riêng giá và kết quả đối chiếu tại thời điểm tìm. Các nhãn dưới đây được kiểm tra lại trên dữ liệu hiện có; nên chạy lại để xác nhận.</div>':''}${localKeyword?'<div>Từ khóa tên gói lọc tại máy trên các trang đã tải theo chủ đầu tư.</div>':''}${category.startsWith('TV_')?'<div>Chuyên môn tư vấn nhận diện theo tên gói trong các trang đã tải.</div>':''}${lost?`<div>${lost} gói của lượt này không còn trong kho (đã xóa hoặc vượt giới hạn lưu).</div>`:''}${!hasKeys?'<div>Bản lưu cũ không có liên kết kết quả. Cần chạy lại để xác định đúng phạm vi.</div>':''}${run.coverage?`<div>${esc(run.coverage.text||coverageText(run.coverage))}</div>`:''}<div>Điểm phù hợp dùng để ưu tiên các gói khớp tiêu chí; không phải xác suất trúng thầu.</div>${historySelect()}</div>`;
 }
 function historySelect(){
   const runs=STATE.runs.filter(x=>x.mode==='form');
@@ -98,10 +110,7 @@ function historySelect(){
   return `<label class="history-label">Lịch sử tra cứu <select id="run-history" aria-label="Chọn lượt tìm trong lịch sử"><option value="" disabled ${!runs.some(r=>r.id===runId)?'selected':''}>Chọn lượt tìm</option>${runs.slice(0,30).map(r=>`<option value="${esc(r.id)}" ${r.id===runId?'selected':''}>${esc(formatDate(r.startedAt))} · ${esc([normalizeCategory(r.criteria?.category)?categoryLabel(r.criteria.category):'',r.criteria?.keyword||r.criteria?.province||r.criteria?.investor].filter(Boolean).join(' · ')||'Theo tiêu chí')} · ${esc(RUN_LABEL[r.status]||r.status)}</option>`).join('')}</select></label>`;
 }
 function packCategory(t){
-  const raw=String(t.fieldRaw||t.field||t.investField||'').toUpperCase();
-  if(raw.includes('TV')||/TƯ VẤN|TU VAN/i.test(String(t.fieldRaw||''))) return raw.includes('GS')?'TV_SUPERVISION':'TV';
-  if(raw.includes('XL')||/XÂY LẮP|XAY LAP/i.test(String(t.fieldRaw||''))) return 'XL';
-  return '';
+  return matchesTenderCategory(t,'TV_SUPERVISION')?'TV_SUPERVISION':tenderFieldOf(t);
 }
 function card(t){
   const st=statusOf(t), dl=deadlineInfo(t), fresh=freshness(t), score=Math.max(0,Math.min(100,Number(t.score)||0));
@@ -109,20 +118,21 @@ function card(t){
   const reason=t.reasons?.[0]||'Xem cấu hình chấm điểm';
   const cat=packCategory(t);
   const list=checklistItemsFor(cat);
-  const progress=checklistProgress((STATE.checklists||{})[t.key]||{},cat);
+  const checklist=checklistDrafts.get(t.key)||(STATE.checklists||{})[t.key]||{};
+  const progress=checklistProgress(checklist,cat);
   const match=bestContractMatch(t,STATE.pastContracts||[]);
   const matchLabel=MATCH_LABEL[match.status]||MATCH_LABEL.thieu;
-  const due=checklistDueItems(t,(STATE.checklists||{})[t.key]||{},cat);
+  const due=checklistDueItems(t,checklist,cat);
   const approve=approvalLabel(t);
   const mx=match.contract?matrixSummary(contractMatrix(match.contract,{workType:match.tenderType})):null;
-  const pct=marketBidPercentiles(STATE.participations||[],[t],{investor:t.investorName||'',province:(t.location||'').split(',').pop()||''});
-  const priceHint=pct.n>=3&&Number(t.price)?(Number(t.price)<pct.p25?'Giá gói dưới P25 thị trường':Number(t.price)>pct.p75?'Giá gói trên P75 thị trường':'Giá gói trong P25–P75'):'';
+  const pct=marketBidPercentiles(STATE.participations||[],STATE.tenders||[],{investor:t.investorName||'',field:tenderFieldOf(t)});
+  const priceHint=pct.n>=3&&t.investorName&&tenderFieldOf(t)?`Giá dự thầu đã ghi nhận cùng CĐT/lĩnh vực: P25 ${formatMoney(pct.p25)} · P75 ${formatMoney(pct.p75)} (${pct.n} mẫu, chưa hiệu chỉnh quy mô)`:'';
   const gua=guaranteeReminder(t);
   return `<article class="ws-result ${st==='CLOSED'?'closed':''} ${selected.has(t.key)?'selected':''}" data-key="${esc(t.key)}">
     <div class="ws-result-top"><span class="status-tag ${st==='CLOSED'?'closed':st!=='OPEN'?'warn':''}"><i></i>${esc(BID_STATUS_LABEL[st])}</span><span class="code">${esc(t.displayCode||t.notifyNo||t.bidNo||'')}</span><label class="select-check"><input type="checkbox" data-select="${esc(t.key)}" aria-label="Chọn so sánh ${esc(t.bidName)}" ${selected.has(t.key)?'checked':''}>So sánh</label></div>
     <div class="ws-result-body"><div><h3>${url?`<a href="${esc(url)}" target="_blank" rel="noopener">${esc(t.bidName)}</a>`:esc(t.bidName)}</h3><div class="ws-result-meta"><div>${icon('chart',14)}<strong>${esc(formatMoney(t.price))}</strong></div><div>${icon('clock',14)}<span class="${dl.level}" title="${esc(formatDate(t.closeDate))} · Giờ Việt Nam">${esc(dl.label)}</span></div><div>${icon('building',14)}<span>${esc(t.investorName||t.procuringEntityName||'Chưa rõ chủ đầu tư')}</span></div><div>${icon('pin',14)}<span>${esc(t.location||'Chưa rõ địa điểm')}</span></div></div></div><div class="ws-score" title="Điểm phù hợp theo cấu hình; không phải xác suất trúng thầu"><div class="score-number">${score}</div><small>ĐIỂM PHÙ HỢP</small><div class="score-bar"><i style="width:${score}%"></i></div><small>/ 100</small></div></div>
-    <div class="ws-result-bottom"><div class="reason-chips"><span class="reason-chip">${esc(action.label)}</span><span class="reason-chip">${esc(lifecycleLabel(t))}</span><span class="reason-chip ${match.status!=='dat'?'warn':''}">${esc(matchLabel)}</span>${mx?`<span class="reason-chip">${esc(mx.text)}</span>`:''}${due.length?`<span class="reason-chip warn">Đến hạn tick: ${esc(due[0].label)}</span>`:''}${approve?`<span class="reason-chip">${esc(approve)}</span>`:''}${priceHint?`<span class="reason-chip">${esc(priceHint)}</span>`:''}${gua[0]?`<span class="reason-chip warn">${esc(gua[0].text)}</span>`:''}<span class="reason-chip ${miss.length?'warn':''}">${miss.length?`${miss.length} mục cần kiểm tra`:'Đủ trường chính'}</span>${t.watchlisted?'<span class="reason-chip">Đang theo dõi</span>':''}${t.watchedInvestorId?'<span class="reason-chip">CĐT đang theo dõi</span>':''}</div><div class="result-links"><button type="button" data-watch="${esc(t.key)}" class="${t.watchlisted?'on':''}" aria-pressed="${Boolean(t.watchlisted)}">${icon('bookmark',14)}${t.watchlisted?'Đã lưu':'Theo dõi'}</button>${t.notifyNo&&url?`<button type="button" data-download="${esc(t.key)}">${icon('download',14)}E-HSMT</button>`:''}${url?`<a href="${esc(url)}" target="_blank" rel="noopener">Xem e-GP ${icon('external',14)}</a>`:''}<button type="button" data-outline="${esc(t.key)}">Khung BPTC</button></div></div>
-    <details class="explain"><summary>Hồ sơ dự thầu ${progress.done}/${progress.total}${progress.owner?` · ${esc(progress.owner)}`:''}</summary><div>${list.map(item=>`<label><input type="checkbox" data-check="${esc(t.key)}" data-item="${esc(item.id)}" data-cat="${esc(cat)}" ${progress.items[item.id]?'checked':''}> ${esc(item.label)}</label>`).join('<br>')}</div></details>
+    <div class="ws-result-bottom"><div class="reason-chips"><span class="reason-chip ${t.filterState==='MATCH'?'':'warn'}" title="${esc(t.filterReason)}">${esc(GATE_LABEL[t.filterState]||'Chưa kiểm tra tiêu chí')}</span><span class="reason-chip">${esc(action.label)}</span><span class="reason-chip">${esc(lifecycleLabel(t))}</span><span class="reason-chip ${match.status!=='dat'?'warn':''}">${esc(matchLabel)}</span>${mx?`<span class="reason-chip">${esc(mx.text)}</span>`:''}${due.length?`<span class="reason-chip warn">Đến hạn tick: ${esc(due[0].label)}</span>`:''}${approve?`<span class="reason-chip">${esc(approve)}</span>`:''}${priceHint?`<span class="reason-chip">${esc(priceHint)}</span>`:''}${gua[0]?`<span class="reason-chip warn">${esc(gua[0].text)}</span>`:''}<span class="reason-chip ${miss.length?'warn':''}">${miss.length?`${miss.length} mục cần kiểm tra`:'Đủ trường chính'}</span>${t.watchlisted?'<span class="reason-chip">Đang theo dõi</span>':''}${t.watchedInvestorId?'<span class="reason-chip">CĐT đang theo dõi</span>':''}</div><div class="result-links"><button type="button" data-watch="${esc(t.key)}" class="${t.watchlisted?'on':''}" aria-pressed="${Boolean(t.watchlisted)}">${icon('bookmark',14)}${t.watchlisted?'Đã lưu':'Theo dõi'}</button>${t.notifyNo&&url?`<button type="button" data-download="${esc(t.key)}">${icon('download',14)}E-HSMT</button>`:''}${url?`<a href="${esc(url)}" target="_blank" rel="noopener">Xem e-GP ${icon('external',14)}</a>`:''}<button type="button" data-outline="${esc(t.key)}">Khung BPTC</button></div></div>
+    <details class="explain"><summary data-check-summary="${esc(t.key)}">Hồ sơ dự thầu ${progress.done}/${progress.total}${progress.owner?` · ${esc(progress.owner)}`:''}${checklistSaving.has(t.key)?' · đang lưu…':''}</summary><div>${list.map(item=>`<label><input type="checkbox" data-check="${esc(t.key)}" data-item="${esc(item.id)}" data-cat="${esc(cat)}" ${progress.items[item.id]?'checked':''} ${STATE.settings?.readOnlyMode?'disabled':''}> ${esc(item.label)}</label>`).join('<br>')}</div></details>
     <details class="explain"><summary>Vì sao có điểm này? · ${esc(reason)}</summary><ul>${(t.reasons||[]).map(r=>`<li>${esc(r)}</li>`).join('')}<li>Mức đầy đủ trường: ${confidence.value}/100. Đây không phải độ chính xác được bảo đảm.</li>${miss.map(r=>`<li>${esc(r)}</li>`).join('')}</ul><p>Hạn đã ghi nhận: ${esc(formatDate(t.closeDate))} · Giờ Việt Nam. ${esc(action.note)}</p></details><div class="fresh-stamp ${fresh.stale?'stale':''}">${esc(fresh.label)}${fresh.stale?' · Nên kiểm tra lại dữ liệu trên e-GP':''}</div>
   </article>`;
 }
@@ -136,12 +146,14 @@ function render(){
   renderScope(run,all);
   const valid=new Set(all.map(t=>t.key));selected=new Set([...selected].filter(k=>valid.has(k)));
   show('summary',Boolean(run));show('results-section',all.length>0);show('empty-state',!all.length);
-  $('m-total').textContent=all.length.toLocaleString('vi-VN');$('m-match').textContent=all.filter(t=>t.matched).length;
-  $('m-open').textContent=all.filter(t=>statusOf(t)==='OPEN').length;
-  const withPrice=all.filter(t=>t.price!==null&&t.price!==undefined&&t.price!==''&&Number.isFinite(Number(t.price)));
+  const matching=all.filter(t=>t.filterState==='MATCH');
+  $('m-total').textContent=matching.length.toLocaleString('vi-VN');$('m-total-sub').textContent=`${all.length} gói đã nhận · ${all.filter(t=>t.filterState==='INSUFFICIENT').length} chưa đủ dữ liệu · ${all.filter(t=>t.filterState==='OUT_OF_RANGE').length} ngoài tiêu chí`;
+  $('m-match').textContent=matching.filter(t=>t.matched).length;
+  $('m-open').textContent=matching.filter(t=>statusOf(t)==='OPEN').length;
+  const withPrice=matching.filter(t=>t.price!==null&&t.price!==undefined&&t.price!==''&&Number.isFinite(Number(t.price)));
   $('m-val').textContent=withPrice.length?formatMoney(withPrice.reduce((sum,t)=>sum+Number(t.price),0)):'Chưa xác định';
-  $('m-val-sub').textContent=`${withPrice.length}/${all.length} gói có giá · Không ước đoán giá thiếu`;
-  filtered=filterAndSort(all,{text:$('result-q').value,status:$('statusFilter').value,minScore:$('minScoreFilter').value,sortBy:$('sortBy').value,onlyMatched:$('only').checked}).filter(t=>!$('only-watch').checked||t.watchlisted);
+  $('m-val-sub').textContent=`${withPrice.length}/${matching.length} gói khớp có giá · Không ước đoán giá thiếu`;
+  filtered=filterAndSort(all.filter(t=>!$('criteria-state').value||t.filterState===$('criteria-state').value),{text:$('result-q').value,status:$('statusFilter').value,minScore:$('minScoreFilter').value,sortBy:$('sortBy').value,onlyMatched:$('only').checked}).filter(t=>!$('only-watch').checked||t.watchlisted);
   $('result-count').textContent=filtered.length;
   const pages=Math.max(1,Math.ceil(filtered.length/PAGE_SIZE));page=Math.min(page,pages);
   const offset=(page-1)*PAGE_SIZE, rows=filtered.slice(offset,offset+PAGE_SIZE);
@@ -176,7 +188,7 @@ $('save-form').addEventListener('submit',async e=>{e.preventDefault();const b=e.
 $('saved-searches').addEventListener('click',async e=>{const p=e.target.closest('[data-preset]'),d=e.target.closest('[data-delete-preset]');if(p){const item=STATE.savedSearches.find(x=>x.id===p.dataset.preset);if(item){fillCriteria(item.criteria);notify(`Đã điền “${item.name}”. Bấm Tìm gói thầu để chạy.`);}}if(d){const item=STATE.savedSearches.find(x=>x.id===d.dataset.deletePreset);if(!item||!confirm(`Xóa bộ tìm kiếm “${item.name}”?`))return;const r=await send('DELETE_NAMED_SEARCH',{id:item.id});if(r.ok){STATE.savedSearches=r.savedSearches;renderPresets();}else notify(r.message,true);}});
 $('run-scope').addEventListener('change',e=>{if(e.target.id==='run-history'){runId=e.target.value;writeLocal(RUN,runId);page=1;selected.clear();alertMessage('');render();}});
 $('stop').addEventListener('click',async()=>{$('stop').disabled=true;const r=await send('CANCEL_ACTIVE_RUN',{runId});if(!r.ok)notify(r.message,true);await refresh();});
-for(const id of ['result-q','statusFilter','sortBy','minScoreFilter','only','only-watch'])$(id).addEventListener(id==='result-q'?'input':'change',()=>{page=1;render();});
+for(const id of ['result-q','statusFilter','sortBy','minScoreFilter','only','only-watch','criteria-state'])$(id).addEventListener(id==='result-q'?'input':'change',()=>{page=1;render();});
 $('prev-page').addEventListener('click',()=>{page--;render();$('results-title').scrollIntoView({block:'start'});});
 $('next-page').addEventListener('click',()=>{page++;render();$('results-title').scrollIntoView({block:'start'});});
 $('list').addEventListener('change',e=>{if(!e.target.matches('[data-select]'))return;const key=e.target.dataset.select;if(e.target.checked){if(selected.size>=4){e.target.checked=false;notify('So sánh tối đa 4 gói. Bỏ chọn một gói để thêm gói khác.',true);return;}selected.add(key);}else selected.delete(key);e.target.closest('article').classList.toggle('selected',selected.has(key));renderSelection();});
@@ -186,20 +198,39 @@ $('list').addEventListener('click',async e=>{
   if(watch){const t=STATE.tenders.find(x=>x.key===watch.dataset.watch);if(!t)return;watch.disabled=true;const r=await send('SET_WATCH',{key:t.key,value:!t.watchlisted});if(r.ok){t.watchlisted=!t.watchlisted;render();}else{watch.disabled=false;notify(r.message,true);}}
   if(download){const t=STATE.tenders.find(x=>x.key===download.dataset.download);if(!t)return;download.disabled=true;download.textContent='Đang lấy tệp…';const r=await send('FETCH_AND_DOWNLOAD',{notifyNo:t.notifyNo,detailUrl:safeSource(t.detailUrl)});notify(r.ok?`Đã gửi tải ${r.downloaded||0} tệp.`:r.message,!r.ok);render();}
 });
-$('list').addEventListener('change',async e=>{
+function reflectChecklist(key,cat){
+  const progress=checklistProgress(checklistDrafts.get(key)||(STATE.checklists||{})[key]||{},cat);
+  document.querySelectorAll('[data-check-summary]').forEach(el=>{if(el.dataset.checkSummary===key)el.textContent=`Hồ sơ dự thầu ${progress.done}/${progress.total}${progress.owner?` · ${progress.owner}`:''}${checklistSaving.has(key)?' · đang lưu…':''}`;});
+  document.querySelectorAll('[data-check]').forEach(el=>{if(el.dataset.check===key)el.checked=Boolean(progress.items[el.dataset.item]);});
+}
+async function flushChecklist(key,cat){
+  if(checklistSaving.has(key))return;
+  checklistSaving.add(key);
+  reflectChecklist(key,cat);
+  try{
+    while(checklistDrafts.has(key)){
+      const draft=checklistDrafts.get(key);
+      const r=await send('SAVE_CHECKLIST',{key,...draft});
+      if(r.ok){STATE.checklists=STATE.checklists||{};STATE.checklists[key]=r.checklist;}
+      else notify(r.message||'Chưa lưu được checklist; đã khôi phục trạng thái đã lưu.',true);
+      if(checklistDrafts.get(key)===draft)checklistDrafts.delete(key);
+    }
+  }finally{checklistSaving.delete(key);reflectChecklist(key,cat);}
+}
+$('list').addEventListener('change',e=>{
   const box=e.target.closest('[data-check]');
   if(!box)return;
   const key=box.dataset.check;
   const cat=box.dataset.cat||'';
-  const current=checklistProgress((STATE.checklists||{})[key],cat).items;
+  const current=checklistProgress(checklistDrafts.get(key)||(STATE.checklists||{})[key]||{},cat).items;
   current[box.dataset.item]=box.checked;
-  const r=await send('SAVE_CHECKLIST',{key,items:current,category:cat,owner:STATE.settings?.operatorName||''});
-  if(r.ok){STATE.checklists=STATE.checklists||{};STATE.checklists[key]=r.checklist;}
-  else notify(r.message,true);
+  checklistDrafts.set(key,{items:current,category:cat,owner:STATE.settings?.operatorName||''});
+  reflectChecklist(key,cat);
+  flushChecklist(key,cat);
 });
 $('compare').addEventListener('click',compare);$('clear-selection').addEventListener('click',()=>{selected.clear();render();});
 document.querySelectorAll('[data-close]').forEach(b=>b.addEventListener('click',()=>$(b.dataset.close).close()));
-$('csv').addEventListener('click',async()=>{const count=filtered.length,keys=filtered.map(t=>t.key);if(!count)return;$('csv').disabled=true;const r=await send('EXPORT_CSV',{saveAs:true,keys});notify(r.ok?`Đã tạo Excel cho ${count} gói sau lọc.`:r.message,!r.ok);render();});
+$('csv').addEventListener('click',async()=>{const count=filtered.length,keys=filtered.map(t=>t.key);if(!count)return;$('csv').disabled=true;const r=await send('EXPORT_CSV',{saveAs:true,keys,runId});notify(r.ok?`Đã tạo Excel cho ${count} gói sau lọc.`:r.message,!r.ok);render();});
 $('calendar').addEventListener('click',async()=>{
   const result=buildDeadlineCalendar(filtered);if(!result.count){notify('Không có gói còn hạn để tạo lịch.',true);return;}
   const url=URL.createObjectURL(new Blob([result.text],{type:'text/calendar;charset=utf-8'}));

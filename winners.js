@@ -131,7 +131,7 @@ function renderCandidates(lk) {
     alertBox(
       `Không thấy nhà thầu nào khớp <b>${esc(lk.query)}</b>.<br>
        <span class="small">Gợi ý: nhập ngắn gọn phần tên riêng (ví dụ “An Khang” thay vì tên đầy đủ),
-       hoặc nhập thẳng <b>mã số thuế</b> để tra chính xác tuyệt đối.</span>`,
+       hoặc nhập thẳng <b>mã số thuế</b> — tra theo mã số thuế không bỏ sót gói trúng theo liên danh.</span>`,
       'error'
     );
     return;

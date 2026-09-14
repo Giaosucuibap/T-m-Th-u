@@ -10,6 +10,60 @@ const PORT = Number(process.env.MOCK_PORT || 8443);
 
 const SEARCH = '/o/egp-portal-contractor-selection-v2/services/smart/search';
 const LOT_OPEN = '/services/expose/ldtkqmt/bid-notification-p/lotOpenDetail';
+const AREA_LIST = '/o/egp-portal-contractor-selection-v2/services/get/area-api-list';
+
+/* --------------------------------------------------------------------------
+ *  DANH MỤC ĐỊA BÀN
+ *
+ *  Từ 4.10.1, tiện ích TỪ CHỐI CHẠY khi chưa tra được danh mục này — thà không
+ *  chạy còn hơn âm thầm bỏ tiêu chí tỉnh rồi tìm toàn quốc. Nên bản giả lập
+ *  phải phục vụ endpoint này, nếu không mọi kịch bản trình duyệt đều dừng ở
+ *  cửa đó và chẳng kiểm được gì phía sau.
+ *
+ *  `status`: 1 = địa bàn hiện hành, 0 = địa bàn CŨ giữ lại để tra hồ sơ đăng
+ *  trước sáp nhập 1/7/2025. Lâm Đồng có cả `68` (hiện hành) lẫn `703` (cũ) —
+ *  giữ đúng cặp này vì đó là bất biến canary sống đang canh.
+ * ------------------------------------------------------------------------ */
+const AREA_PROVINCES = [
+  { code: '68', name: 'Lâm Đồng', parentCode: '', status: 1 },
+  { code: '703', name: 'Tỉnh Lâm Đồng', parentCode: '', status: 0 },
+  { code: '75', name: 'Đồng Nai', parentCode: '', status: 1 },
+  { code: '56', name: 'Khánh Hòa', parentCode: '', status: 1 },
+  { code: '66', name: 'Đắk Lắk', parentCode: '', status: 1 },
+  { code: '64', name: 'Gia Lai', parentCode: '', status: 1 },
+  { code: '51', name: 'Quảng Ngãi', parentCode: '', status: 1 },
+  { code: '92', name: 'Cần Thơ', parentCode: '', status: 1 },
+  { code: '815', name: 'TP Cần Thơ', parentCode: '', status: 0 }
+];
+
+/** Xã/phường theo mã tỉnh. Đủ để bộ lọc xã có cái mà đối chiếu. */
+const AREA_WARDS = {
+  68: [
+    { code: '23122', name: 'Xã Đức Trọng', status: 1 },
+    { code: '23125', name: 'Xã Đơn Dương', status: 1 },
+    { code: '23128', name: 'Xã Đạ Tẻh', status: 1 },
+    { code: '23131', name: 'Phường Bảo Lộc', status: 1 }
+  ],
+  703: [{ code: '70301', name: 'Xã Đức Trọng ma cu', status: 0 }],
+  75: [{ code: '24101', name: 'Xã Tân Minh', status: 1 }],
+  56: [{ code: '22101', name: 'Phường Nha Trang', status: 1 }],
+  66: [{ code: '24501', name: 'Xã Ea Kar', status: 1 }],
+  64: [{ code: '24601', name: 'Xã Chư Sê', status: 1 }],
+  51: [{ code: '21101', name: 'Xã Bình Sơn', status: 1 }],
+  92: [{ code: '31101', name: 'Phường Ninh Kiều', status: 1 }],
+  815: [{ code: '81501', name: 'Phường Ninh Kiều ma cu', status: 0 }]
+};
+
+/** Trả đúng nhóm địa bàn mà tiện ích hỏi: areaType 1 = tỉnh, 2 = xã/phường. */
+function areaListFor(body) {
+  const spec = (body && body.areas && body.areas[0]) || {};
+  if (String(spec.areaType) === '1') return AREA_PROVINCES;
+  if (String(spec.areaType) === '2') {
+    const parent = String(spec.parentCode || '').trim();
+    return (AREA_WARDS[parent] || []).map((w) => ({ ...w, parentCode: parent }));
+  }
+  return [];
+}
 
 const PROVINCES = ['Lâm Đồng', 'Đồng Nai', 'Khánh Hòa', 'Đắk Lắk', 'Gia Lai', 'Quảng Ngãi'];
 const NAMES = [
@@ -141,6 +195,29 @@ const server = https.createServer(
       return;
     }
 
+    // Trình duyệt tự xin favicon. Nếu để 404 thì kịch bản đếm nó thành LỖI, và
+    // một lỗi 404 THẬT sẽ núp ngay sau nó mà không ai để ý.
+    if (url.pathname === '/favicon.ico') {
+      res.writeHead(204);
+      res.end();
+      return;
+    }
+
+    if (url.pathname === AREA_LIST) {
+      let body = '';
+      req.on('data', (c) => (body += c));
+      req.on('end', () => {
+        let parsed = {};
+        try { parsed = JSON.parse(body) || {}; } catch {}
+        const data = areaListFor(parsed);
+        console.log(`[mock] AREA areaType=${parsed?.areas?.[0]?.areaType} `
+          + `parentCode=${parsed?.areas?.[0]?.parentCode || '-'} -> ${data.length} bản ghi`);
+        res.writeHead(200, { 'content-type': 'application/json;charset=UTF-8' });
+        res.end(JSON.stringify({ data }));
+      });
+      return;
+    }
+
     if (url.pathname === LOT_OPEN) {
       res.writeHead(200, { 'content-type': 'application/json;charset=UTF-8' });
       res.end(JSON.stringify([
@@ -170,6 +247,9 @@ const server = https.createServer(
       return;
     }
 
+    // GHI RA đường dẫn không khớp. Trước đây im lặng, nên một lỗi 404 trong
+    // kịch bản không truy được về đâu — mất cả buổi mới biết nó là gì.
+    console.log(`[mock] 404 ${req.method} ${url.pathname}`);
     res.writeHead(404, { 'content-type': 'text/plain' });
     res.end('not found');
   }

@@ -83,7 +83,7 @@
   const RELEVANT = new Set(['notifyNo', 'notify_no', 'tbmtNo', 'bidNo', 'bidName', 'notifyName', 'packageName', 'publicDate', 'publishDate', 'investorName', 'procuringEntityName', 'bidPrice', 'packagePrice', 'bidPackagePrice', 'notifyVersion', 'notifyVersionNo', 'investField', 'investFieldName', 'fieldName', 'closeDate', 'bidCloseDate', 'projectName', 'provinceName', 'executionLocation']);
   const IDENTITY = ['notifyNo', 'bidName', 'notifyName', 'bidNo'];
 
-  const PLAN_KEYS = new Set(['id', 'query', 'pageSize']);
+  const PLAN_KEYS = new Set(['id', 'query', 'pageSize', 'queryIndex']);
   const QUERY_KEYS = new Set(['index', 'filters', 'keyWord', 'matchType', 'matchFields']);
   const FILTER_KEYS = new Set(['fieldName', 'searchType', 'fieldValues', 'from', 'to']);
   const SEARCH_TYPES = new Set(['in', 'range', 'not_null', 'greater_equal', 'less_equal']);
@@ -173,7 +173,8 @@
     if (typeof value.id !== 'string' || !PLAN_ID.test(value.id) || !validQuery(value.query)) return null;
     if (!Number.isInteger(value.pageSize) || ![10, 20, 50].includes(value.pageSize)) return null;
     try {
-      return { id: value.id, query: JSON.parse(JSON.stringify(value.query)), pageSize: value.pageSize };
+      if(value.queryIndex!=null&&(!Number.isSafeInteger(value.queryIndex)||value.queryIndex<0))return null;
+      return { id: value.id, queryIndex:value.queryIndex??0, query: JSON.parse(JSON.stringify(value.query)), pageSize: value.pageSize };
     } catch {
       return null;
     }
@@ -388,7 +389,7 @@
     }
   }
 
-  async function inspectResponse(response, request, planId = '') {
+  async function inspectResponse(response, request, planId = '', queryIndex = 0) {
     try {
       const clone = response.clone();
       const ctype = clone.headers.get('content-type') || '';
@@ -403,7 +404,7 @@
       recordEndpoint(responseUrl, request.method, response.status, data);
       if (planId) {
         post('KQLCNT_PAGE', {
-          planId,
+          planId, queryIndex, sourcePageIndex:nativePageIndex(request.body),
           ok: response.status >= 200 && response.status < 300,
           status: response.status,
           data
@@ -421,7 +422,10 @@
       if (!planId && data && hasRelevant(data)) {
         post('NETWORK_CAPTURE', { request, data, responseUrl: response.url, status: response.status, capturedAt: new Date().toISOString() });
       }
-    } catch {}
+    } catch {
+      if(planId)post('KQLCNT_PAGE',{planId,queryIndex,ok:false,status:response.status||0,
+        schemaIssue:true,failureReason:'Không đọc được dữ liệu phản hồi e-GP.',data:null});
+    }
   }
 
   // ------- Chặn fetch để quan sát (không can thiệp request gốc) -------
@@ -431,11 +435,12 @@
     try { request = await serializeFetchRequest(input, init); } catch { request = { url: String(input), method: 'GET', headers: {}, body: '' }; }
     let fetchInput = input;
     let fetchInit = init;
-    let planId = '';
+    let planId = '', queryIndex = 0;
     if (kqlcntPlan && isSearchRequest(request.url, request.method)) {
       const refined = refineKqlcntBody(request.url, request.method, request.body);
       if (refined !== null) {
         planId = kqlcntPlan.id;
+        queryIndex = kqlcntPlan.queryIndex;
         request.body = refined;
         try {
           if (typeof Request !== 'undefined' && input instanceof Request) {
@@ -452,8 +457,14 @@
       }
     }
     request.pageUrl=location.href;
-    const response = await originalFetch(fetchInput, fetchInit);
-    void inspectResponse(response, request, planId);
+    let response;
+    try { response = await originalFetch(fetchInput, fetchInit); }
+    catch(error){
+      if(planId)post('KQLCNT_PAGE',{planId,queryIndex,ok:false,status:0,
+        failureReason:'Kết nối e-GP bị gián đoạn.',data:null});
+      throw error;
+    }
+    void inspectResponse(response, request, planId, queryIndex);
     return response;
   };
 
@@ -463,6 +474,8 @@
   const XHRSetHeader = XMLHttpRequest.prototype.setRequestHeader;
   XMLHttpRequest.prototype.open = function (method, url, ...rest) {
     this.__br = { method: String(method || 'GET').toUpperCase(), url: String(url), headers: {}, body: '' };
+    this.__brKqlcnt = '';
+    this.__brQueryIndex = 0;
     return XHROpen.call(this, method, url, ...rest);
   };
   XMLHttpRequest.prototype.setRequestHeader = function (name, value) {
@@ -480,18 +493,29 @@
         const refined = refineKqlcntBody(this.__br.url, this.__br.method, this.__br.body);
         if (refined !== null) {
           this.__brKqlcnt = kqlcntPlan.id;
+          this.__brQueryIndex = kqlcntPlan.queryIndex;
           body = refined;
           this.__br.body = refined;
         }
       }
 
       this.__br.pageUrl=location.href;
+      const onFailure=()=>{
+        removeFailureListeners();
+        if(this.__brKqlcnt)post('KQLCNT_PAGE',{planId:this.__brKqlcnt,queryIndex:this.__brQueryIndex,ok:false,status:this.status||0,
+          failureReason:'Kết nối e-GP bị gián đoạn hoặc hết thời gian chờ.',data:null});
+      };
+      const removeFailureListeners=()=>{
+        for(const type of ['error','timeout','abort'])this.removeEventListener?.(type,onFailure);
+      };
+      for(const type of ['error','timeout','abort'])this.addEventListener(type,onFailure,{once:true});
       this.addEventListener('load', () => {
+        removeFailureListeners();
         try {
           const data = this.responseType === 'json' ? this.response : safeParse(this.responseText || '');
           if (this.__brKqlcnt) {
             post('KQLCNT_PAGE', {
-              planId: this.__brKqlcnt,
+              planId: this.__brKqlcnt, queryIndex: this.__brQueryIndex, sourcePageIndex:nativePageIndex(this.__br.body),
               ok: this.status >= 200 && this.status < 300,
               status: this.status,
               data
@@ -545,6 +569,13 @@
    * lib/bbmt.js — nơi có kiểm thử — nên ở đây chỉ việc gắn vào, giữ nguyên
    * phân trang mà giao diện e-GP đang dùng.
    */
+  function nativePageIndex(body){
+    try{
+      const value=JSON.parse(body)?.[0]?.pageNumber;
+      return value!==null&&value!==undefined&&value!==''&&Number.isSafeInteger(Number(value))&&Number(value)>=0?Number(value):null;
+    }catch{return null;}
+  }
+
   function refineKqlcntBody(url, method, rawBody) {
     if (!kqlcntPlan || !kqlcntPlan.query || !rawBody) return null;
     if (!isSearchRequest(url, method) || !validQuery(kqlcntPlan.query)) return null;
@@ -566,7 +597,7 @@
     if (event.data.type === 'KQLCNT_PLAN') {
       const plan = event.data.payload || null;
       kqlcntPlan = plan === null ? null : validatedPlan(plan);
-      post('KQLCNT_PLAN_ACK', { planId: kqlcntPlan ? kqlcntPlan.id : null, accepted: plan === null || Boolean(kqlcntPlan) });
+      post('KQLCNT_PLAN_ACK', { planId: kqlcntPlan ? kqlcntPlan.id : null, queryIndex:kqlcntPlan?.queryIndex??0, accepted: plan === null || Boolean(kqlcntPlan) });
     }
   });
 

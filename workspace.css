@@ -35,5 +35,7 @@ body:has(.popup-launch) .card{border-radius:10px;padding:12px;box-shadow:none}bo
 .ws-sidebar{align-self:start}.ws-intro p,.ws-result-meta,.search-hint,.view-help,.results-meta,.fresh-stamp,.explain{color:#637b68}.ws-result-top .code,.ws-metric .sub,.ws-metric small,.ws-result .reason-chip,.ws-score small,.ws-footer{color:#667b5f}.ws-result .reason-chip.warn{color:#8b6423}.ws-result .fresh-stamp.stale{color:#8d6d29}.ws-intro{padding-top:24px;padding-bottom:22px}.search-field-main{display:block}.history-label{flex-wrap:wrap}.history-label select{max-width:100%}
 .search-grid.has-category{grid-template-columns:1.2fr 1fr 1fr 1fr}.search-grid.has-category>div{min-width:0}.search-grid.has-category label[for="category"]{text-transform:uppercase}
 .run-strip>div{flex:1;min-width:0;overflow-wrap:anywhere}.run-strip>.ico{flex:none}.history-label select{min-width:0;flex:0 1 450px}
+.ws-sidebar nav{min-height:0;overflow-y:auto;flex:1;overscroll-behavior:contain}.ws-side-bottom,.ws-version,.ws-brand,.nav-caption{flex-shrink:0}
+@media(max-width:850px){.ws-sidebar nav{overflow-y:hidden;overflow-x:auto}}
 @media(max-width:1150px){.search-grid.has-category{grid-template-columns:1fr 1fr}.search-grid.has-category>div:first-child{grid-column:auto}}
 @media(max-width:540px){.search-grid.has-category{grid-template-columns:1fr}}

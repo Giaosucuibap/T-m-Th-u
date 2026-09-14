@@ -20,17 +20,18 @@
       </ul>
 
       <h3>2. Dữ liệu được lưu ở đâu</h3>
-      <p>Dữ liệu gói thầu, nhà thầu, cấu hình và bộ lọc được lưu <b>cục bộ trên máy của bạn</b> bằng <code>chrome.storage.local</code>. Nút “Xóa danh sách và lịch sử quét” chỉ xóa dữ liệu nghiệp vụ liên quan; nút “Khôi phục mặc định — xóa toàn bộ” xóa cả cấu hình, Bot Token và logo.</p>
+      <p>Dữ liệu gói thầu, nhà thầu, cấu hình, bộ lọc, lịch tìm, checklist, hồ sơ năng lực, hợp đồng và nhật ký thao tác được lưu <b>cục bộ trên máy của bạn</b> bằng <code>chrome.storage.local</code>. Nút “Xóa danh sách và lịch sử quét” chỉ xóa dữ liệu nghiệp vụ liên quan; nút “Khôi phục mặc định — xóa toàn bộ” xóa cả cấu hình, Bot Token và logo. Tên người thao tác và chế độ Chỉ xem là chức năng quản lý trên máy, không phải tài khoản được xác thực.</p>
 
       <h3>3. Tiện ích truy cập những gì</h3>
       <ul>
         <li><b>muasamcong.mpi.gov.vn</b>: đọc dữ liệu gói thầu <i>công khai</i> mà chính trang e-GP tải, để chuẩn hóa, chống trùng và chấm điểm.</li>
         <li><b>api.telegram.org</b> (tùy chọn): chỉ khi bạn tự bật và nhập Bot Token/Chat ID của bạn, tiện ích gửi thông báo gói mới tới Telegram của <i>chính bạn</i>. Token được lưu cục bộ trên máy bạn.</li>
         <li><b>localhost:1234</b>: gọi phần mềm hỗ trợ e-GP đang chạy trên máy bạn để tải hồ sơ mời thầu, khi bạn bấm nút tải E-HSMT.</li>
+        <li><b>tile.openstreetmap.org</b>: tải ảnh nền bản đồ khi mở Phân tích địa bàn. Nhà cung cấp nhận yêu cầu tải ô bản đồ và địa chỉ IP; tiện ích không gửi danh sách gói thầu, checklist hay hợp đồng tới dịch vụ bản đồ. Bảng số liệu vẫn xem được khi ảnh nền không tải được.</li>
       </ul>
 
       <h3>4. Chia sẻ cho bên thứ ba</h3>
-      <p>Tiện ích không gửi dữ liệu về máy chủ của nhà phát triển. Dữ liệu chỉ rời khỏi máy khi <b>bạn chủ động</b> xuất file hoặc bật gửi Telegram; khi đó nội dung cảnh báo gói thầu được gửi tới Telegram theo cấu hình của bạn.</p>
+      <p>Tiện ích không gửi dữ liệu về máy chủ của nhà phát triển. Ngoài các yêu cầu tới e-GP và ảnh nền bản đồ nêu trên, bạn có thể chủ động xuất Excel, DOCX, bản sao lưu hoặc gói đồng bộ JSON để chia sẻ. Telegram chỉ gửi theo cấu hình bạn bật. Nút email mở ứng dụng soạn thư để bạn kiểm tra và tự gửi. Gói JSON có thể dùng HMAC với khóa dùng chung để kiểm tra nội dung; đây không phải chữ ký số xác thực cá nhân và không mã hóa tệp.</p>
 
       <h3>5. Quyền hạn xin cấp và lý do</h3>
       <ul>
