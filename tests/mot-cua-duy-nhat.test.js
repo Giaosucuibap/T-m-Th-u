@@ -1,5 +1,5 @@
 /* ============================================================================
- *  MỘT CỬA DUY NHẤT CHO LỌC, THỐNG KÊ VÀ XUẤT DỮ LIỆU  (B1.4)
+ *  MỘT CỬA DUY NHẤT CHO LỌC, THỐNG KÊ VÀ XUẤT  (B1.4)
  *
  *  Lỗi cần chặn: bản Excel xuất ra KHÁC danh sách đang hiện trên màn hình.
  *
@@ -8,20 +8,23 @@
  *  Người dùng cầm bản Excel đi họp với con số không khớp thứ họ vừa nhìn thấy,
  *  và không có cách nào biết bên nào đúng.
  *
- *  Bản 4.10.1 đã gom về một cửa: `passesHardFilter()` chấm từng bản ghi TRƯỚC
- *  khi lưu, nên thống kê, thông báo và xuất đều đọc cùng một kho đã lọc.
+ *  Bản 4.11.0 gom về `lib/result-view.js`:
+ *    • `createResultView()` — MỘT phép lọc, dùng chung cho danh sách, thống kê
+ *      và bản xuất. Phân trang thuộc về phần vẽ, không được cắt kết quả này.
+ *    • `verifyExportKeys()` — chốt chặn: danh sách khoá gửi kèm lệnh xuất phải
+ *      TRÙNG KHÍT tập đang hiện; lệch một khoá là NÉM LỖI, không xuất im lặng.
  *
- *  Tệp này khoá lại hai tính chất khiến "một cửa" còn giữ được ý nghĩa.
+ *  Chốt chặn thứ hai chặt hơn hẳn cách chỉ "cùng gọi một hàm": kể cả khi màn
+ *  hình gửi sai, bản xuất vẫn không thể lệch mà không ai biết.
  * ========================================================================== */
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
-import vm from 'node:vm';
 import { fileURLToPath } from 'node:url';
 
 import { passesHardFilter, hardFilterReason, HARD_FILTER_REASON_LABELS } from '../lib/hard-filter.js';
-import { filterAndSort, statusOf } from '../lib/decision.js';
+import { createResultView, verifyExportKeys, resultRevision } from '../lib/result-view.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -40,13 +43,6 @@ test('mọi lý do loại trừ phát ra từ bộ lọc đều có nhãn', () =
 
   const thieu = phatRa.filter((r) => !Object.hasOwn(HARD_FILTER_REASON_LABELS, r));
   assert.deepEqual(thieu, [], `lý do chưa có nhãn: ${thieu.join(', ')}`);
-});
-
-test('lý do khớp xã theo mã — đường mới của 4.11.0 — cũng có nhãn', () => {
-  for (const r of ['ward', 'insufficient-ward']) {
-    assert.ok(Object.hasOwn(HARD_FILTER_REASON_LABELS, r), `thiếu nhãn cho "${r}"`);
-    assert.ok(hardFilterReason(r).length > 0);
-  }
 });
 
 test('lý do lạ không làm vỡ giao diện', () => {
@@ -77,158 +73,141 @@ const HO_SO = [
 ];
 
 test('chấm hai lần cho cùng kết quả — cổng không mang trạng thái ẩn', () => {
-  const criteria = { province: 'Lâm Đồng', ward: 'Đức Trọng', minPrice: 1e9 };
+  const criteria = { province: 'Lâm Đồng', minPrice: 1e9 };
   const lan1 = HO_SO.map((r) => passesHardFilter(r, criteria, AREAS));
   const lan2 = HO_SO.map((r) => passesHardFilter(r, criteria, AREAS));
   assert.deepEqual(lan2, lan1, 'cùng đầu vào phải cho cùng kết quả');
 
-  // Và thứ tự gọi không được ảnh hưởng.
   const nguoc = [...HO_SO].reverse().map((r) => passesHardFilter(r, criteria, AREAS)).reverse();
   assert.deepEqual(nguoc, lan1, 'đảo thứ tự chấm vẫn phải ra cùng kết quả');
 });
 
 test('không sửa bản ghi gốc — nếu sửa, lượt chấm sau sẽ khác lượt trước', () => {
-  const criteria = { province: 'Lâm Đồng', ward: 'Đức Trọng' };
+  const criteria = { province: 'Lâm Đồng' };
   const truoc = JSON.stringify(HO_SO);
   HO_SO.forEach((r) => passesHardFilter(r, criteria, AREAS));
   assert.equal(JSON.stringify(HO_SO), truoc, 'bộ lọc đã sửa dữ liệu đầu vào');
 });
 
-test('mọi gói bị loại đều nói được VÌ SAO, cả trên màn hình lẫn trong tệp xuất', () => {
-  const criteria = { province: 'Lâm Đồng', ward: 'Đức Trọng', minPrice: 1e9 };
-  const daCham = HO_SO.map((r) => ({ record: r, verdict: passesHardFilter(r, criteria, AREAS) }));
-  for (const x of daCham.filter((v) => !v.verdict.ok)) {
-    assert.ok(hardFilterReason(x.verdict.reason).length > 0,
-      `gói "${x.record.bidName}" bị loại mà không giải thích được`);
-  }
-});
-
-/* --------------------------------------------------------------------------
- *  3. BẢN XUẤT PHẢI TRÙNG KHÍT DANH SÁCH ĐANG HIỆN — kiểm trên mã THẬT
- *
- *  Đây mới là bài hồi quy người dùng cần. Nó KHÔNG mô phỏng lại logic; nó cắt
- *  đúng hàm `exportCsv` trong background.js ra và chạy thật, với danh sách khoá
- *  y hệt cái màn hình gửi sang (`search.js`: keys = filtered.map(t => t.key)).
- *
- *  Nếu ai đó thêm một bộ lọc riêng vào đường xuất — lọc điểm, lọc trạng thái,
- *  bỏ gói thiếu giá — bài này đỏ ngay. Đó là toàn bộ mục đích của nó.
- * ------------------------------------------------------------------------ */
-
-/** Cắt `exportCsv` khỏi background.js và chạy nó với các phụ thuộc giả lập. */
-function napHamXuat() {
-  const src = fs.readFileSync(path.join(ROOT, 'background.js'), 'utf8');
-  const start = src.indexOf('async function exportCsv');
-  assert.ok(start >= 0, 'không tìm thấy exportCsv trong background.js — mốc cắt đã hỏng');
-  const rest = src.slice(start);
-  const next = /\n(?:async )?function [A-Za-z_$]/.exec(rest.slice(1));
-  const body = next ? rest.slice(0, next.index + 1) : rest;
-
-  // Phải là bản THẬT, không phải một đoạn rỗng lọt qua.
-  assert.match(body, /downloadXlsx\(/, 'đoạn cắt được không chứa lệnh xuất');
-
-  const batDuoc = {};
-  const sandbox = {
-    getState: async () => JSON.parse(JSON.stringify(sandbox.__state)),
-    downloadXlsx: async (filename, spec) => { batDuoc.filename = filename; batDuoc.spec = spec; return 1; },
-    stamp: () => '2026-09-14',
-    numOrNull: (v) => (v === null || v === undefined || v === '' || typeof v === 'boolean'
-      || !Number.isFinite(Number(v))) ? null : Number(v),
-    statusOf,
-    hardFilterReason,
-    BID_STATUS_LABEL: new Proxy({}, { get: (_, k) => String(k) }),
-    GATE_LABEL: new Proxy({}, { get: (_, k) => String(k) }),
-    DECISION_STATE_LABEL: new Proxy({}, { get: (_, k) => String(k) }),
-    normalizeDecisionState: (v) => v || 'NONE',
-    __state: null
-  };
-  vm.createContext(sandbox);
-  vm.runInContext(`${body}\n;globalThis.__exportCsv = exportCsv;`, sandbox);
-  return { sandbox, batDuoc, exportCsv: sandbox.__exportCsv };
-}
-
-/** Kho gói thầu đã qua cổng lọc — đúng thứ nằm trong storage thật. */
-const KHO = [
-  { key: 'k1', bidName: 'Kênh mương Đức Trọng',  score: 88, price: 2e9,  closeDate: '2026-12-01', watchlisted: true,  matched: true,  filterState: 'MATCH' },
-  { key: 'k2', bidName: 'Hồ chứa Đạ Tẻh',        score: 71, price: 9e9,  closeDate: '2026-11-20', watchlisted: false, matched: true,  filterState: 'MATCH' },
-  { key: 'k3', bidName: 'Gói điểm thấp',         score: 12, price: 3e8,  closeDate: '2026-11-05', watchlisted: false, matched: false, filterState: 'MATCH' },
-  { key: 'k4', bidName: 'Gói chưa rõ giá',       score: 64,              closeDate: '2026-10-30', watchlisted: false, matched: true,  filterState: 'INSUFFICIENT' },
-  { key: 'k5', bidName: 'Trạm bơm Cát Tiên',     score: 95, price: 1.4e10, closeDate: '2026-12-15', watchlisted: true, matched: true, filterState: 'MATCH' }
-];
-
-/** Đúng công thức trong search.js:156 — kể cả hai bộ lọc nằm ngoài filterAndSort. */
-function danhSachDangHien(view = {}) {
-  const theoTrangThai = KHO.filter((t) => !view.criteriaState || t.filterState === view.criteriaState);
-  return filterAndSort(theoTrangThai, view).filter((t) => !view.onlyWatch || t.watchlisted);
-}
-
-test('BẢN XUẤT trùng khít DANH SÁCH ĐANG HIỆN, ở mọi tổ hợp bộ lọc', async () => {
-  const { sandbox, batDuoc, exportCsv } = napHamXuat();
-
-  const toHop = [
-    { ten: 'không lọc gì',            view: {} },
-    { ten: 'chỉ gói khớp tiêu chí',   view: { onlyMatched: true } },
-    { ten: 'điểm từ 70',              view: { minScore: 70 } },
-    { ten: 'chỉ gói đang theo dõi',   view: { onlyWatch: true } },
-    { ten: 'chỉ trạng thái MATCH',    view: { criteriaState: 'MATCH' } },
-    { ten: 'tìm chữ trong tên',       view: { text: 'Đức Trọng' } },
-    { ten: 'chồng nhiều bộ lọc',      view: { onlyMatched: true, minScore: 70, onlyWatch: true } }
-  ];
-
-  for (const { ten, view } of toHop) {
-    const hien = danhSachDangHien(view);
-    if (!hien.length) continue;                       // e-GP rỗng thì không có gì để đối chiếu
-
-    sandbox.__state = { tenders: KHO, runs: [] };
-    await exportCsv(false, hien.map((t) => t.key), '');
-
-    const xuatRa = batDuoc.spec.rows.map((r) => r.bidName);
-    assert.deepEqual(
-      [...xuatRa].sort(), [...hien.map((t) => t.bidName)].sort(),
-      `"${ten}": bản xuất KHÁC danh sách đang hiện — người dùng sẽ cầm con số sai đi họp`
-    );
-  }
-});
-
-test('đường xuất không được tự lọc thêm — gói thiếu giá vẫn phải có trong tệp', async () => {
-  /* Bỏ gói thiếu giá cho "bảng đẹp" là âm thầm xoá đúng nhóm gói người dùng
-     cần soi nhất. Nếu nó biến mất khỏi tệp mà vẫn nằm trên màn hình thì hai
-     bên đang nói hai chuyện. */
-  const { sandbox, batDuoc, exportCsv } = napHamXuat();
-  sandbox.__state = { tenders: KHO, runs: [] };
-  await exportCsv(false, ['k4'], '');
-
-  assert.equal(batDuoc.spec.rows.length, 1);
-  assert.equal(batDuoc.spec.rows[0].bidName, 'Gói chưa rõ giá');
-  assert.equal(batDuoc.spec.rows[0].price, null, 'thiếu giá phải là ô TRỐNG, không phải 0 đ');
-});
-
-test('xuất khoá không thuộc lượt tra cứu đã chọn thì DỪNG, không xuất im lặng', async () => {
-  // Xuất nhầm gói của lượt khác là báo cáo sai phạm vi. Thà báo lỗi.
-  const { sandbox, exportCsv } = napHamXuat();
-  sandbox.__state = {
-    tenders: KHO,
-    runs: [{ id: 'r1', foundKeys: ['k1', 'k2'], resultStates: {} }]
-  };
-  await assert.rejects(() => exportCsv(false, ['k1', 'k5'], 'r1'), /không thuộc lượt tra cứu/);
-});
-
-test('phạm vi xuất vô lý bị chặn trước khi dựng tệp', async () => {
-  const { sandbox, exportCsv } = napHamXuat();
-  sandbox.__state = { tenders: KHO, runs: [] };
-  await assert.rejects(() => exportCsv(false, ['k1', 123], ''), /không hợp lệ/);
-  await assert.rejects(() => exportCsv(false, [], ''), /Không có gói/);
-});
-
 test('gói CHƯA ĐỦ DỮ LIỆU không bị lẫn vào nhóm "ngoài tiêu chí"', () => {
   // Gộp hai nhóm này là âm thầm vứt đi những gói có thể đúng. Người đi đấu
   // thầu mất cơ hội mà không bao giờ biết mình đã mất.
-  const criteria = { province: 'Lâm Đồng', ward: 'Đức Trọng', minPrice: 1e9 };
-  const chuaRoDiaBan = passesHardFilter(HO_SO[2], criteria, AREAS);
-  const chuaCoGia = passesHardFilter(HO_SO[3], criteria, AREAS);
+  const criteria = { province: 'Lâm Đồng', minPrice: 1e9 };
+  assert.equal(passesHardFilter(HO_SO[2], criteria, AREAS).state, 'INSUFFICIENT');
+  assert.equal(passesHardFilter(HO_SO[3], criteria, AREAS).state, 'INSUFFICIENT');
+  assert.equal(passesHardFilter(HO_SO[1], criteria, AREAS).state, 'OUT_OF_RANGE',
+    'có đủ căn cứ thì phải kết luận dứt khoát');
+});
 
-  assert.equal(chuaRoDiaBan.state, 'INSUFFICIENT');
-  assert.equal(chuaCoGia.state, 'INSUFFICIENT');
+/* --------------------------------------------------------------------------
+ *  3. BẢN XUẤT PHẢI TRÙNG KHÍT DANH SÁCH ĐANG HIỆN
+ *
+ *  Kiểm trên chính `lib/result-view.js` — cửa thật mà `lib/runtime-export.js`
+ *  đi qua — chứ không mô phỏng lại phép lọc ở đây. Mô phỏng thì bài thử chỉ
+ *  chứng minh bản mô phỏng đúng với chính nó.
+ * ------------------------------------------------------------------------ */
 
-  const ngoaiTieuChi = passesHardFilter(HO_SO[1], criteria, AREAS);
-  assert.equal(ngoaiTieuChi.state, 'OUT_OF_RANGE', 'có đủ căn cứ thì phải kết luận dứt khoát');
+const KHO = [
+  { key:'k1', bidName:'Kênh mương Đức Trọng',  score:88, price:2e9,   closeDate:'2026-12-01', watchlisted:true,  locations:[{provCode:'68'}] },
+  { key:'k2', bidName:'Hồ chứa Đạ Tẻh',        score:71, price:9e9,   closeDate:'2026-11-20', watchlisted:false, locations:[{provCode:'68'}] },
+  { key:'k3', bidName:'Đường xã Tân Minh',     score:12, price:3e8,   closeDate:'2026-11-05', watchlisted:false, locations:[{provCode:'75'}] },
+  { key:'k4', bidName:'Gói chưa công bố giá',  score:64,              closeDate:'2026-10-30', watchlisted:false, locations:[{provCode:'68'}] },
+  { key:'k5', bidName:'Trạm bơm Cát Tiên',     score:95, price:1.4e10,closeDate:'2026-12-15', watchlisted:true,  locations:[{provCode:'68'}] }
+];
+const LUOT = { id:'r1', foundKeys:KHO.map(t => t.key), criteria:{ province:'Lâm Đồng' }, resultStates:{} };
+
+const TO_HOP = [
+  { ten:'không lọc thêm',          view:{ criteriaState:'' } },
+  { ten:'chỉ gói KHỚP',            view:{ criteriaState:'MATCH' } },
+  { ten:'chỉ CHƯA ĐỦ DỮ LIỆU',     view:{ criteriaState:'INSUFFICIENT' } },
+  { ten:'chỉ NGOÀI TIÊU CHÍ',      view:{ criteriaState:'OUT_OF_RANGE' } },
+  { ten:'điểm từ 70',              view:{ criteriaState:'', minScore:70 } },
+  { ten:'chỉ gói đang theo dõi',   view:{ criteriaState:'', onlyWatch:true } },
+  { ten:'tìm chữ trong tên',       view:{ criteriaState:'', text:'Đức Trọng' } },
+  { ten:'theo mã tỉnh 68',         view:{ criteriaState:'', provinceCode:'68' } },
+  { ten:'đóng thầu tới 30/11',     view:{ criteriaState:'', closeTo:'2026-11-30' } },
+  { ten:'chồng nhiều bộ lọc',      view:{ criteriaState:'MATCH', minScore:70, onlyWatch:true } }
+];
+
+test('BẢN XUẤT trùng khít DANH SÁCH ĐANG HIỆN, ở mọi tổ hợp bộ lọc', () => {
+  for (const { ten, view } of TO_HOP) {
+    const hien = createResultView(KHO, LUOT, view).rows;
+    // Đây đúng việc màn hình làm: gửi khoá của TOÀN BỘ danh sách sau lọc.
+    const khoaGuiDi = hien.map((t) => t.key);
+    const xuatRa = verifyExportKeys(createResultView(KHO, LUOT, view).rows, khoaGuiDi);
+    assert.deepEqual(xuatRa.map((t) => t.key), khoaGuiDi,
+      `"${ten}": bản xuất KHÁC danh sách đang hiện — người dùng sẽ cầm con số sai đi họp`);
+  }
+});
+
+test('thống kê trên màn hình đếm đúng tập sẽ được xuất', () => {
+  // Con số tóm tắt và bản xuất phải sinh ra từ cùng một lượt chấm. Lệch nhau
+  // thì người dùng đọc một con số ở đầu trang và đếm ra con số khác trong file.
+  for (const { ten, view } of TO_HOP) {
+    const v = createResultView(KHO, LUOT, view);
+    assert.equal(v.summary.total, v.rows.length, `"${ten}": tổng không khớp số dòng`);
+    assert.equal(v.summary.match + v.summary.insufficient + v.summary.outOfRange, v.rows.length,
+      `"${ten}": ba nhóm cộng lại không bằng tổng — có gói không thuộc nhóm nào`);
+  }
+});
+
+test('XUẤT THIẾU một gói thì DỪNG, không xuất im lặng', () => {
+  const hien = createResultView(KHO, LUOT, { criteriaState: '' }).rows;
+  assert.ok(hien.length >= 3, 'dữ liệu mẫu phải đủ để bỏ bớt mà vẫn còn');
+  assert.throws(() => verifyExportKeys(hien, hien.slice(1).map((t) => t.key)), /khớp toàn bộ danh sách/);
+});
+
+test('XUẤT THỪA một gói ngoài danh sách cũng DỪNG', () => {
+  // Xuất thừa nguy hiểm ngang xuất thiếu: báo cáo mang gói không thuộc phạm vi.
+  const hien = createResultView(KHO, LUOT, { criteriaState: 'MATCH' }).rows;
+  assert.throws(() => verifyExportKeys(hien, [...hien.map((t) => t.key), 'k-khong-co-that']),
+    /khớp toàn bộ danh sách/);
+});
+
+test('XUẤT TRÙNG một khoá hai lần cũng DỪNG', () => {
+  const hien = createResultView(KHO, LUOT, { criteriaState: '' }).rows;
+  const trung = [...hien.map((t) => t.key)];
+  trung[1] = trung[0];
+  assert.throws(() => verifyExportKeys(hien, trung), /khớp toàn bộ danh sách/);
+});
+
+test('phạm vi xuất vô lý bị chặn trước khi dựng tệp', () => {
+  const hien = createResultView(KHO, LUOT, {}).rows;
+  assert.throws(() => verifyExportKeys(hien, ['k1', 123]), /không hợp lệ/);
+  assert.throws(() => verifyExportKeys(hien, new Array(10001).fill('k1')), /không hợp lệ/);
+});
+
+test('MỐC PHIÊN BẢN đổi khi kết quả đổi — nền của chốt chặn "tải lại rồi hãy xuất"', () => {
+  /* Bản xuất chốt theo `revision`. Nếu mốc này không đổi khi dữ liệu đổi thì
+     chốt chặn thành vô nghĩa: kho đã thay mà lệnh xuất cũ vẫn được nhận. */
+  const a = resultRevision(createResultView(KHO, LUOT, {}).rows);
+  assert.equal(a, resultRevision(createResultView(KHO, LUOT, {}).rows), 'cùng dữ liệu phải cùng mốc');
+
+  const khoDoi = KHO.map((t) => (t.key === 'k1' ? { ...t, price: 3e9 } : t));
+  assert.notEqual(a, resultRevision(createResultView(khoDoi, LUOT, {}).rows),
+    'đổi giá một gói mà mốc không đổi — chốt chặn xuất sẽ bỏ lọt');
+
+  /* Một gói MỚI của lượt khác thì KHÔNG được đổi kết quả lượt này — phạm vi
+     một lượt tra cứu do `foundKeys` của nó định nghĩa, không phải do kho. */
+  const goiLuotKhac = { key:'k6', bidName:'Gói của lượt khác', score:50, closeDate:'2026-12-20', locations:[{provCode:'68'}] };
+  assert.equal(a, resultRevision(createResultView([...KHO, goiLuotKhac], LUOT, {}).rows),
+    'gói ngoài lượt tra cứu đã lọt vào kết quả của lượt này');
+
+  // Nhưng thuộc lượt này thì phải đổi.
+  const luotRong = { ...LUOT, foundKeys: [...LUOT.foundKeys, 'k6'] };
+  assert.notEqual(a, resultRevision(createResultView([...KHO, goiLuotKhac], luotRong, {}).rows),
+    'thêm gói vào chính lượt này mà mốc không đổi — chốt chặn xuất sẽ bỏ lọt');
+});
+
+/* --------------------------------------------------------------------------
+ *  4. Bản xuất phải NÓI ĐƯỢC vì sao mỗi gói nằm trong đó
+ * ------------------------------------------------------------------------ */
+
+test('mọi dòng trong bản xuất đều mang kết luận và lý do đọc được', () => {
+  for (const row of createResultView(KHO, LUOT, { criteriaState: '' }).rows) {
+    assert.ok(['MATCH', 'INSUFFICIENT', 'OUT_OF_RANGE'].includes(row.filterState),
+      `gói "${row.bidName}" không mang kết luận đối chiếu`);
+    assert.ok(String(row.filterReason || '').length > 0,
+      `gói "${row.bidName}" bị xếp nhóm mà không giải thích được`);
+  }
 });

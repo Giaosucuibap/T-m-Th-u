@@ -9,7 +9,11 @@ import { findPriorTenderVersion, newTenderChanges, deadlineReminderState, should
 
 test('4.8.1 acronyms classify unlabeled consulting tasks without overriding source field or Ban QLDA', () => {
   for (const [acronym, category] of [['TVTK','TV_DESIGN'],['TVGS','TV_SUPERVISION'],['GSXL','TV_SUPERVISION'],['TVKS','TV_SURVEY'],['TVTT','TV_APPRAISAL'],['TVTĐ','TV_APPRAISAL'],['TVQLDA','TV_PROJECT_MANAGEMENT'],['QLDA','TV_PROJECT_MANAGEMENT']]) {
-    assert.equal(matchesTenderCategory({bidName:`Gói thầu số 02: ${acronym} công trình`}, category), true, acronym);
+    /* 4.11.0: viết tắt trong TÊN gói vẫn phân nhánh tư vấn được, nhưng chỉ
+       khi e-GP đã khai lĩnh vực gốc là TV. Tên gói không tự nâng một gói chưa
+       khai lĩnh vực lên thành Tư vấn — nó vào nhóm "Chưa đủ dữ liệu". */
+    assert.equal(matchesTenderCategory({bidName:`Gói thầu số 02: ${acronym} công trình`,investField:'TV'}, category), true, acronym);
+    assert.equal(matchesTenderCategory({bidName:`Gói thầu số 02: ${acronym} công trình`}, category), false, acronym);
     assert.equal(matchesTenderCategory({bidName:`${acronym} công trình`,investField:'HH'}, category), false);
   }
   assert.equal(matchesTenderCategory({bidName:'Tư vấn khảo sát trụ sở Ban QLDA',investField:'TV'},'TV_PROJECT_MANAGEMENT'),false);
@@ -25,8 +29,14 @@ test('4.8.1 local mandatory/excluded terms persist and stay tied to package titl
   assert.equal(matchesLocalFilters({bidName:'Mua sắm bàn ghế',projectName:'Xây dựng kênh mương'},c.criteria),false);
 });
 
+/* 4.11.0: lĩnh vực phải do CHÍNH gói con khai, nên bản mẫu dùng `bidNamePlanNew`
+   — đúng dạng e-GP trả về khi có dữ liệu từng gói. Khai `investField` ở mức kế
+   hoạch chỉ nói kế hoạch có những loại nào, không nói gói nào thuộc loại nào. */
 const mixedPlan = () => normalizeKhlcntPlan({planNo:'PL2600000001',investField:['XL','TV'],
-  bidName:['Thi công kênh mương','Tư vấn thiết kế kênh mương','Tư vấn giám sát kênh mương','Tư vấn giám sát phần mềm'],
+  bidNamePlanNew:[{name:'Thi công kênh mương',investField:'XL'},
+    {name:'Tư vấn thiết kế kênh mương',investField:'TV'},
+    {name:'Tư vấn giám sát kênh mương',investField:'TV'},
+    {name:'Tư vấn giám sát phần mềm',investField:'TV'}],
   bidPrice:[8e9,2e8,3e8,5e7]});
 
 test('4.8.1 multi-province KHLCNT retains either requested province and audits the same scope', () => {

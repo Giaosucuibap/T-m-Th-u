@@ -2,6 +2,138 @@
 
 Tài liệu này ghi lại các thay đổi quan trọng của Giáo Sư Cùi Bắp. Cấu trúc tham khảo [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) và phiên bản tuân theo cách đánh số ngữ nghĩa ở mức sản phẩm.
 
+## [4.12.0] — 2026-09-24
+
+Nhận bản **4.11.0 của tác giả** làm nền (bản này khác hẳn bản 4.11.0 của nhánh:
+tác giả đã tự làm cả nhóm B2 — tách service worker, chỉ mục, cache truy vấn,
+một tab e-GP dùng lại — và cả B3 — cầu nối E-HSMT qua native messaging). Bản
+4.12.0 giữ nguyên những phần đó và bổ sung bốn việc.
+
+Bộ kiểm thử: **474 bài, xanh trên cả 4 múi giờ.** Mỗi thay đổi dưới đây đều đã
+kiểm bằng cách hoàn tác mã nguồn và xác nhận bài thử báo đỏ.
+
+### Nhanh hơn 4,2–4,7 lần ở mọi cỡ kho
+
+Đo có mốc đối chiếu (trung vị 7 lượt, bỏ lượt khởi động), trên chính bản của
+tác giả và bản này:
+
+| Thao tác | Kho | Bản tác giả | Bản này | Nhanh gấp |
+|---|---|---|---|---|
+| Gõ một phím vào ô tìm | 3.000 | 322 ms | **77 ms** | 4,2× |
+| Đổi bộ lọc điểm | 3.000 | 85 ms | **19 ms** | 4,5× |
+| Gõ một phím vào ô tìm | 20.000 | 2.374 ms | **506 ms** | 4,7× |
+| Đổi bộ lọc điểm | 20.000 | 649 ms | **137 ms** | 4,7× |
+
+Nút thắt **không** nằm ở chỗ ai cũng đoán. Tách từng phần trên kho 20.000 gói:
+lọc theo chữ chỉ tốn **1 ms**, chọn qua chỉ mục **0–2 ms**, chấm cổng lọc
+186 ms — còn **phép sắp xếp tốn 2.198 ms**.
+
+Nguyên nhân: `compareTenders` gọi `decisionRank`, mà hàm này gọi `statusOf` và
+`daysToClose` — cả hai phân tích chuỗi ngày. Sắp n phần tử cần ~n·log₂n phép so
+sánh, mỗi phép chạy chúng hai lần: ~570.000 lần phân tích ngày cho **một** lần
+sắp, và nó chạy lại mỗi lần gõ phím.
+
+Sửa: tính khoá sắp xếp một lần cho mỗi dòng rồi so sánh trên số đã tính. Kèm
+theo, chuỗi tìm kiếm đã chuẩn hoá được nhớ lại trên bản ghi bằng thuộc tính
+**không liệt kê được** — nên nó vô hình với `JSON.stringify`, với bản sao lưu,
+với tệp Excel và với mốc phiên bản kết quả.
+
+`tests/toc-do-sap-xep.test.js` khoá lại điều quan trọng nhất: **thứ tự phải
+trùng khớp hoàn toàn** thứ tự cũ, trên cả 4 kiểu sắp. Tối ưu kiểu này chỉ đúng
+khi mọi khoá chỉ phụ thuộc vào chính dòng đó; sai một chỗ là thứ tự đổi âm thầm.
+
+### Kết quả tra cứu nay LẶP LẠI ĐƯỢC
+
+Hai gói bằng điểm, bằng hạng, bằng giá thì trước đây đứng theo thứ tự chúng
+tình cờ nằm trong kho — hai lần tra cùng tiêu chí có thể cho hai bảng khác thứ
+tự. In ra hai lần, so hai tờ, thấy lệch, và không có cách nào biết bên nào
+đúng. Nay chốt hoà bằng khoá gói, thứ tự cố định.
+
+### Bảng Excel: kẻ ô, đậm, nghiêng, màu theo kết luận
+
+`lib/xlsx.js` trước đây khai `<borders count="1">` với một khung **rỗng**,
+không có font nghiêng, không có màu nền. Nay:
+
+- **Kẻ khung từng ô** bằng nét xám nhạt — bảng 24 cột không kẻ thì in ra không
+  dò được hàng. Ô thiếu giá vẫn có khung và vẫn **trống**, không thành "0 đ".
+- **Màu nền mang đúng ba kết luận** của cổng lọc: xanh nhạt *Khớp*, vàng nhạt
+  *Chưa đủ dữ liệu*, đỏ nhạt *Ngoài tiêu chí*. Không có kết luận thì chỉ kẻ dải
+  chẵn/lẻ — tô màu khi không có căn cứ là nói một kết luận không tồn tại.
+- **Đậm** tên gói, giá gói, cột đối chiếu; **nghiêng xám** lý do đối chiếu.
+- **Dải đầu bảng** hai dòng gộp ô: tên báo cáo, phạm vi lọc, mạch đối soát
+  e-GP, thời điểm xuất. Người nhận file không ngồi cạnh người xuất file.
+
+Quan trọng hơn cách hiển thị: **bảng kiểu nay sinh ra bằng mã từ một danh sách
+duy nhất**. Trước đây chỉ số kiểu và các `<xf>` được gõ tay ở hai chỗ cách nhau
+150 dòng; lệch một ô là cả bảng sai kiểu — tiền thành ngày, chữ thành phần trăm
+— mà tệp vẫn mở được nên không ai thấy ngay.
+
+### Bộ icon: một dáng duy nhất ở mọi cỡ
+
+Bộ cũ là **ba cái dấu khác nhau**: 16/32px vòng tròn + dấu tích; 48px thêm vạch
+ngắm và khung tài liệu chen chúc; 128px một cảnh radar khác hẳn. Người dùng
+nhận ra phần mềm bằng cái dấu trên thanh công cụ.
+
+`tools/make-icons.mjs` sinh cả bộ từ một nguồn, giản lược dần mà **không đổi
+dáng**: vòng radar + dấu tích giữ nguyên ở mọi cỡ; vạch ngắm thêm từ 48px; khung
+tài liệu, vòng ngoài và chấm quét chỉ ở 128px. Nét khai riêng theo từng cỡ, vì ở
+16px một nét 4/128 chỉ còn nửa điểm ảnh và biến thành vệt xám.
+
+### Sửa lỗi
+
+- **`Failed to fetch` hiện thẳng ra màn hình.** Chụp màn hình bản 4.11.0 thì
+  dưới ô *Xã / Phường* hiện đúng hai chữ đó: tiếng Anh, không nói cái gì hỏng,
+  không nói phải làm sao. Tệ hơn: ô chọn xã im lặng ngừng hoạt động, nên người
+  dùng vẫn bấm tìm và vẫn nhận kết quả — chỉ là kết quả **không hề lọc theo
+  xã**, mà trông vẫn bình thường. Nay mỗi câu lỗi nói đủ ba điều: hỏng ở đâu,
+  tiêu chí xã đang **chưa được áp dụng**, và phải làm gì tiếp.
+- **Mã loại gói không tồn tại bị hiểu là "không lọc gì".** Một mã gõ sai
+  (`TV_DESING`), một bộ săn lưu từ bản cũ, hay một hằng số đổi tên đều rơi về
+  chuỗi rỗng, và người dùng thấy bộ lọc đang bật mà nhận về toàn bộ gói thầu.
+  Nay `isUnknownCategory()` phân biệt "không chọn" với "mã không hiểu".
+- **Màn hình kế hoạch không được truyền danh mục địa bàn**, nên mọi tiêu chí xã
+  đều rơi vào "Chưa đủ dữ liệu" — bộ lọc xã ở đó chưa bao giờ dùng được.
+- **Gói con của kế hoạch mượn được tên xã của kế hoạch mẹ.** `wards` bị bỏ sót
+  trong danh sách xoá khi gói con đã khai địa bàn riêng.
+- **Câu "chính xác tuyệt đối" quay lại `winners.js`.** Xem mục 4.11.0 của nhánh
+  về lý do đây là chuyện có hại thật, không phải chuyện câu chữ.
+- **Giá lẻ và giá chẵn khác độ đậm** trong cùng một cột Excel.
+- **Phiên bản ghim cứng `'4.11.0'`** làm mặc định trong `lib/live-canary.js`.
+  Bằng chứng canary chỉ có nghĩa khi gắn đúng phiên bản đã chạy nó; một số ghim
+  cứng sẽ lặng lẽ cũ đi sau mỗi lần nâng bản.
+
+### Khớp xã: nhận lại chứng cứ bằng chữ, nhưng có điều kiện
+
+Bản 4.11.0 bỏ hẳn chuỗi địa điểm, chỉ tính mã. Đúng về nguyên tắc, nhưng rất
+nhiều hồ sơ e-GP ghi địa bàn bằng chữ mà không kèm mã — chọn xã xong là gần như
+toàn bộ rơi vào "Chưa đủ dữ liệu", và bộ lọc xã hoá ra vô dụng.
+
+Nay chứng cứ chữ được nhận lại, với điều kiện chặt: chuỗi phải nêu tên xã, **và**
+hồ sơ phải có thêm chứng cứ tỉnh thuộc phạm vi đã chọn — mã tỉnh (chắc chắn) hoặc
+tên tỉnh trong chuỗi. Nêu mỗi tên xã trần thì không đủ, vì "Đức Trọng" có ở nhiều
+tỉnh. Kết luận này mang lý do riêng `ward-text` để phân biệt với `ward-code`.
+
+Chữ chỉ đủ để **công nhận**, không đủ để **loại bỏ**: chuỗi nêu một xã khác
+trong cùng tỉnh vẫn là "Chưa đủ dữ liệu", vì địa chỉ chủ đầu tư không phải địa
+điểm thi công.
+
+### Phép thử của nhánh phải cập nhật theo
+
+21 bài đỏ khi hợp nhất. Không bài nào là lỗi sản phẩm — tác giả đã đổi hợp đồng
+theo hướng chặt hơn, và bài thử đang khoá hành vi cũ:
+
+- **Tên gói không còn quyết định lĩnh vực gói thầu.** Chỉ trường e-GP khai mới
+  tính; viết tắt trong tên (TVGS, TVTK) vẫn phân nhánh tư vấn nhưng không tự
+  nâng một gói chưa khai lên thành "Tư vấn". Đã kiểm: gói đó **không biến mất**,
+  nó vào nhóm "Chưa đủ dữ liệu".
+- **Xã nhận dạng bằng CẶP (mã xã, mã tỉnh cha)**, không phải mã trần.
+- **`host_permissions` thu hẹp**: bỏ `http://localhost:1234/*`, chuyển sang
+  `nativeMessaging`. Bài thử ghim cứng danh sách cũ nay đổi thành "không được
+  **nới rộng**" — ghim cứng thì một lần thu hẹp hợp lệ cũng báo đỏ, và người sửa
+  sẽ quen tay cập nhật fixture cho xong, để lần nới rộng thật sau đó lọt luôn.
+- Bài kiểm Excel ghim `s="2"` đổi thành đọc ngược `styles.xml` và kiểm **ý
+  nghĩa** kiểu ô.
+
 ## [4.11.0] — 2026-09-14
 
 Nhận bản **4.10.1** của tác giả làm nền, rồi làm tiếp nhóm **B1 — Chính xác hơn nữa**.

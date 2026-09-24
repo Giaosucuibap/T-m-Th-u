@@ -1,10 +1,13 @@
 import { TENDER_CATEGORIES, categoryLabel } from './lib/tender-categories.js';
 import { escapeHtml } from './lib/html.js';
 import { huntLabel } from './lib/hunts.js';
+import { createWardPicker } from './ward-picker.js';
 
 const $ = (id) => document.getElementById(id);
 const send = (type, payload = {}) => chrome.runtime.sendMessage({ type, payload });
 const esc = escapeHtml;
+const wardPicker=createWardPicker({send,province:$('province'),ward:$('ward'),list:$('ward-list'),hint:$('ward-hint')});
+$('province').addEventListener('change',()=>{wardPicker.clear();wardPicker.load();});
 
 $('category').innerHTML = TENDER_CATEGORIES.map((c) => `<option value="${esc(c.value)}">${esc(c.label)}</option>`).join('');
 
@@ -18,7 +21,7 @@ function formCriteria() {
   return {
     investor: $('investor').value,
     province: $('province').value,
-    ward: $('ward').value,
+    ...wardPicker.read(),
     keyword: $('keyword').value,
     mustKeywords: $('mustKeywords').value,
     excludeKeywords: $('excludeKeywords').value,
@@ -37,9 +40,11 @@ function fillHunt(h) {
   if ($('telegramChatId')) $('telegramChatId').value = h?.telegramChatId || '';
   $('times').value = (h?.times || ['06:05']).join(', ');
   const c = h?.criteria || {};
+  wardPicker.set(c.wardIdentities);
   for (const key of ['investor', 'province', 'ward', 'keyword', 'mustKeywords', 'excludeKeywords', 'minPrice', 'maxPrice', 'category']) {
     if ($(key)) $(key).value = c[key] ?? '';
   }
+  wardPicker.load();
 }
 
 async function refresh() {
@@ -123,4 +128,11 @@ send('AREA_OPTIONS').then((r) => {
   if (r?.ok) $('province-list').innerHTML = (r.provinces || []).map((n) => `<option value="${esc(n)}">`).join('');
 }).catch(() => {});
 
+const incomingCriteria=new URL(location.href).searchParams.get('criteria');
+if(incomingCriteria){
+  try{const c=JSON.parse(incomingCriteria);if(c&&typeof c==='object'&&!Array.isArray(c)){
+    fillHunt({name:[c.keyword,c.province,c.category].filter(Boolean).join(' · ').slice(0,70)||'Bộ săn từ lượt tìm',kind:'tbmt',enabled:false,telegram:false,criteria:c});
+    setNotice('alert','Đã điền tiêu chí từ bước Tìm. Kiểm tra thời gian chạy, bật bộ săn khi cần và bấm Lưu để tạo lịch.');
+  }}catch{setNotice('alert','Không đọc được tiêu chí chuyển sang. Hãy nhập lại trước khi lưu.','error');}
+}
 refresh();

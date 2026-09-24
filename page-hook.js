@@ -146,7 +146,13 @@
     const stepFilters = query.filters.filter((filter) => filter.fieldName === 'stepCode');
     if (types[0] === 'es-notify-contractor') {
       const steps = filterValues(query.filters, 'stepCode');
-      if (!steps || steps.length < 1 || steps.some((step) => !NOTICE_STEPS.has(step))) return false;
+      // Permit a stage-independent query only for one exact, complete public
+      // notice ID. IB2600534292 moved to online quotation on 14/09/2026;
+      // assuming all live notice identities use steps 1–4 hid that real record.
+      const exactNotice = !stepFilters.length && /^IB\d{10}$/.test(query.keyWord || '')
+        && query.matchType === 'exact' && Array.isArray(query.matchFields)
+        && query.matchFields.length === 1 && query.matchFields[0] === 'notifyNo';
+      if (!exactNotice && (!steps || steps.length < 1 || steps.some((step) => !NOTICE_STEPS.has(step)))) return false;
     } else if (stepFilters.length) {
       return false;
     }
@@ -407,6 +413,7 @@
           planId, queryIndex, sourcePageIndex:nativePageIndex(request.body),
           ok: response.status >= 200 && response.status < 300,
           status: response.status,
+          retryAfter: response.status === 429 ? (response.headers.get('retry-after') || '').slice(0, 100) : '',
           data
         });
       }
@@ -424,6 +431,7 @@
       }
     } catch {
       if(planId)post('KQLCNT_PAGE',{planId,queryIndex,ok:false,status:response.status||0,
+        retryAfter:response.status===429?(response.headers.get('retry-after')||'').slice(0,100):'',
         schemaIssue:true,failureReason:'Không đọc được dữ liệu phản hồi e-GP.',data:null});
     }
   }
@@ -518,6 +526,7 @@
               planId: this.__brKqlcnt, queryIndex: this.__brQueryIndex, sourcePageIndex:nativePageIndex(this.__br.body),
               ok: this.status >= 200 && this.status < 300,
               status: this.status,
+              retryAfter: this.status === 429 ? (this.getResponseHeader?.('retry-after') || '').slice(0, 100) : '',
               data
             });
           }

@@ -425,6 +425,41 @@
     return wait;
   }
 
+  /* KQ_BACKOFF_START */
+  function kqBackoffDelay(retryAfter, attempt, now = Date.now(), random = Math.random()) {
+    const raw = String(retryAfter || '').trim();
+    let requested = /^\d+(?:\.\d+)?$/.test(raw) ? Number(raw) * 1000 : Date.parse(raw) - now;
+    if (!Number.isFinite(requested)) requested = 0;
+    // Never retry before Retry-After. A delay above our budget ends this run.
+    return Math.max(2000 * 2 ** attempt, requested, 0) + Math.floor(Math.max(0, Math.min(1, random)) * 500);
+  }
+  async function kqRecoverRateLimit(page, expectedIndex, plan) {
+    for (let attempt = 0; page?.status === 429 && attempt < 3; attempt++) {
+      const delay = kqBackoffDelay(page.retryAfter, attempt);
+      if (delay > 60000) return { ...page, failureReason: 'e-GP yêu cầu nghỉ quá một phút. Đã giữ dữ liệu; hãy chạy lại sau thời gian e-GP cho phép.' };
+      kqReport(`e-GP đang giới hạn truy cập (429). Chờ ${Math.ceil(delay / 1000)} giây trước khi thử lại trang ${expectedIndex + 1}...`);
+      const until = Date.now() + delay;
+      while (Date.now() < until) {
+        if (kqCancelled || kqPlan !== plan) return { ok: false, status: 429, cancelled: true };
+        await new Promise(resolve => setTimeout(resolve, Math.min(250, until - Date.now())));
+      }
+      if (kqCancelled || kqPlan !== plan) return { ok: false, status: 429, cancelled: true };
+      if (expectedIndex === 0) page = await kqTriggerFirstPage();
+      else {
+        // Element UI ignores clicking an already-active page. Move back once,
+        // await that native response, then advance to the exact failed page.
+        const previous = document.querySelector('.el-pagination .btn-prev');
+        if (!previous || previous.disabled) return { ...page, failureReason: 'Không tìm được điều khiển phân trang để đọc lại trang bị giới hạn.' };
+        const wait = kqAwaitPage(); previous.click();
+        const before = await wait;
+        if (!before?.ok || before.sourcePageIndex !== expectedIndex - 1) return { ok: false, status: before?.status || 0, failureReason: 'e-GP chưa khôi phục được trang liền trước; dữ liệu đã đọc được giữ lại.' };
+        page = await kqGoNextPage();
+      }
+    }
+    return page;
+  }
+  /* KQ_BACKOFF_END */
+
   async function kqRunHarvest(){
     const plan=kqPlan;
     if(!plan)return;
@@ -440,8 +475,9 @@
 
     kqReport(`Đang hỏi e-GP về ${plan.label}...`);
     let page=await kqTriggerFirstPage();
+    if(page?.status===429)page=await kqRecoverRateLimit(page,0,plan);
     if(!page||!page.ok){
-      kqFinish(false,`e-GP chưa trả dữ liệu cho lượt tra cứu${page&&page.status?` (HTTP ${page.status})`:''}. Hãy thử lại sau ít phút.`);
+      kqFinish(false,page?.failureReason||`e-GP chưa trả dữ liệu cho lượt tra cứu${page&&page.status?` (HTTP ${page.status})`:''}. Hãy thử lại sau ít phút.`);
       return;
     }
 
@@ -500,6 +536,8 @@
       await new Promise(r=>setTimeout(r,KQ_PAGE_PAUSE));
       if(kqCancelled)break;
       page=await kqGoNextPage();
+      if(page?.status===429)page=await kqRecoverRateLimit(page,pageIndex,plan);
+      if(page&&!page.ok&&page.failureReason)failureReason=page.failureReason;
     }
 
     const capped=Boolean(maxPages)&&totalPages!==null&&totalPages>maxPages&&pageIndex>=maxPages;

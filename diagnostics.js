@@ -10,7 +10,6 @@ import {
 import { redactSettings, stripSecretsDeep } from './lib/redact.js';
 import { safeRunForBackup } from './lib/backup.js';
 import { canaryCheck } from './lib/canary.js';
-import { evaluateLiveCanary, canaryGate, inCanaryWindow, LIVE_CANARY_CODES } from './lib/canary-live.js';
 import { normalizeKhlcntPlan } from './lib/khlcnt.js';
 import { dateGate } from './lib/match-gate.js';
 import { matchesAreaCodes } from './lib/area-match.js';
@@ -152,67 +151,38 @@ document.getElementById('epCopy').onclick = async () => {
 
 epLoad();
 
-
-/* ---------------------------------------------------------------------------
- *  CANARY SỐNG
- *
- *  Nửa BẤT BIẾN ĐỊA BÀN chạy được ngay: danh mục địa bàn của e-GP gọi được mà
- *  không cần token. Đây cũng là nửa nguy hiểm hơn — mã tỉnh trôi thì kết quả
- *  thiếu đi một cách lặng lẽ, không ai thấy bằng mắt.
- *
- *  Nửa ĐỐI CHỨNG TỪNG MÃ GÓI cần một lượt quét qua tab e-GP; chưa nối. Giao
- *  diện nói rõ điều đó thay vì để người dùng tưởng đã kiểm đủ.
- * ------------------------------------------------------------------------- */
-let CANARY_KQ = null;
-
-$('canaryRun').onclick = async () => {
-  const btn = $('canaryRun');
-  btn.disabled = true;
-  $('canaryMsg').textContent = 'Đang tải danh mục địa bàn từ e-GP…';
-  $('canaryOut').textContent = '';
-
-  const gioVn = Number(new Date().toLocaleString('en-GB', { timeZone: 'Asia/Ho_Chi_Minh', hour: '2-digit', hour12: false }));
-  const ngoaiGio = !inCanaryWindow(gioVn);
-
-  const res = await msg('CANARY_AREAS').catch((e) => ({ ok: false, message: String(e.message || e) }));
-  if (!res || res.ok === false || !res.areas) {
-    btn.disabled = false;
-    $('canaryMsg').textContent = 'Chưa tải được danh mục địa bàn: ' + ((res && res.message) || 'không rõ nguyên nhân')
-      + ' — chưa kết luận được gì, KHÔNG coi là đạt.';
-    return;
-  }
-
-  // Chưa nối phần đọc từng mã gói -> không truyền quan sát nào, nên mọi mã ghi
-  // NOT_RUN. Đó là sự thật, và evaluateLiveCanary sẽ không báo đạt.
-  CANARY_KQ = { ...evaluateLiveCanary([], res.areas), runHourVn: gioVn, outOfHours: ngoaiGio };
-  const gate = canaryGate(CANARY_KQ);
-  const troi = CANARY_KQ.areaRows.filter((r) => r.status === 'AREA_DRIFT');
-
-  $('canaryMsg').textContent =
-    (troi.length
-      ? `⛔ MÃ ĐỊA BÀN ĐÃ TRÔI: ${troi.map((r) => `${r.name} thiếu mã ${r.missing.join(', ')}`).join('; ')}. `
-        + 'Mọi lượt tra địa bàn này đang bỏ sót dữ liệu cũ.'
-      : `✓ Bất biến địa bàn còn đúng (${CANARY_KQ.areaRows.length} tỉnh đã kiểm).`)
-    + ` · Đối chứng mã gói: 0/${LIVE_CANARY_CODES.length} — phần này CHƯA TỰ ĐỘNG, phải tra tay từng mã.`
-    + (ngoaiGio ? ` · Lưu ý: đang ${gioVn}h, nên chạy sau 22h.` : '');
-
-  $('canaryOut').textContent = JSON.stringify({
-    batBienDiaBan: CANARY_KQ.areaRows,
-    doiChungMaGoi: `0/${LIVE_CANARY_CODES.length} — chưa tự động`,
-    congChanBanDung: gate,
-    _phamVi: 'Mới kiểm bất biến địa bàn. Chưa đối chứng từng mã gói trên e-GP.'
-  }, null, 2);
-
-  $('canarySave').disabled = false;
-  btn.disabled = false;
-};
-
-$('canarySave').onclick = () => {
-  if (!CANARY_KQ) return;
-  const blob = new Blob([JSON.stringify(CANARY_KQ, null, 2)], { type: 'application/json' });
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = 'canary-result.json';
-  a.click();
-  setTimeout(() => URL.revokeObjectURL(a.href), 5000);
-};
+const LIVE_LABEL={GREEN:'Các hồ sơ mẫu đã kiểm tra đạt',RED:'Có mẫu không khớp hoặc kiểm tra thất bại',UNKNOWN:'Chưa đủ dữ liệu để xác nhận',RUNNING:'Đang kiểm tra các hồ sơ mẫu'};
+let liveTimer;
+async function loadLiveCanary(){
+  clearTimeout(liveTimer);
+  try{
+    const response=await msg('CANARY_STATUS');
+    if(!response?.ok)throw new Error(response?.message||'Chưa đọc được trạng thái kiểm tra.');
+    const live=response.liveCanary||{},status=Object.hasOwn(LIVE_LABEL,live.status)?live.status:'UNKNOWN';
+    $('live-status').className=`notice ${status==='GREEN'?'ok':status==='RED'?'error':''}`;
+    $('live-status').textContent=`${LIVE_LABEL[status]}${live.reason?' · '+live.reason:''}`;
+    $('live-time').textContent=`Lần kiểm tra: ${live.checkedAt?new Date(live.checkedAt).toLocaleString('vi-VN',{timeZone:'Asia/Ho_Chi_Minh'}):'chưa có'} · Lịch kế tiếp: ${live.nextRunAt?new Date(live.nextRunAt).toLocaleString('vi-VN',{timeZone:'Asia/Ho_Chi_Minh'}):'chưa xác định'} · Giờ Việt Nam`;
+    $('live-cases').innerHTML=(live.cases||[]).map(item=>`<p><b>${esc(item.id)}</b> · ${esc(item.type)} · ${esc(item.status)}${item.reason?' — '+esc(item.reason):''}</p>`).join('');
+    $('live-run').disabled=status==='RUNNING'||Boolean(state?.settings?.readOnlyMode);
+    if(status==='RUNNING'&&!document.hidden)liveTimer=setTimeout(loadLiveCanary,3000);
+  }catch(e){$('live-status').className='notice';$('live-status').textContent=`Chưa xác định · ${e.message||e}`;}
+}
+$('live-run').addEventListener('click',async()=>{
+  $('live-run').disabled=true;
+  try{const result=await msg('CANARY_RUN');if(!result?.ok)throw new Error(result?.message||'Chưa bắt đầu được kiểm tra.');await loadLiveCanary();}
+  catch(e){$('live-status').className='notice';$('live-status').textContent=String(e.message||e);$('live-run').disabled=false;}
+});
+$('live-refresh').addEventListener('click',loadLiveCanary);
+async function checkNative(){
+  $('native-check').disabled=true;
+  try{
+    const result=await msg('AGENT_STATUS');
+    const installed=result?.installed===true,upstream=result?.upstream===true;
+    $('native-status').className=`notice ${installed&&upstream?'ok':''}`;
+    $('native-status').textContent=installed?(upstream?'Cầu nối Native Messaging và phần mềm hỗ trợ e-GP đang phản hồi.':'Cầu nối đã cài; phần mềm hỗ trợ e-GP chưa phản hồi. Hãy mở phần mềm hỗ trợ rồi kiểm tra lại.'):(result?.message||'Chưa kết nối được cầu nối Native Messaging. Xem hướng dẫn cài trên máy.');
+  }catch(e){$('native-status').textContent=`Chưa kiểm tra được cầu nối: ${e.message||e}`;}finally{$('native-check').disabled=false;}
+}
+$('native-check').addEventListener('click',checkNative);
+$('native-guide').href=chrome.runtime.getURL('HUONG-DAN-NATIVE.md');
+window.addEventListener('pagehide',()=>clearTimeout(liveTimer));
+loadLiveCanary();

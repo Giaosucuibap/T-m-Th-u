@@ -8,8 +8,10 @@
  *  bị làm mờ. Một tỷ lệ 100% từ 2 gói không được trông giống 100% từ 40 gói.
  * ========================================================================== */
 
+import { createWardPicker } from './ward-picker.js';
 const $ = (id) => document.getElementById(id);
 const send = (type, payload = {}) => chrome.runtime.sendMessage({ type, payload });
+const wardPicker=createWardPicker({send,province:$('province'),ward:$('ward'),list:$('ward-list'),hint:$('ward-hint')});
 
 let POLL = null;
 let SCAN = null;
@@ -67,18 +69,7 @@ async function loadProvinces() {
 }
 
 async function loadWards() {
-  const province = $('province').value.trim();
-  if (!province) { fillDatalist('ward-list', []); return; }
-  $('ward-hint').textContent = 'Đang lấy danh sách xã/phường…';
-  const res = await send('AREA_OPTIONS', { province });
-  if (!res || res.ok === false) {
-    $('ward-hint').textContent = (res && res.message) || 'Chưa lấy được danh sách xã/phường.';
-    return;
-  }
-  fillDatalist('ward-list', res.wards);
-  $('ward-hint').textContent = res.wards.length
-    ? `${res.wards.length} địa danh của ${province} (gồm cả tên huyện/xã trước sáp nhập).`
-    : `Không thấy xã/phường nào cho "${province}".`;
+  return wardPicker.load();
 }
 
 
@@ -146,7 +137,7 @@ function clearFilters() {
  * ------------------------------------------------------------------------ */
 
 async function start() {
-  const payload = { ward: $('ward').value.trim(), province: $('province').value.trim(), ...readFilters() };
+  const payload = { ...wardPicker.read(), province: $('province').value.trim(), ...readFilters() };
   alertBox('', null);
   show($('result'), false);
   show($('progress'), true);
@@ -501,7 +492,7 @@ function drawPricing() {
 
 $('go').addEventListener('click', start);
 $('ward').addEventListener('keydown', (e) => { if (e.key === 'Enter') start(); });
-$('province').addEventListener('change', loadWards);
+$('province').addEventListener('change',()=>{wardPicker.clear();loadWards();});
 $('province').addEventListener('blur', loadWards);
 $('stop').addEventListener('click', async () => {
   // Phải gọi ĐÚNG lệnh của tính năng này. Trước đây gọi CANCEL_ACTIVE_RUN —
@@ -539,6 +530,39 @@ $('clear').addEventListener('click', clearFilters);
 /* Khi mở trang: DỌN các lượt còn kẹt "đang chạy" từ phiên trước rồi mới đọc
    trạng thái. Không dọn thì trang vẽ lại thanh tiến trình của một lượt đã
    chết từ đời nào — trông như phần mềm tự động chạy. */
+let heatMap = null, heatRows = [], mapEnabled = false;
+function toggleHeatMap() {
+  if (mapEnabled) {
+    mapEnabled = false;
+    heatMap?.stop();heatMap?.remove();heatMap = null;
+    show($('heat-map'), false);
+    $('toggle-map').textContent = 'Bật nền bản đồ';
+    $('toggle-map').setAttribute('aria-pressed','false');
+    $('heat-detail').textContent = 'Nền bản đồ đang tắt. Không tải thêm ảnh từ OpenStreetMap.';
+    return;
+  }
+  const mapped = heatRows.filter(r => r.mapped);
+  if (!window.L || !mapped.length) return;
+  mapEnabled = true;
+  show($('heat-map'),true);
+  $('toggle-map').textContent = 'Tắt nền bản đồ';
+  $('toggle-map').setAttribute('aria-pressed','true');
+  $('heat-detail').textContent = 'Nền bản đồ đã bật. Chọn một điểm tỉnh để xem các gói đã lưu.';
+  heatMap = window.L.map('heat-map',{zoomAnimation:false,fadeAnimation:false,markerZoomAnimation:false}).setView([12.2,108.4],6);
+  // This is the only tile-layer creation path, entered by the user's button.
+  const tiles=window.L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',maxZoom:12});
+  tiles.on('tileerror',()=>{if(mapEnabled)$('heat-detail').textContent='Nền bản đồ chưa tải được. Bảng số liệu bên dưới vẫn xem được.';});
+  tiles.addTo(heatMap);
+  for(const r of mapped){
+    const marker=window.L.circleMarker([r.lat,r.lng],{radius:6+r.heat*10,color:'#0f766e',fillOpacity:0.5});
+    marker.on('click',()=>{$('heat-detail').innerHTML=`<b>${esc(r.label)} · điểm tỉnh gần đúng</b><br>`+(r.tenders||[]).map(t=>`${esc(t.notifyNo||'')} · ${esc(t.bidName||'')}`).join('<br>')+(r.count>r.tenders.length?`<br>Hiển thị ${r.tenders.length}/${r.count} gói; số đếm bao gồm cả nhóm.`:'');});
+    const tooltip=document.createElement('span');tooltip.textContent=`${r.label} · ${r.count} gói · điểm tỉnh gần đúng`;
+    marker.bindTooltip(tooltip);marker.addTo(heatMap);
+  }
+  heatMap.fitBounds(mapped.map(r=>[r.lat,r.lng]),{padding:[25,25],maxZoom:7,animate:false});
+}
+$('toggle-map').addEventListener('click',toggleHeatMap);
+window.addEventListener('pagehide',()=>{mapEnabled=false;heatMap?.stop();heatMap?.remove();heatMap=null;});
 async function renderHeat() {
   try {
     const { districtHeat } = await import('./lib/heatmap.js');
@@ -548,25 +572,9 @@ async function renderHeat() {
     const box = $('heat-list');
     if (!box) return;
     box.innerHTML = rows.map((r) => `<div style="margin:6px 0"><b>${esc(r.label)}</b> · ${r.count} gói · ${money(r.value)} (${r.knownPrices}/${r.count} gói có giá)${r.mapped ? ' · điểm tham chiếu tỉnh' : ' · không đặt điểm trên bản đồ'}<div class="bar"><i style="width:${Math.round(r.heat*100)}%;animation:none;margin:0"></i></div></div>`).join('') || 'Kho gói còn trống.';
-    const mapped = rows.filter((r) => r.mapped);
-    show($('heat-map'), Boolean(mapped.length));
-    if (window.L && $('heat-map') && mapped.length) {
-      const map = window.L.map('heat-map').setView([12.2, 108.4], 6);
-      const tiles = window.L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>', maxZoom: 12 });
-      tiles.on('tileerror', () => { $('heat-detail').textContent = 'Nền bản đồ chưa tải được. Bảng số liệu theo tỉnh bên dưới vẫn xem được.'; });
-      tiles.addTo(map);
-      for (const r of mapped) {
-        const marker = window.L.circleMarker([r.lat, r.lng], { radius: 6 + r.heat * 10, color: '#0f766e', fillOpacity: 0.5 });
-        marker.on('click', () => {
-          $('heat-detail').innerHTML = `<b>${esc(r.label)} · điểm tỉnh gần đúng</b><br>` + (r.tenders || []).map((t) => `${esc(t.notifyNo || '')} · ${esc(t.bidName || '')}`).join('<br>') + (r.count > r.tenders.length ? `<br>Hiển thị ${r.tenders.length}/${r.count} gói; số đếm bao gồm cả nhóm.` : '');
-        });
-        const tooltip = document.createElement('span');
-        tooltip.textContent = `${r.label} · ${r.count} gói · điểm tỉnh gần đúng`;
-        marker.bindTooltip(tooltip);
-        marker.addTo(map);
-      }
-      map.fitBounds(mapped.map((r) => [r.lat, r.lng]), { padding: [25, 25], maxZoom: 7 });
-    }
+    heatRows=rows;
+    $('toggle-map').disabled=!rows.some(r=>r.mapped)||!window.L;
+    $('heat-detail').textContent=rows.some(r=>r.mapped)?'Nền bản đồ đang tắt. Bấm Bật nền bản đồ nếu bạn muốn xem điểm tham chiếu tỉnh.':'Chưa có gói với tọa độ tỉnh xác định; không đặt điểm suy đoán.';
   } catch (error) { $('heat-list').textContent = error?.message || 'Chưa vẽ được bảng địa bàn.'; }
 }
 

@@ -12,6 +12,21 @@ const selects = ['approvalSteps'];
 const $ = (id) => document.getElementById(id);
 const msg = (type, payload = {}) => chrome.runtime.sendMessage({ type, payload });
 
+async function loadCanaryConfig(){
+  try{const result=await msg('CANARY_STATUS');if(!result?.ok)throw new Error(result?.message||'Chưa đọc được lịch kiểm tra.');
+    const config=result.config||{};$('canary-enabled').checked=config.enabled===true;$('canary-weekday').value=String(config.weekday??1);$('canary-hour').value=String(config.hour??2);
+    $('canary-message').textContent=result.liveCanary?.reason||'Lịch dùng giờ Việt Nam, độc lập múi giờ của máy.';
+  }catch(e){$('canary-message').textContent=String(e.message||e);}
+}
+$('save-canary').addEventListener('click',async()=>{
+  const hour=Number($('canary-hour').value),weekday=Number($('canary-weekday').value);
+  if(!Number.isInteger(hour)||hour<0||hour>23||!Number.isInteger(weekday)||weekday<0||weekday>6){$('canary-message').textContent='Chọn ngày hợp lệ và giờ nguyên từ 0 đến 23.';return;}
+  $('save-canary').disabled=true;
+  try{const result=await msg('CANARY_CONFIG',{enabled:$('canary-enabled').checked,weekday,hour});$('canary-message').textContent=result?.ok?'Đã lưu lịch kiểm tra theo giờ Việt Nam.':result?.message||'Chưa lưu được lịch.';}
+  catch(e){$('canary-message').textContent=String(e.message||e);}finally{$('save-canary').disabled=false;}
+});
+loadCanaryConfig();
+
 function esc(x) {
   return String(x ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }

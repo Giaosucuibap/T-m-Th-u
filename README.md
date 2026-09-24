@@ -1,4 +1,4 @@
-# Giáo Sư Cùi Bắp 4.11.0
+# Giáo Sư Cùi Bắp 4.12.0
 
 **Trợ lý ra quyết định dự thầu ngay trên nguồn e-GP chính thức.**
 
@@ -192,14 +192,29 @@ npm test
 
 Bộ hiện tại kiểm tra chuẩn hoá văn bản/tiền/ngày, URL chính thức, request an toàn, safe backup theo danh sách trắng, claim/ACK/lease của tác vụ, pipeline quyết định, xếp hạng, Radar, CSP/manifest, cú pháp/import JavaScript, tài nguyên giao diện, hyperlink Excel, cách tính liên danh, cổng ba trạng thái, khớp xã theo mã và đối chiếu bản xuất với danh sách đang hiện.
 
-Kết quả 4.11.0: **453/453 kiểm thử tự động đạt**, xanh trên cả bốn múi giờ.
+Kết quả 4.12.0: **474/474 kiểm thử tự động đạt**, xanh trên cả bốn múi giờ.
 
-Xin nói rõ giới hạn: **toàn bộ 453 bài này chạy trên dữ liệu tự dựng.** Chúng
+Xin nói rõ giới hạn: **toàn bộ 474 bài này chạy trên dữ liệu tự dựng.** Chúng
 chứng minh phần mềm không tự hỏng, và chỉ vậy. Chúng **không** biết e-GP vừa đổi
 tên một trường hay vừa bỏ một mã tỉnh — đúng loại hỏng làm phần mềm trả kết quả
 thiếu mà vẫn xanh hết. Đó là việc của canary sống ở mục dưới. Kết quả cục bộ
-không thay thế kiểm thử trực tiếp trên e-GP, kiểm thử hiệu năng, rà soát Chrome
-Web Store hay kiểm toán bảo mật độc lập.
+không thay thế kiểm thử trực tiếp trên e-GP, rà soát Chrome Web Store hay kiểm
+toán bảo mật độc lập.
+
+#### Đo tốc độ
+
+```bash
+node tools/perf.mjs 3000
+node tools/perf.mjs 20000
+```
+
+Đo thời gian lọc + chấm + sắp xếp — đường chạy lại mỗi lần gõ một phím vào ô
+tìm. Lấy **trung vị 7 lượt**, bỏ lượt đầu (khởi động JIT). Một phép đo đơn lẻ
+trên máy có tải khác là số ngẫu nhiên, không phải bằng chứng.
+
+Kết quả 4.12.0 trên kho 20.000 gói: **506 ms** mỗi lần gõ phím, so với 2.374 ms
+ở 4.11.0. Nút thắt hoá ra là phép **sắp xếp**, không phải phép lọc — xem
+[CHANGELOG.md](CHANGELOG.md) mục 4.12.0.
 
 #### Canary sống — đối chứng với e-GP thật
 

@@ -67,9 +67,17 @@ test('Investor names compare complete tokens and codes compare full identities',
   assert.equal(state({investorName:'null'},{investor:'Ban QLDA'}),'INSUFFICIENT');
 });
 test('Ward check rejects another ward and does not turn investor-name inference into verified location',()=>{
-  assert.equal(state({location:'Xã Bảo Lâm'},{ward:'Xã Đạ Tẻh'}),'OUT_OF_RANGE');
-  assert.equal(state({investorName:'Ban QLDA Đạ Tẻh'},{ward:'Xã Đạ Tẻh'}),'INSUFFICIENT');
-  assert.equal(state({location:'Xã Đạ Tẻh - Tỉnh Lâm Đồng'},{ward:'Đạ Tẻh'}),'MATCH');
+  /* 4.11.0: xã được nhận dạng bằng CẶP (mã xã, mã tỉnh cha). Chữ trong chuỗi
+     địa điểm chỉ còn là chứng cứ phụ, và chỉ được công nhận khi nêu ĐỒNG THỜI
+     tên xã và một tỉnh nằm trong phạm vi đã chọn — xem tests/ward-code.test.js.
+
+     Không có danh mục địa bàn (đối số thứ ba là null) thì không tra được tên xã
+     ra mã nào, nên mọi trường hợp ở đây đều là CHƯA ĐỦ DỮ LIỆU. Đó là đúng:
+     thiếu danh mục mà vẫn kết luận dứt khoát là kết luận không có căn cứ. */
+  assert.equal(state({location:'Xã Bảo Lâm'},{ward:'Xã Đạ Tẻh'}),'INSUFFICIENT');
+  assert.equal(state({investorName:'Ban QLDA Đạ Tẻh'},{ward:'Xã Đạ Tẻh'}),'INSUFFICIENT',
+    'tên chủ đầu tư KHÔNG phải địa điểm thi công');
+  assert.equal(state({location:'Xã Đạ Tẻh - Tỉnh Lâm Đồng'},{ward:'Đạ Tẻh'}),'INSUFFICIENT');
 });
 test('Keyword applies with or without investor; score cannot bypass title gates',()=>{
   assert.equal(state({bidName:'Xây trạm bơm',score:100},{keyword:'trường học'}),'OUT_OF_RANGE');
@@ -83,7 +91,14 @@ test('Identifier keywords match record identities without contaminating free-tex
   assert.equal(state({notifyNo:'IB2600000002',bidName:'Tên khác'},{keyword:'IB2600000001'}),'OUT_OF_RANGE');
 });
 test('Subtype filtering retains 4.8.1 abbreviations and reports an unknown field',()=>{
-  for(const [bidName,category] of [['TVGS thi công','TV_SUPERVISION'],['TVTK công trình','TV_DESIGN'],['TVKS địa chất','TV_SURVEY']]) assert.equal(state({bidName},{category}),'MATCH');
+  /* 4.11.0: lĩnh vực gốc chỉ lấy từ trường e-GP khai. Viết tắt trong TÊN gói
+     (TVGS, TVTK, TVKS) vẫn dùng để phân nhánh tư vấn, nhưng không còn tự nâng
+     một gói không khai lĩnh vực lên thành "Tư vấn". Không khai thì là CHƯA
+     BIẾT — và gói vẫn hiện ra trong nhóm "Chưa đủ dữ liệu", không bị vứt. */
+  for(const [bidName,category] of [['TVGS thi công','TV_SUPERVISION'],['TVTK công trình','TV_DESIGN'],['TVKS địa chất','TV_SURVEY']]){
+    assert.equal(state({bidName},{category}),'INSUFFICIENT',`${bidName} không khai lĩnh vực`);
+    assert.equal(state({bidName,investField:'TV'},{category}),'MATCH',`${bidName} có khai TV`);
+  }
   assert.equal(state({bidName:'Gói số 1'},{category:'XL'}),'INSUFFICIENT');
   assert.equal(state({bidName:'Xây nhà',investField:'XL'},{category:'TV'}),'OUT_OF_RANGE');
 });
@@ -195,7 +210,15 @@ test('BBMT normalization preserves investor codes and code-only locations used b
     procuringEntityName:'Bên mời thầu',procuringEntityCode:'vn0987654321',investField:'XL',locations:[{provCode:'68',wardName:'Xã Đạ Tẻh'}],bidRealityOpenDate:'2026-09-14T10:00:00'};
   const normal=normalizeBbmtPackage(raw);
   for(const investor of ['vn0123456789','vn0987654321']) assert.equal(state(normal,{investor}),'MATCH');
-  assert.equal(state(normal,{provinces:['68'],ward:'Đạ Tẻh',category:'XL'}),'MATCH');
+  /* Tỉnh + loại gói vẫn kết luận dứt khoát được. Riêng tiêu chí XÃ thì cần
+     danh mục địa bàn để tra tên ra cặp (mã xã, mã tỉnh) — không có danh mục mà
+     vẫn kết luận là kết luận không căn cứ, nên đây là CHƯA ĐỦ DỮ LIỆU. */
+  assert.equal(state(normal,{provinces:['68'],category:'XL'}),'MATCH');
+  assert.equal(state(normal,{provinces:['68'],ward:'Đạ Tẻh',category:'XL'}),'INSUFFICIENT');
+  const DANH_MUC={provinces:[{code:'68',name:'Lâm Đồng'}],
+    wardsByProvince:{68:[{code:'23128',name:'Xã Đạ Tẻh',parentCode:'68'}]}};
+  assert.equal(passesHardFilter(normal,{provinces:['68'],ward:'Đạ Tẻh',category:'XL'},DANH_MUC).state,'MATCH',
+    'có danh mục thì chữ "Xã Đạ Tẻh - tỉnh Lâm Đồng" phải đủ để công nhận');
   assert.equal(state(normal,{provinces:['38']}),'OUT_OF_RANGE');
   assert.deepEqual(normal.provinceCodes,['68']);
   assert.equal(state(normalizeBbmtPackage({...raw,locations:[],provinceCode:'38'}),{provinces:['38']}),'MATCH');
@@ -205,8 +228,17 @@ test('KHLCNT preserves both investor identities, direct province codes, and ward
     procuringEntityCode:'vn0987654321',provCode:'38',wardName:'Xã A',bidName:['Thi công trường'],bidPrice:[1e9]});
   assert.deepEqual(normal.investorCodes,['vn0123456789','vn0987654321']);
   assert.deepEqual(normal.provinceCodes,['38']);
+  /* Tiêu chí XÃ cần danh mục địa bàn để tra tên ra cặp (mã xã, mã tỉnh cha).
+     Không truyền danh mục thì kế hoạch rơi vào "Chưa đủ dữ liệu" chứ không bị
+     loại — nó vẫn hiện ra cho người dùng tự xét. */
+  const DANH_MUC={provinces:[{code:'38',name:'Thanh Hóa'}],
+    wardsByProvince:{38:[{code:'38001',name:'Xã A',parentCode:'38'}]}};
   for(const investor of ['vn0123456789','vn0987654321']) {
-    assert.equal(classifyPlansByCriteria([normal],{investor,provinces:['38'],ward:'Xã A'}).match.length,1);
+    assert.equal(classifyPlansByCriteria([normal],{investor,provinces:['38']}).match.length,1);
+    assert.equal(classifyPlansByCriteria([normal],{investor,provinces:['38'],ward:'Xã A'}).insufficient.length,1,
+      'thiếu danh mục thì phải báo chưa đủ dữ liệu, không kết luận bừa');
+    assert.equal(classifyPlansByCriteria([normal],{investor,provinces:['38'],ward:'Xã A'},DANH_MUC).match.length,1,
+      'có danh mục thì phải khớp được');
   }
   assert.equal(classifyPlansByCriteria([normal],{investor:'Chủ đầu tư'}).match.length,1);
   assert.equal(classifyPlansByCriteria([normal],{investor:'vn1111111111'}).outOfRange.length,1);

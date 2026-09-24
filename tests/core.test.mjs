@@ -45,4 +45,19 @@ test('Manifest entry points and imports exist, no unexpected host permissions ad
      xong. Bất biến thật là manifest và package.json PHẢI cùng một phiên bản. */
   const pkg=JSON.parse(fs.readFileSync(new URL('package.json',base)));
   assert.equal(m.version,pkg.version,'manifest.json và package.json lệch phiên bản');
-  assert.match(m.version,/^\d+\.\d+\.\d+$/);for(const file of [m.background.service_worker,m.action.default_popup,m.options_page,...Object.values(m.icons),...m.content_scripts.flatMap(s=>s.js)])assert.ok(fs.existsSync(new URL(file,base)),file);const old=JSON.parse(fs.readFileSync(new URL('./fixtures/original-manifest.json',import.meta.url)));assert.deepEqual(m.host_permissions,old.host_permissions);assert.equal(m.key,old.key);});
+  assert.match(m.version,/^\d+\.\d+\.\d+$/);for(const file of [m.background.service_worker,m.action.default_popup,m.options_page,...Object.values(m.icons),...m.content_scripts.flatMap(s=>s.js)])assert.ok(fs.existsSync(new URL(file,base)),file);const old=JSON.parse(fs.readFileSync(new URL('./fixtures/original-manifest.json',import.meta.url)));
+  /* Bất biến là KHÔNG ĐƯỢC NỚI RỘNG, chứ không phải "không được đổi". Ghim cứng
+     danh sách cũ thì một lần THU HẸP hợp lệ cũng báo đỏ, và người sửa sẽ quen
+     tay cập nhật fixture cho xong — lần nới rộng thật sau đó lọt luôn.
+     4.11.0 bỏ 'http://localhost:1234/*' và chuyển sang nativeMessaging: cầu nối
+     tải hồ sơ nay là một host khai báo sẵn trên máy, thay vì một cổng HTTP mà
+     bất kỳ phần mềm nào cũng chiếm được. Đó là thu hẹp, nên phải cho qua. */
+  const themVao=(m.host_permissions||[]).filter(p=>!(old.host_permissions||[]).includes(p));
+  assert.deepEqual(themVao,[],`đã NỚI RỘNG quyền truy cập host: ${themVao.join(', ')}`);
+  assert.ok(!(m.host_permissions||[]).some(p=>/^https?:\/\/(localhost|127\.|0\.0\.0\.0|\*)/.test(p)),
+    'quyền trỏ vào máy nội bộ hoặc ký tự đại diện — hãy dùng native messaging');
+  // Quyền API mới thì được phép, nhưng phải nằm trong danh sách đã cân nhắc.
+  const DUOC_PHEP=new Set([...(old.permissions||[]),'nativeMessaging']);
+  const quyenLa=(m.permissions||[]).filter(p=>!DUOC_PHEP.has(p));
+  assert.deepEqual(quyenLa,[],`quyền chưa được cân nhắc: ${quyenLa.join(', ')}`);
+  assert.equal(m.key,old.key);});

@@ -57,7 +57,12 @@ test('Vietnamese accents, punctuation and combined consulting tasks match indepe
   const combined = { investField: 'TV', bidName: 'Khảo sát; tư vấn thiết kế và giám sát thi công công trình' };
   for (const category of ['TV', 'TV_DESIGN', 'TV_SUPERVISION', 'TV_SURVEY']) assert.equal(matchesTenderCategory(combined, category), true, category);
   assert.equal(matchesTenderCategory(combined, 'TV_APPRAISAL'), false);
-  assert.equal(matchesTenderCategory({ name: 'TU VAN THAM-DINH du toan' }, 'TV_APPRAISAL'), true);
+  /* HỢP ĐỒNG MỚI (4.11.0): tên gói KHÔNG quyết định lĩnh vực gốc.
+     "TU VAN THAM-DINH du toan" mà e-GP không khai lĩnh vực thì không được tự
+     xếp vào Tư vấn — tên gói là chữ người ta gõ, không phải trường dữ liệu.
+     Gói đó KHÔNG biến mất: cổng lọc xếp nó vào "Chưa đủ dữ liệu" (xem bài
+     "gói không khai lĩnh vực" bên dưới). */
+  assert.equal(matchesTenderCategory({ name: 'TU VAN THAM-DINH du toan' }, 'TV_APPRAISAL'), false);
   assert.equal(matchesTenderCategory({ field: 'TV', name: 'Tư vấn quản lý dự án đầu tư' }, 'TV_PROJECT_MANAGEMENT'), true);
   assert.equal(matchesTenderCategory({ field: 'TV', name: 'Tu van GIAM\u0020SA\u0301T thi cong' }, 'TV_SUPERVISION'), true);
 });
@@ -82,8 +87,14 @@ test('mixed plans are evaluated per child without borrowing plan-wide fields', (
   ] };
   assert.equal(matchesTenderCategory(plan, 'XL'), false);
   assert.equal(matchesTenderCategory(plan, 'TV_SUPERVISION'), false);
-  assert.deepEqual(plan.packages.filter((p) => matchesTenderCategory(p, 'XL')).map((p) => p.name), ['Xây lắp trường học']);
-  assert.deepEqual(plan.packages.filter((p) => matchesTenderCategory(p, 'TV_SUPERVISION')).map((p) => p.name), ['Tư vấn giám sát thi công']);
+  /* Gói con chỉ có TÊN, không khai lĩnh vực → không khớp loại nào. Tên gói
+     không phải căn cứ phân loại; xem chú thích ở bài trên. */
+  assert.deepEqual(plan.packages.filter((p) => matchesTenderCategory(p, 'XL')).map((p) => p.name), []);
+  assert.deepEqual(plan.packages.filter((p) => matchesTenderCategory(p, 'TV_SUPERVISION')).map((p) => p.name), []);
+  // Khai lĩnh vực ở CHÍNH gói con thì phân loại dứt khoát.
+  const khaiRo = plan.packages.map((p, i) => ({ ...p, investField: ['XL', 'TV', 'TV'][i] }));
+  assert.deepEqual(khaiRo.filter((p) => matchesTenderCategory(p, 'XL')).map((p) => p.name), ['Xây lắp trường học']);
+  assert.deepEqual(khaiRo.filter((p) => matchesTenderCategory(p, 'TV_SUPERVISION')).map((p) => p.name), ['Tư vấn giám sát thi công']);
   assert.equal(matchesTenderCategory({ ...plan.packages[2], fields: plan.fields }, 'XL'), false);
   assert.equal(matchesTenderCategory({ ...plan.packages[2], investField: plan.investField }, 'TV'), false);
   assert.equal(matchesTenderCategory({ bidName: ['Xây lắp trường học'], investField: ['XL'] }, 'XL'), false);
@@ -94,15 +105,58 @@ test('matching is pure and ignores inherited field metadata', () => {
   const item = Object.freeze({ name: 'Tư vấn khảo sát địa hình', field: 'TV' });
   assert.equal(matchesTenderCategory(item, 'TV_SURVEY'), true);
   assert.deepEqual(item, { name: 'Tư vấn khảo sát địa hình', field: 'TV' });
+  /* Lĩnh vực kế thừa qua prototype KHÔNG phải dữ liệu của bản ghi này. Đọc nó
+     là mượn dữ liệu của chỗ khác rồi coi như của mình. */
   const inherited = Object.assign(Object.create({ investField: 'XL' }), { name: 'Tư vấn khảo sát địa hình' });
-  assert.equal(matchesTenderCategory(inherited, 'TV_SURVEY'), true);
+  assert.equal(matchesTenderCategory(inherited, 'TV_SURVEY'), false);
+  assert.equal(matchesTenderCategory(inherited, 'XL'), false, 'đã đọc trường kế thừa qua prototype');
+});
+
+test('GÓI KHÔNG KHAI LĨNH VỰC không bị vứt — cổng lọc xếp vào "Chưa đủ dữ liệu"', async () => {
+  /* Đây là điều khiến hợp đồng mới an toàn. Không đoán lĩnh vực từ tên gói là
+     đúng, NHƯNG chỉ đúng khi gói đó vẫn hiện ra cho người dùng tự xét. Nếu nó
+     lặng lẽ biến mất thì bản mới còn tệ hơn bản cũ: người đi đấu thầu mất gói
+     mà không bao giờ biết mình đã mất. */
+  const { passesHardFilter } = await import('../lib/hard-filter.js');
+  for (const name of ['Xây lắp trường học Tân Minh', 'TVGS thi công kênh mương', 'Gói thầu số 05']) {
+    const v = passesHardFilter({ bidName: name }, { category: 'XL' }, null);
+    assert.equal(v.state, 'INSUFFICIENT', `"${name}" bị loại hẳn thay vì báo chưa đủ dữ liệu`);
+    assert.equal(v.reason, 'insufficient-category');
+  }
+  // Còn khai rõ mà khác loại thì loại dứt khoát — đó mới là "ngoài tiêu chí".
+  assert.equal(passesHardFilter({ bidName: 'Xây nhà', investField: 'XL' }, { category: 'TV' }, null).state, 'OUT_OF_RANGE');
+});
+
+test('MÃ LOẠI GÓI KHÔNG TỒN TẠI không được hiểu là "không lọc gì"', async () => {
+  /* Một mã gõ sai, một bộ săn lưu từ bản cũ, hay một hằng số đổi tên đều rơi về
+     chuỗi rỗng. Nếu chuỗi rỗng nghĩa là "không lọc", người dùng thấy bộ lọc
+     đang bật trên màn hình mà nhận về TOÀN BỘ gói thầu, và tin là mình đã lọc.
+     Không có dấu hiệu nào cho họ biết. */
+  const goiHangHoa = { bidName: 'Mua sắm bàn ghế', investField: 'HH' };
+  for (const sai of ['MS', 'TV_DESING', 'XAYLAP', 'HH2']) {
+    assert.equal(matchesTenderCategory(goiHangHoa, sai), false, `mã sai "${sai}" vẫn khớp mọi gói`);
+  }
+  assert.equal(matchesTenderCategory(goiHangHoa, 'HH'), true, 'mã đúng phải khớp');
+  assert.equal(matchesTenderCategory(goiHangHoa, ''), true, 'không chọn loại thì không lọc');
+
+  // Và cổng lọc phải NÓI RA, chứ không lặng lẽ trả về 0 kết quả.
+  const { passesHardFilter } = await import('../lib/hard-filter.js');
+  const v = passesHardFilter(goiHangHoa, { category: 'TV_DESING' }, null);
+  assert.equal(v.reason, 'invalid-category');
+  assert.equal(v.state, 'INSUFFICIENT');
 });
 
 test('field resolution exposes unclassified packages without inventing metadata', () => {
   assert.equal(tenderFieldOf({ name: 'Gói thầu số 3' }), '');
   assert.equal(tenderFieldOf(null), '');
   assert.equal(tenderFieldOf({ name: 'Tư vấn thiết kế', fieldCode: 'HH' }), 'HH');
-  assert.equal(tenderFieldOf({ name: 'Tư vấn thiết kế' }), 'TV');
+  /* Chỉ có TÊN thì lĩnh vực là CHƯA BIẾT, không phải 'TV'. Suy ra từ tên rồi
+     trả về như một trường dữ liệu là biến phỏng đoán thành sự thật — chỗ nhận
+     nó ở xa không còn phân biệt được đâu là e-GP khai, đâu là mình đoán.
+     Muốn gợi ý từ tên thì gọi thẳng `inferTenderFieldFromName`, có tên hàm nói
+     rõ đó là suy đoán. */
+  assert.equal(tenderFieldOf({ name: 'Tư vấn thiết kế' }), '');
+  assert.equal(inferTenderFieldFromName('Tư vấn thiết kế'), 'TV', 'gợi ý theo tên vẫn phải dùng được');
   assert.equal(tenderFieldOf({ name: 'Thi công trường học', packages: [{ name: 'Thi công' }], investField: 'XL' }), '');
 });
 

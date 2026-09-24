@@ -1,4 +1,6 @@
-import { passesHardFilter, hardFilterReason } from './lib/hard-filter.js';
+import { hardFilterReason } from './lib/hard-filter.js';
+import { createResultView, resultRows } from './lib/result-view.js';
+import { createSearchIndex } from './lib/search-index.js';
 import { GATE_LABEL, coverageText } from './lib/match-gate.js';
 import { formatMoney, formatDate, BID_STATUS_LABEL } from './lib/core.js';
 import { statusOf, filterAndSort, missingFields, dataConfidence, actionFor } from './lib/decision.js';
@@ -19,30 +21,37 @@ const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&
 const show=(id,on)=>$(id).classList.toggle('hidden',!on);
 const LAST='gscb_last_search', RUN='gscb_search_run';
 let STATE={tenders:[],runs:[],savedSearches:[]}, runId='', page=1, timer=null, refreshing=false, starting=false;
-let filtered=[], selected=new Set(), toastTimer=null, wardRequest=0, pendingCriteria=null;
+let filtered=[], selected=new Set(), toastTimer=null, wardRequest=0, pendingCriteria=null, pendingRefresh=false;
+let resultIndex=createSearchIndex([]), wardOptions=[], savedWardIdentities=[];
 const checklistDrafts=new Map(), checklistSaving=new Set();
 const PAGE_SIZE=30;
 const readLocal=(k,fallback)=>{try{return JSON.parse(localStorage.getItem(k))??fallback;}catch{return fallback;}};
 const writeLocal=(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v));}catch{}}
-const criteria=()=>Object.fromEntries(CRITERIA_FIELDS.map(k=>[k,$(k).value.trim()]));
+function criteria(){
+  const out=Object.fromEntries(CRITERIA_FIELDS.map(k=>[k,$(k).value.trim()]));
+  const picked=wardOptions.find(w=>w.label===out.ward);
+  if(picked){out.ward=picked.name;out.wardIdentities=[{code:picked.code,parentCode:picked.parentCode,name:picked.name}];}
+  else if(savedWardIdentities.length&&out.ward===savedWardIdentities[0].name)out.wardIdentities=savedWardIdentities;
+  return out;
+}
 $('category').innerHTML=TENDER_CATEGORIES.map(c=>`<option value="${esc(c.value)}">${esc(c.label)}</option>`).join('');
-function fillCriteria(c){for(const k of CRITERIA_FIELDS)$(k).value=k==='category'?normalizeCategory(c?.[k]):(c?.[k]??'');writeLocal(LAST,criteria());loadWards();}
+function fillCriteria(c){savedWardIdentities=Array.isArray(c?.wardIdentities)?c.wardIdentities:[];wardOptions=[];for(const k of CRITERIA_FIELDS)$(k).value=k==='category'?normalizeCategory(c?.[k]):(c?.[k]??'');writeLocal(LAST,criteria());loadWards();}
 async function send(type,payload={}){
   try {const r=await chrome.runtime.sendMessage({type,payload});return r||{ok:false,message:'Tiện ích chưa trả lời. Thử tải lại trang.'};}
   catch(e){return {ok:false,message:'Không kết nối được tiện ích. Tải lại trang sau khi cập nhật. '+String(e.message||'').slice(0,160)};}
 }
 function notify(message,error=false){clearTimeout(toastTimer);$('toast').textContent=message;$('toast').className=`toast${error?' error':''}`;toastTimer=setTimeout(()=>show('toast',false),5500);}
 function alertMessage(message){$('alert').textContent=message;$('alert').className='notice error'+(message?'':' hidden');}
-function chosenRun(){return STATE.runs.find(r=>r.id===runId)||(STATE.activeRun?.id===runId?STATE.activeRun:null);}
-function currentRows(){
-  const run=chosenRun();
-  return runTenders(STATE.tenders,run).map(t=>{
-    const saved=run?.resultStates?.[t.key];
-    const gate=saved?.filterState?null:run?.criteria?passesHardFilter(t,run.criteria):{state:'INSUFFICIENT',reason:'Bản lưu cũ chưa ghi tiêu chí để đối chiếu'};
-    return {...t,...(saved||{}),filterState:saved?.filterState||gate.state,filterReason:hardFilterReason(saved?.filterState?{reason:saved.filterReason,state:saved.filterState}:gate),matched:(saved?.matched??t.matched) && (saved?.filterState||gate.state)==='MATCH'};
-  });
+function chosenRun(){return STATE.selectedRun?.id===runId?STATE.selectedRun:STATE.activeRun?.id===runId?STATE.activeRun:STATE.runs.find(r=>r.id===runId);}
+function currentRows(){return resultIndex.rows;}
+function selectedRows(){return [...selected].map(key=>resultIndex.byKey.get(key)).filter(Boolean);}
+function rebuildIndex(){
+  resultIndex=createSearchIndex(resultRows(STATE.tenders||[],chosenRun()));
+  const chosen=$('result-province').value;
+  $('result-province').innerHTML='<option value="">Mọi tỉnh trong lượt tìm</option>'+[...resultIndex.byProvinceCode.keys()].sort().map(code=>`<option value="${esc(code)}">Mã tỉnh ${esc(code)} (${resultIndex.byProvinceCode.get(code).size} gói)</option>`).join('');
+  if(resultIndex.byProvinceCode.has(chosen))$('result-province').value=chosen;
 }
-function selectedRows(){return currentRows().filter(t=>selected.has(t.key));}
+function viewFilters(){return {criteriaState:$('criteria-state').value,text:$('result-q').value,status:$('statusFilter').value,minScore:$('minScoreFilter').value,sortBy:$('sortBy').value,onlyMatched:$('only').checked,onlyWatch:$('only-watch').checked,provinceCode:$('result-province').value,closeFrom:$('close-from').value,closeTo:$('close-to').value};}
 
 async function loadProvinces(){
   const r=await send('AREA_OPTIONS');
@@ -51,13 +60,18 @@ async function loadProvinces(){
 }
 async function loadWards(){
   const request=++wardRequest, province=$('province').value.trim();
-  $('ward-list').innerHTML='';
-  if(!province)return;
-  if(splitProvinceNames(province).length>1){$('ward-hint').textContent='Đang chọn nhiều tỉnh; nhập tên xã/phường để lọc tiếp nếu cần.';return;}
+  $('ward-list').innerHTML='';wardOptions=[];
+  if(!province){$('ward-hint').textContent='Chọn tỉnh trước, rồi chọn xã/phường kèm mã.';return;}
   const r=await send('AREA_OPTIONS',{province});
-  if(request!==wardRequest)return;
-  $('ward-hint').textContent='';
-  if(r.ok)$('ward-list').innerHTML=(r.wards||[]).map(n=>`<option value="${esc(n)}"></option>`).join('');
+  if(request!==wardRequest||$('province').value.trim()!==province)return;
+  $('ward-hint').textContent='Chọn xã/phường kèm mã tỉnh để phân biệt tên trùng và địa bàn cũ.';
+  if(r.ok){
+    wardOptions=(r.wardIdentities||[]).map(w=>({...w,label:`${w.name} · mã ${w.code} · tỉnh ${w.parentCode}${w.current?' · hiện hành':' · mã cũ'}`}));
+    $('ward-list').innerHTML=wardOptions.map(w=>`<option value="${esc(w.label)}"></option>`).join('');
+    if(!wardOptions.length)$('ward-hint').textContent='Chưa có danh mục xã/phường kèm mã; chưa thể xác nhận bộ lọc xã/phường.';
+    const saved=savedWardIdentities[0], option=saved&&wardOptions.find(w=>w.code===saved.code&&w.parentCode===saved.parentCode);
+    if(option&&$('ward').value.trim()===saved.name)$('ward').value=option.label;
+  }else $('ward-hint').textContent=r.message||'Chưa tải được danh mục xã/phường.';
 }
 async function start(){
   if(starting)return;
@@ -66,7 +80,7 @@ async function start(){
   starting=true;$('go').disabled=true;alertMessage('');
   writeLocal(LAST,criteria());
   $('progress-text').textContent='Đang chuẩn bị lượt tìm trên e-GP…';show('progress',true);
-  const r=await send('TBMT_SEARCH',{...v.criteria,focusTab:true});
+  const r=await send('TBMT_SEARCH',{...v.criteria,wardIdentities:criteria().wardIdentities,focusTab:true});
   starting=false;
   if(!r.ok){alertMessage(r.message||'Chưa bắt đầu được lượt tìm.');show('progress',false);$('go').disabled=false;return;}
   runId=r.runId;writeLocal(RUN,runId);selected.clear();page=1;
@@ -74,15 +88,19 @@ async function start(){
 }
 function schedule(){clearTimeout(timer);if(STATE.activeRun)timer=setTimeout(refresh,2000);}
 async function refresh(){
-  if(refreshing)return;refreshing=true;
+  if(refreshing){pendingRefresh=true;return;}refreshing=true;
   try{
-    const r=await send('GET_SEARCH_STATE');
+    const requestedRun=runId;
+    const r=await send('GET_SEARCH_STATE',{runId:requestedRun,revision:STATE.revision});
     if(!r.ok){alertMessage(r.message);return;}
+    if(requestedRun!==runId){pendingRefresh=true;return;}
+    if(r.unchanged){schedule();return;}
     STATE=r;
-    if(!runId)runId=(STATE.activeRun?.mode==='form'?STATE.activeRun:null)?.id||STATE.runs.find(x=>x.mode==='form')?.id||'';
+    if(!runId)runId=STATE.selectedRun?.id||(STATE.activeRun?.mode==='form'?STATE.activeRun:null)?.id||STATE.runs.find(x=>x.mode==='form')?.id||'';
+    rebuildIndex();
     // An absent remembered run must never silently display another run's records.
     renderPresets();render();schedule();
-  }finally{refreshing=false;}
+  }finally{refreshing=false;if(pendingRefresh){pendingRefresh=false;queueMicrotask(refresh);}}
 }
 
 function renderPresets(){
@@ -134,10 +152,11 @@ function card(t){
     <div class="ws-result-bottom"><div class="reason-chips"><span class="reason-chip ${t.filterState==='MATCH'?'':'warn'}" title="${esc(t.filterReason)}">${esc(GATE_LABEL[t.filterState]||'Chưa kiểm tra tiêu chí')}</span><span class="reason-chip">${esc(action.label)}</span><span class="reason-chip">${esc(lifecycleLabel(t))}</span><span class="reason-chip ${match.status!=='dat'?'warn':''}">${esc(matchLabel)}</span>${mx?`<span class="reason-chip">${esc(mx.text)}</span>`:''}${due.length?`<span class="reason-chip warn">Đến hạn tick: ${esc(due[0].label)}</span>`:''}${approve?`<span class="reason-chip">${esc(approve)}</span>`:''}${priceHint?`<span class="reason-chip">${esc(priceHint)}</span>`:''}${gua[0]?`<span class="reason-chip warn">${esc(gua[0].text)}</span>`:''}<span class="reason-chip ${miss.length?'warn':''}">${miss.length?`${miss.length} mục cần kiểm tra`:'Đủ trường chính'}</span>${t.watchlisted?'<span class="reason-chip">Đang theo dõi</span>':''}${t.watchedInvestorId?'<span class="reason-chip">CĐT đang theo dõi</span>':''}</div><div class="result-links"><button type="button" data-watch="${esc(t.key)}" class="${t.watchlisted?'on':''}" aria-pressed="${Boolean(t.watchlisted)}">${icon('bookmark',14)}${t.watchlisted?'Đã lưu':'Theo dõi'}</button>${t.notifyNo&&url?`<button type="button" data-download="${esc(t.key)}">${icon('download',14)}E-HSMT</button>`:''}${url?`<a href="${esc(url)}" target="_blank" rel="noopener">Xem e-GP ${icon('external',14)}</a>`:''}<button type="button" data-outline="${esc(t.key)}">Khung BPTC</button></div></div>
     <details class="explain"><summary data-check-summary="${esc(t.key)}">Hồ sơ dự thầu ${progress.done}/${progress.total}${progress.owner?` · ${esc(progress.owner)}`:''}${checklistSaving.has(t.key)?' · đang lưu…':''}</summary><div>${list.map(item=>`<label><input type="checkbox" data-check="${esc(t.key)}" data-item="${esc(item.id)}" data-cat="${esc(cat)}" ${progress.items[item.id]?'checked':''} ${STATE.settings?.readOnlyMode?'disabled':''}> ${esc(item.label)}</label>`).join('<br>')}</div></details>
     <details class="explain"><summary>Vì sao có điểm này? · ${esc(reason)}</summary><ul>${(t.reasons||[]).map(r=>`<li>${esc(r)}</li>`).join('')}<li>Mức đầy đủ trường: ${confidence.value}/100. Đây không phải độ chính xác được bảo đảm.</li>${miss.map(r=>`<li>${esc(r)}</li>`).join('')}</ul><p>Hạn đã ghi nhận: ${esc(formatDate(t.closeDate))} · Giờ Việt Nam. ${esc(action.note)}</p></details><div class="fresh-stamp ${fresh.stale?'stale':''}">${esc(fresh.label)}${fresh.stale?' · Nên kiểm tra lại dữ liệu trên e-GP':''}</div>
+    <p><a class="btn light" href="checklist.html?key=${encodeURIComponent(t.key)}">Mở checklist riêng của gói này</a></p>
   </article>`;
 }
 function render(){
-  const run=chosenRun(), all=currentRows(), running=STATE.activeRun?.id===runId;
+  const run=chosenRun(), view=createResultView(STATE.tenders||[],run,viewFilters(),{index:resultIndex}), all=view.all, running=STATE.activeRun?.id===runId;
   show('progress',running||starting);$('go').disabled=starting||Boolean(STATE.activeRun);
   if(running)$('progress-text').textContent=STATE.activeRun.message||'Đang tìm trên e-GP…';
   $('stop').disabled=!running;
@@ -146,14 +165,13 @@ function render(){
   renderScope(run,all);
   const valid=new Set(all.map(t=>t.key));selected=new Set([...selected].filter(k=>valid.has(k)));
   show('summary',Boolean(run));show('results-section',all.length>0);show('empty-state',!all.length);
-  const matching=all.filter(t=>t.filterState==='MATCH');
-  $('m-total').textContent=matching.length.toLocaleString('vi-VN');$('m-total-sub').textContent=`${all.length} gói đã nhận · ${all.filter(t=>t.filterState==='INSUFFICIENT').length} chưa đủ dữ liệu · ${all.filter(t=>t.filterState==='OUT_OF_RANGE').length} ngoài tiêu chí`;
-  $('m-match').textContent=matching.filter(t=>t.matched).length;
-  $('m-open').textContent=matching.filter(t=>statusOf(t)==='OPEN').length;
-  const withPrice=matching.filter(t=>t.price!==null&&t.price!==undefined&&t.price!==''&&Number.isFinite(Number(t.price)));
-  $('m-val').textContent=withPrice.length?formatMoney(withPrice.reduce((sum,t)=>sum+Number(t.price),0)):'Chưa xác định';
-  $('m-val-sub').textContent=`${withPrice.length}/${matching.length} gói khớp có giá · Không ước đoán giá thiếu`;
-  filtered=filterAndSort(all.filter(t=>!$('criteria-state').value||t.filterState===$('criteria-state').value),{text:$('result-q').value,status:$('statusFilter').value,minScore:$('minScoreFilter').value,sortBy:$('sortBy').value,onlyMatched:$('only').checked}).filter(t=>!$('only-watch').checked||t.watchlisted);
+  const summary=view.summary;
+  $('m-total').textContent=summary.total.toLocaleString('vi-VN');$('m-total-sub').textContent=`${summary.match} khớp · ${summary.insufficient} thiếu dữ liệu · ${summary.outOfRange} ngoài tiêu chí · Toàn bộ trang sau lọc`;
+  $('m-match').textContent=summary.matched;
+  $('m-open').textContent=summary.open;
+  $('m-val').textContent=summary.totalValue===null?'Chưa xác định':formatMoney(summary.totalValue);
+  $('m-val-sub').textContent=`${summary.priced}/${summary.total} gói sau lọc có giá · Không ước đoán giá thiếu`;
+  filtered=view.rows;
   $('result-count').textContent=filtered.length;
   const pages=Math.max(1,Math.ceil(filtered.length/PAGE_SIZE));page=Math.min(page,pages);
   const offset=(page-1)*PAGE_SIZE, rows=filtered.slice(offset,offset+PAGE_SIZE);
@@ -178,25 +196,27 @@ function compare(){
 }
 
 $('search-form').addEventListener('submit',e=>{e.preventDefault();start();});
-$('province').addEventListener('change',()=>{$('ward').value='';loadWards();});
+$('create-hunt').addEventListener('click',()=>{const input=criteria(),valid=validateCriteria(input);if(!valid.ok){alertMessage(valid.message);$(valid.field).focus();return;}location.href=`hunts.html?criteria=${encodeURIComponent(JSON.stringify({...valid.criteria,wardIdentities:input.wardIdentities}))}`;});
+$('province').addEventListener('change',()=>{$('ward').value='';savedWardIdentities=[];loadWards();});
 CRITERIA_FIELDS.forEach(k=>$(k).addEventListener('change',()=>writeLocal(LAST,criteria())));
 $('reset').addEventListener('click',()=>{fillCriteria({});alertMessage('');$('keyword').focus();});
 $('useSettings').addEventListener('click',()=>{const s=STATE.settings||{};fillCriteria({...criteria(),province:s.provinces?.[0]||'',ward:'',minPrice:s.minPrice||'',maxPrice:s.maxPrice||''});notify('Đã lấy tỉnh và khoảng giá từ cấu hình.');});
 document.querySelectorAll('.quick button').forEach(b=>b.addEventListener('click',()=>{$('minPrice').value=b.dataset.min||'';$('maxPrice').value=b.dataset.max||'';writeLocal(LAST,criteria());}));
-$('save-search').addEventListener('click',()=>{const v=validateCriteria(criteria());if(!v.ok){alertMessage(v.message);$(v.field).focus();return;}pendingCriteria=v.criteria;$('saved-name').value=[v.criteria.category?categoryLabel(v.criteria.category):'',v.criteria.keyword,v.criteria.province].filter(Boolean).join(' · ').slice(0,70);$('save-dialog').showModal();$('saved-name').focus();});
+$('save-search').addEventListener('click',()=>{const v=validateCriteria(criteria());if(!v.ok){alertMessage(v.message);$(v.field).focus();return;}pendingCriteria={...v.criteria,wardIdentities:criteria().wardIdentities};$('saved-name').value=[v.criteria.category?categoryLabel(v.criteria.category):'',v.criteria.keyword,v.criteria.province].filter(Boolean).join(' · ').slice(0,70);$('save-dialog').showModal();$('saved-name').focus();});
 $('save-form').addEventListener('submit',async e=>{e.preventDefault();const b=e.submitter;b.disabled=true;const r=await send('SAVE_NAMED_SEARCH',{name:$('saved-name').value,criteria:pendingCriteria});b.disabled=false;if(!r.ok){notify(r.message,true);return;}STATE.savedSearches=r.savedSearches;renderPresets();$('save-dialog').close();notify('Đã lưu bộ tìm kiếm trên máy.');});
 $('saved-searches').addEventListener('click',async e=>{const p=e.target.closest('[data-preset]'),d=e.target.closest('[data-delete-preset]');if(p){const item=STATE.savedSearches.find(x=>x.id===p.dataset.preset);if(item){fillCriteria(item.criteria);notify(`Đã điền “${item.name}”. Bấm Tìm gói thầu để chạy.`);}}if(d){const item=STATE.savedSearches.find(x=>x.id===d.dataset.deletePreset);if(!item||!confirm(`Xóa bộ tìm kiếm “${item.name}”?`))return;const r=await send('DELETE_NAMED_SEARCH',{id:item.id});if(r.ok){STATE.savedSearches=r.savedSearches;renderPresets();}else notify(r.message,true);}});
-$('run-scope').addEventListener('change',e=>{if(e.target.id==='run-history'){runId=e.target.value;writeLocal(RUN,runId);page=1;selected.clear();alertMessage('');render();}});
+$('run-scope').addEventListener('change',e=>{if(e.target.id==='run-history'){runId=e.target.value;writeLocal(RUN,runId);page=1;selected.clear();alertMessage('');resultIndex=createSearchIndex([]);refresh();}});
 $('stop').addEventListener('click',async()=>{$('stop').disabled=true;const r=await send('CANCEL_ACTIVE_RUN',{runId});if(!r.ok)notify(r.message,true);await refresh();});
-for(const id of ['result-q','statusFilter','sortBy','minScoreFilter','only','only-watch','criteria-state'])$(id).addEventListener(id==='result-q'?'input':'change',()=>{page=1;render();});
+for(const id of ['result-q','statusFilter','sortBy','minScoreFilter','only','only-watch','criteria-state','result-province','close-from','close-to'])$(id).addEventListener(id==='result-q'?'input':'change',()=>{page=1;render();});
+$('clear-view').addEventListener('click',()=>{$('result-q').value='';$('statusFilter').value='';$('minScoreFilter').value='0';$('sortBy').value='decision';$('only').checked=false;$('only-watch').checked=false;$('criteria-state').value='MATCH';$('result-province').value='';$('close-from').value='';$('close-to').value='';page=1;render();});
 $('prev-page').addEventListener('click',()=>{page--;render();$('results-title').scrollIntoView({block:'start'});});
 $('next-page').addEventListener('click',()=>{page++;render();$('results-title').scrollIntoView({block:'start'});});
 $('list').addEventListener('change',e=>{if(!e.target.matches('[data-select]'))return;const key=e.target.dataset.select;if(e.target.checked){if(selected.size>=4){e.target.checked=false;notify('So sánh tối đa 4 gói. Bỏ chọn một gói để thêm gói khác.',true);return;}selected.add(key);}else selected.delete(key);e.target.closest('article').classList.toggle('selected',selected.has(key));renderSelection();});
 $('list').addEventListener('click',async e=>{
   const watch=e.target.closest('[data-watch]'),download=e.target.closest('[data-download]'),outline=e.target.closest('[data-outline]');
   if(outline){location.href=`outline.html?key=${encodeURIComponent(outline.dataset.outline)}`;return;}
-  if(watch){const t=STATE.tenders.find(x=>x.key===watch.dataset.watch);if(!t)return;watch.disabled=true;const r=await send('SET_WATCH',{key:t.key,value:!t.watchlisted});if(r.ok){t.watchlisted=!t.watchlisted;render();}else{watch.disabled=false;notify(r.message,true);}}
-  if(download){const t=STATE.tenders.find(x=>x.key===download.dataset.download);if(!t)return;download.disabled=true;download.textContent='Đang lấy tệp…';const r=await send('FETCH_AND_DOWNLOAD',{notifyNo:t.notifyNo,detailUrl:safeSource(t.detailUrl)});notify(r.ok?`Đã gửi tải ${r.downloaded||0} tệp.`:r.message,!r.ok);render();}
+  if(watch){const t=resultIndex.byKey.get(watch.dataset.watch);if(!t)return;watch.disabled=true;const r=await send('SET_WATCH',{key:t.key,value:!t.watchlisted});if(r.ok){await refresh();}else{watch.disabled=false;notify(r.message,true);}}
+  if(download){const t=resultIndex.byKey.get(download.dataset.download);if(!t)return;download.disabled=true;download.textContent='Đang lấy tệp…';const r=await send('FETCH_AND_DOWNLOAD',{notifyNo:t.notifyNo,detailUrl:safeSource(t.detailUrl)});notify(r.ok?`Đã gửi tải ${r.downloaded||0} tệp.`:r.message,!r.ok);render();}
 });
 function reflectChecklist(key,cat){
   const progress=checklistProgress(checklistDrafts.get(key)||(STATE.checklists||{})[key]||{},cat);
@@ -230,7 +250,7 @@ $('list').addEventListener('change',e=>{
 });
 $('compare').addEventListener('click',compare);$('clear-selection').addEventListener('click',()=>{selected.clear();render();});
 document.querySelectorAll('[data-close]').forEach(b=>b.addEventListener('click',()=>$(b.dataset.close).close()));
-$('csv').addEventListener('click',async()=>{const count=filtered.length,keys=filtered.map(t=>t.key);if(!count)return;$('csv').disabled=true;const r=await send('EXPORT_CSV',{saveAs:true,keys,runId});notify(r.ok?`Đã tạo Excel cho ${count} gói sau lọc.`:r.message,!r.ok);render();});
+$('csv').addEventListener('click',async()=>{const count=filtered.length,keys=filtered.map(t=>t.key);if(!count)return;$('csv').disabled=true;const r=await send('EXPORT_CSV',{saveAs:true,keys,runId,view:viewFilters(),revision:STATE.revision});notify(r.ok?`Đã tạo Excel cho ${count} gói sau lọc trên mọi trang.`:r.message,!r.ok);if(!r.ok)await refresh();render();});
 $('calendar').addEventListener('click',async()=>{
   const result=buildDeadlineCalendar(filtered);if(!result.count){notify('Không có gói còn hạn để tạo lịch.',true);return;}
   const url=URL.createObjectURL(new Blob([result.text],{type:'text/calendar;charset=utf-8'}));

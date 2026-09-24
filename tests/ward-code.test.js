@@ -1,181 +1,152 @@
 /* ============================================================================
- *  KHỚP XÃ / PHƯỜNG THEO MÃ  (B1.3)
+ *  KHỚP XÃ/PHƯỜNG THEO MÃ, KHÔNG CHỈ THEO CHỮ  (B1.3)
  *
- *  Trước 4.11.0, bộ lọc xã/phường so CỤM CHỮ. Cách đó có hai đường hỏng ngược
- *  chiều nhau, và cả hai đều im lặng:
+ *  HAI KIỂU HỎNG ÂM THẦM mà lớp này sinh ra để chặn:
  *
- *    NHẬN NHẦM — cả nước có nhiều xã trùng tên. Người dùng ở Lâm Đồng đọc phải
- *                gói thầu của tỉnh khác, tưởng là cơ hội của mình.
- *    BỎ SÓT    — e-GP ghi "Xã Đức Trọng", "Đức Trọng", "Huyện Đức Trọng" (tên
- *                trước sáp nhập). Gõ một kiểu, gói ghi kiểu khác là mất hút.
+ *  1. NHẬN NHẦM — tiêu chí "Đức Trọng" khớp bằng cụm chữ, nên một xã TRÙNG TÊN
+ *     ở tỉnh khác cũng lọt vào danh sách. Người dùng chuẩn bị hồ sơ cho một gói
+ *     cách đó bốn trăm cây số.
  *
- *  Với người đi đấu thầu, BỎ SÓT đắt hơn nhiều: mất hẳn một cơ hội, và không
- *  bao giờ biết mình đã mất.
+ *  2. BỎ SÓT — ngược lại, hồ sơ ghi tên xã theo lối cũ hoặc viết tắt thì cụm
+ *     chữ không khớp, gói biến mất, và không có gì báo cho người dùng biết.
  *
- *  Mã xã thì duy nhất và chỉ có một kiểu viết. Nên thứ tự là MÃ trước, tên chỉ
- *  dùng để quy ra mã, và chỉ khi bản ghi không có mã nào mới lùi về so chữ.
+ *  CÁCH BẢN 4.11.0 GIẢI: một xã được nhận dạng bằng CẶP (mã xã, mã tỉnh cha),
+ *  không phải bằng mã xã trần và càng không phải bằng tên. Vì sao phải là cặp:
+ *  mã xã của hai tỉnh khác nhau có thể trùng nhau, và sau đợt sáp nhập
+ *  1/7/2025 thì e-GP giữ song song cả mã cũ lẫn mã mới.
+ *
+ *  Và quan trọng nhất: KHÔNG ĐỦ CĂN CỨ THÌ NÓI LÀ KHÔNG ĐỦ. Một cái tên xã
+ *  không tra ra được đúng MỘT mã trong phạm vi tỉnh đã chọn thì kết luận là
+ *  `Chưa đủ dữ liệu`, giữ gói lại cho người dùng tự xét — chứ không đoán, và
+ *  cũng không lặng lẽ vứt đi.
  * ========================================================================== */
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { matchesWardCodes, wardCodesForName, recordWardCodes } from '../lib/area-match.js';
+import { matchesWardCodes, resolveWardSelection, recordWardIdentities } from '../lib/area-match.js';
 import { passesHardFilter } from '../lib/hard-filter.js';
 
-/* Danh mục địa bàn đúng hình dạng e-GP trả về: mỗi xã gắn `parentCode` là mã
-   tỉnh. Cố tình dựng HAI xã trùng tên ở hai tỉnh — đó là ca cần phân biệt. */
+/* Danh mục địa bàn đúng hình dạng e-GP trả về: tỉnh, và xã theo mã tỉnh cha.
+   Lâm Đồng có hai mã — `68` hiện hành và `703` trước sáp nhập. Đồng Nai `75`
+   có một xã TRÙNG TÊN "Đức Trọng": đây chính là cái bẫy cần chặn. */
 const AREAS = {
   provinces: [
-    { code: '68', name: 'Lâm Đồng' },
-    { code: '703', name: 'Lâm Đồng' },   // mã cũ, cùng tên
-    { code: '75', name: 'Đồng Nai' }
+    { code: '68',  name: 'Lâm Đồng',       parentCode: '', status: 1 },
+    { code: '703', name: 'Tỉnh Lâm Đồng',  parentCode: '', status: 0 },
+    { code: '75',  name: 'Đồng Nai',       parentCode: '', status: 1 }
   ],
-  wards: [
-    { code: '23122', name: 'Xã Đức Trọng', parentCode: '68' },
-    { code: '99001', name: 'Xã Đức Trọng', parentCode: '75' },  // TRÙNG TÊN, khác tỉnh
-    { code: '23130', name: 'Xã Tà Hine', parentCode: '68' },
-    { code: '70455', name: 'Xã Đức Trọng cũ', parentCode: '703' }
-  ]
+  wardsByProvince: {
+    68:  [{ code: '23122', name: 'Xã Đức Trọng', parentCode: '68' },
+          { code: '23125', name: 'Xã Đơn Dương', parentCode: '68' }],
+    703: [{ code: '70301', name: 'Xã Đạ Tẻh',    parentCode: '703' }],
+    75:  [{ code: '24101', name: 'Xã Đức Trọng', parentCode: '75' },
+          { code: '24102', name: 'Xã Tân Minh',  parentCode: '75' }]
+  }
 };
 
 /* --------------------------------------------------------------------------
- *  1. Quy tên xã ra mã — phải giới hạn theo tỉnh
+ *  1. Điều phải bảo đảm: xã trùng tên ở tỉnh khác KHÔNG lọt vào
  * ------------------------------------------------------------------------ */
 
-test('quy tên xã ra mã, GIỚI HẠN trong tỉnh đã chọn', () => {
-  assert.deepEqual(wardCodesForName('Đức Trọng', ['68'], AREAS), ['23122']);
-  assert.deepEqual(wardCodesForName('Đức Trọng', ['75'], AREAS), ['99001']);
-});
+test('xã TRÙNG TÊN ở tỉnh khác bị chặn, dù chuỗi tên khớp hoàn toàn', () => {
+  const criteria = { province: 'Lâm Đồng', ward: 'Đức Trọng' };
+  const xaDongNai = { wardCode: '24101', wardParentCode: '75', districtName: 'Xã Đức Trọng' };
 
-test('không giới hạn tỉnh thì lấy hết mã trùng tên — và đó là lý do phải giới hạn', () => {
-  const all = wardCodesForName('Đức Trọng', [], AREAS);
-  assert.equal(all.length, 2, 'hai tỉnh cùng có xã tên Đức Trọng');
-  assert.ok(all.includes('23122') && all.includes('99001'));
-});
-
-test('tiền tố đơn vị hành chính không làm lệch kết quả', () => {
-  for (const cach of ['Đức Trọng', 'Xã Đức Trọng', 'xã đức trọng', 'Huyện Đức Trọng', 'ĐỨC TRỌNG']) {
-    assert.deepEqual(wardCodesForName(cach, ['68'], AREAS), ['23122'],
-      `"${cach}" phải ra cùng một mã`);
-  }
-});
-
-/* --------------------------------------------------------------------------
- *  2. Lấy mã xã từ bản ghi e-GP
- * ------------------------------------------------------------------------ */
-
-test('gom mã xã từ mọi chỗ e-GP có thể đặt nó', () => {
-  assert.deepEqual(recordWardCodes({ locations: [{ districtCode: '23122' }] }), ['23122']);
-  assert.deepEqual(recordWardCodes({ wardCode: '23122' }), ['23122']);
-  assert.deepEqual(recordWardCodes({ districtCode: '23122' }), ['23122']);
-});
-
-test('bỏ qua mã 0 — chỉ mục TBMT trả districtCode = 0 cho mọi gói', () => {
-  // Nhận 0 làm mã thật thì mọi gói TBMT sẽ "cùng một xã", loại sạch kết quả.
-  assert.deepEqual(recordWardCodes({ locations: [{ districtCode: '0' }] }), []);
-  assert.deepEqual(recordWardCodes({ districtCode: 0 }), []);
-});
-
-/* --------------------------------------------------------------------------
- *  3. Chặn NHẬN NHẦM — đây là điều cách so chữ không làm được
- * ------------------------------------------------------------------------ */
-
-test('xã TRÙNG TÊN ở tỉnh khác bị loại, dù chuỗi chữ khớp hoàn toàn', () => {
-  const cuaToi = { locations: [{ districtCode: '23122', districtName: 'Xã Đức Trọng' }] };
-  const tinhKhac = { locations: [{ districtCode: '99001', districtName: 'Xã Đức Trọng' }] };
-
-  assert.equal(matchesWardCodes(cuaToi, 'Đức Trọng', ['68'], AREAS).ok, true);
-
-  const v = matchesWardCodes(tinhKhac, 'Đức Trọng', ['68'], AREAS);
-  assert.equal(v.ok, false, 'tên giống hệt nhưng mã khác tỉnh -> phải loại');
-  assert.equal(v.state, 'OUT_OF_RANGE', 'có đủ căn cứ để kết luận, không phải "chưa biết"');
+  const v = matchesWardCodes(xaDongNai, criteria, AREAS);
+  assert.equal(v.ok, false);
+  assert.equal(v.state, 'OUT_OF_RANGE', 'đủ căn cứ để loại thì phải loại dứt khoát, không để lửng lơ');
   assert.equal(v.reason, 'ward');
 });
 
-/* --------------------------------------------------------------------------
- *  4. Chặn BỎ SÓT — cách viết tên khác nhau vẫn phải khớp
- * ------------------------------------------------------------------------ */
-
-test('bản ghi không có mã thì so tên, và mọi cách viết đều khớp', () => {
-  for (const ghi of ['Xã Đức Trọng', 'Đức Trọng', 'Huyện Đức Trọng']) {
-    const r = { locations: [{ provCode: '68', districtName: ghi }] };
-    assert.equal(matchesWardCodes(r, 'Đức Trọng', ['68'], AREAS).ok, true,
-      `e-GP ghi "${ghi}" mà người dùng gõ "Đức Trọng" -> phải khớp`);
-  }
+test('đúng xã đúng tỉnh thì khớp', () => {
+  const v = matchesWardCodes({ wardCode: '23122', wardParentCode: '68' },
+    { province: 'Lâm Đồng', ward: 'Đức Trọng' }, AREAS);
+  assert.equal(v.ok, true);
+  assert.equal(v.state, 'MATCH');
 });
 
-test('chỉ có chuỗi địa điểm gộp thì vẫn dò được cụm từ', () => {
-  const r = { location: 'Xã Đức Trọng - Tỉnh Lâm Đồng' };
-  assert.equal(matchesWardCodes(r, 'Đức Trọng', ['68'], AREAS).ok, true);
+test('cùng mã xã nhưng khác tỉnh cha vẫn bị chặn — nhận dạng là CẶP, không phải mã trần', () => {
+  // Nếu chỉ so mã xã thì hai tỉnh trùng mã sẽ nhận nhầm nhau.
+  const criteria = { wardIdentities: [{ code: '23122', parentCode: '68' }] };
+  assert.equal(matchesWardCodes({ wardCode: '23122', wardParentCode: '68' }, criteria, AREAS).ok, true);
+  assert.equal(matchesWardCodes({ wardCode: '23122', wardParentCode: '75' }, criteria, AREAS).ok, false);
 });
 
 /* --------------------------------------------------------------------------
- *  5. Không đủ dữ liệu thì nói CHƯA BIẾT, không nói "ngoài tiêu chí"
+ *  2. Điều phải bảo đảm: không đủ căn cứ thì NÓI RA, không đoán
  * ------------------------------------------------------------------------ */
 
-test('không có mã lẫn tên xã -> CHƯA ĐỦ DỮ LIỆU, giữ lại để người dùng tự xem', () => {
-  const v = matchesWardCodes({ locations: [{ provCode: '68' }] }, 'Đức Trọng', ['68'], AREAS);
-  assert.equal(v.state, 'INSUFFICIENT',
-    'gói TBMT thường không có mã xã — xếp nó vào "ngoài tiêu chí" là vứt đi một gói có thể đúng');
+test('tên xã mơ hồ giữa hai tỉnh đã chọn → CHƯA ĐỦ DỮ LIỆU, không tự chọn một bên', () => {
+  // "Đức Trọng" có ở cả Lâm Đồng lẫn Đồng Nai. Chọn bừa một bên là đoán.
+  const v = resolveWardSelection({ province: 'Lâm Đồng, Đồng Nai', ward: 'Đức Trọng' }, AREAS);
+  assert.equal(v.ok, false);
+  assert.equal(v.state, 'INSUFFICIENT');
+  assert.equal(v.reason, 'unresolved-ward');
+});
+
+test('chọn xã mà chưa chọn tỉnh → CHƯA ĐỦ DỮ LIỆU', () => {
+  // Không có phạm vi tỉnh thì một cái tên xã không định danh được gì.
+  const v = resolveWardSelection({ ward: 'Đức Trọng' }, AREAS);
+  assert.equal(v.state, 'INSUFFICIENT');
+});
+
+test('chưa tải được danh mục địa bàn → CHƯA ĐỦ DỮ LIỆU, không âm thầm bỏ tiêu chí xã', () => {
+  // Bỏ qua tiêu chí xã khi thiếu danh mục là mở rộng phạm vi tìm mà không báo.
+  const v = resolveWardSelection({ province: 'Lâm Đồng', ward: 'Đức Trọng' }, null);
+  assert.equal(v.ok, false);
+  assert.equal(v.state, 'INSUFFICIENT');
+});
+
+test('hồ sơ không ghi mã xã nào → CHƯA ĐỦ DỮ LIỆU, giữ lại cho người dùng xét', () => {
+  const v = matchesWardCodes({ bidName: 'Kênh mương nội đồng' },
+    { province: 'Lâm Đồng', ward: 'Đức Trọng' }, AREAS);
+  assert.equal(v.state, 'INSUFFICIENT');
   assert.equal(v.reason, 'insufficient-ward');
 });
 
-test('địa điểm có nhắc đơn vị hành chính khác thì mới dám nói ngoài tiêu chí', () => {
-  const v = matchesWardCodes({ location: 'Xã Tà Hine - Tỉnh Lâm Đồng' }, 'Đức Trọng', ['68'], AREAS);
-  assert.equal(v.state, 'OUT_OF_RANGE');
-});
-
-test('không chọn xã thì mọi bản ghi đều qua', () => {
-  assert.equal(matchesWardCodes({}, '', ['68'], AREAS).ok, true);
-  assert.equal(matchesWardCodes({}, null, [], null).ok, true);
+test('KHÔNG chọn xã thì không lọc gì cả', () => {
+  const v = matchesWardCodes({ wardCode: '24101', wardParentCode: '75' }, { province: 'Lâm Đồng' }, AREAS);
+  assert.equal(v.selected, false);
+  assert.equal(v.ok, true);
 });
 
 /* --------------------------------------------------------------------------
- *  6. Nối đúng vào bộ lọc chung
+ *  3. Đọc mã từ hồ sơ: không được suy ra mã tỉnh bằng cách cắt mã xã
  * ------------------------------------------------------------------------ */
 
-test('passesHardFilter dùng đúng lớp khớp theo mã', () => {
-  const criteria = { province: 'Lâm Đồng', ward: 'Đức Trọng' };
-
-  const dung = passesHardFilter({ locations: [{ provCode: '68', districtCode: '23122' }] }, criteria, AREAS);
-  assert.equal(dung.ok, true);
-
-  // Cách viết tên khác -> vẫn giữ (chặn bỏ sót).
-  const khacCach = passesHardFilter(
-    { locations: [{ provCode: '68', districtName: 'Huyện Đức Trọng' }] }, criteria, AREAS);
-  assert.equal(khacCach.ok, true, 'ghi tên kiểu cũ vẫn phải khớp');
-
-  // Thiếu dữ liệu xã -> chưa đủ để kết luận, KHÔNG phải "ngoài tiêu chí".
-  const thieu = passesHardFilter({ locations: [{ provCode: '68' }] }, criteria, AREAS);
-  assert.equal(thieu.state, 'INSUFFICIENT');
-  assert.equal(thieu.reason, 'insufficient-ward');
+test('không cắt mã xã để đoán mã tỉnh', () => {
+  /* Cắt hai chữ số đầu của mã xã ra làm mã tỉnh là một mẹo trông có vẻ đúng và
+     sai âm thầm: cách đánh mã của e-GP không bảo đảm quan hệ đó, nhất là với
+     các mã cũ giữ lại sau sáp nhập. */
+  const chiCoMaXa = recordWardIdentities({ wardCode: '23122' });
+  assert.ok(chiCoMaXa.every((v) => v.parentCode !== '23'),
+    'đã suy ra mã tỉnh "23" bằng cách cắt mã xã — đây là đoán, không phải dữ liệu');
 });
 
-test('CỔNG XÃ tự nó chặn xã trùng tên, dù chuỗi tên khớp hoàn toàn', () => {
-  /* Bài canh quan trọng nhất của cả tệp.
+test('đọc được mã xã từ nhiều dạng e-GP trả về', () => {
+  const tuLocations = recordWardIdentities({ locations: [{ districtCode: '23122', provCode: '68' }] });
+  assert.ok(tuLocations.some((v) => v.code === '23122' && v.parentCode === '68'));
 
-     Mười hai bài trên gọi THẲNG matchesWardCodes(), nên chúng vẫn xanh kể cả
-     khi hàm đó không được nối vào bộ lọc. Chỉ đường đi qua passesHardFilter
-     mới chứng minh việc nối đã xảy ra.
-
-     Bản ghi dựng riêng để CÔ LẬP cổng xã: không có mã tỉnh (nên cổng tỉnh chỉ
-     kết luận được "chưa đủ dữ liệu", không chặn thay), nhưng có mã xã của tỉnh
-     KHÁC kèm tên trùng khít. Cách so chữ cũ sẽ cho qua vì tên khớp; cách theo
-     mã phải loại. */
-  const criteria = { province: 'Lâm Đồng', ward: 'Đức Trọng' };
-  const maTinhKhac = {
-    districtName: 'Xã Đức Trọng',
-    locations: [{ districtCode: '99001', districtName: 'Xã Đức Trọng' }]
-  };
-
-  const v = passesHardFilter(maTinhKhac, criteria, AREAS);
-  assert.equal(v.ok, false, 'tên khớp nhưng mã thuộc tỉnh khác -> phải loại');
-  assert.equal(v.reason, 'ward', 'và phải loại VÌ XÃ, không phải vì lý do khác');
-  assert.equal(v.state, 'OUT_OF_RANGE',
-    'có mã để đối chiếu thì kết luận chắc chắn, không hạ xuống "chưa biết"');
+  // Chuỗi 'null' của e-GP không phải một mã.
+  const rong = recordWardIdentities({ wardCode: 'null', wardParentCode: 'null' });
+  assert.ok(rong.every((v) => v.code !== 'null'), "chuỗi 'null' bị nhận nhầm là mã xã");
 });
 
-test('mã cũ và mã mới của cùng một tỉnh đều được nhận', () => {
-  // Lâm Đồng có cả 68 và 703 trong danh mục e-GP; chọn tỉnh phải lấy cả hai.
-  const codes = wardCodesForName('Đức Trọng cũ', ['68', '703'], AREAS);
-  assert.deepEqual(codes, ['70455']);
+/* --------------------------------------------------------------------------
+ *  4. Nối vào cổng lọc thật — đây mới là thứ người dùng gặp
+ * ------------------------------------------------------------------------ */
+
+test('CỔNG LỌC: xã trùng tên tỉnh khác bị loại, kèm lý do đọc được', () => {
+  const v = passesHardFilter({ bidName: 'Kênh mương Đức Trọng', wardCode: '24101', wardParentCode: '75' },
+    { province: 'Lâm Đồng', ward: 'Đức Trọng' }, AREAS);
+  assert.equal(v.ok, false);
+  assert.equal(v.state, 'OUT_OF_RANGE');
+  assert.equal(v.reason, 'ward');
+});
+
+test('CỔNG LỌC: thiếu mã xã thì xếp CHƯA ĐỦ DỮ LIỆU, không phải NGOÀI TIÊU CHÍ', () => {
+  const v = passesHardFilter({ bidName: 'Kênh mương nội đồng N1' },
+    { province: 'Lâm Đồng', ward: 'Đức Trọng' }, AREAS);
+  assert.equal(v.state, 'INSUFFICIENT',
+    'gộp vào "ngoài tiêu chí" là âm thầm vứt đi gói có thể đúng');
 });

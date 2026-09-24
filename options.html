@@ -66,6 +66,13 @@
       <p><button class="btn" type="submit">Lưu cấu hình</button></p>
     </form>
 
+    <section id="canary-config" class="card" style="margin-top:14px" aria-labelledby="canary-config-title">
+      <h2 id="canary-config-title">Lịch kiểm tra chất lượng dữ liệu</h2>
+      <p class="muted small">Kiểm tra 25 hồ sơ mẫu cùng danh mục tỉnh trên e-GP. Lịch mặc định thứ Hai, 02:00 giờ Việt Nam. Chrome cần đang hoạt động; nếu máy đóng hoặc ngủ, kết quả vẫn là chưa xác định cho đến khi chạy được lượt kiểm tra.</p>
+      <label class="checkline"><input id="canary-enabled" type="checkbox">Bật kiểm tra định kỳ</label>
+      <div class="form-grid"><div><label for="canary-weekday">Ngày trong tuần</label><select id="canary-weekday"><option value="1">Thứ Hai</option><option value="2">Thứ Ba</option><option value="3">Thứ Tư</option><option value="4">Thứ Năm</option><option value="5">Thứ Sáu</option><option value="6">Thứ Bảy</option><option value="0">Chủ Nhật</option></select></div><div><label for="canary-hour">Giờ Việt Nam</label><input id="canary-hour" type="number" min="0" max="23" step="1" value="2"></div></div>
+      <p class="row"><button id="save-canary" class="btn" type="button">Lưu lịch kiểm tra</button><a href="diagnostics.html" class="btn light">Xem kết quả kiểm tra</a></p><div id="canary-message" class="small" role="status"></div>
+    </section>
     <div class="card" style="margin-top:14px">
       <h2>Logo công ty trên màn hình và báo cáo</h2>
       <p class="muted small">Chọn PNG, JPG hoặc WEBP. Logo được lưu cục bộ và không mất khi cập nhật tiện ích.</p>

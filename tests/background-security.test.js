@@ -33,7 +33,13 @@ function between(text, startMarker, endMarker) {
 }
 
 test('backup export serializes only the explicit safe-backup projection', () => {
-  const body = between(source, 'async function exportBackup', '\n/* ==========================================================================');
+  /* 4.11.0 dời thân hàm xuất sang lib/runtime-export.js; background.js chỉ còn
+     một dòng uỷ quyền. Bài này phải đi theo mã, vì thứ nó bảo vệ — bản sao lưu
+     KHÔNG được mang token, cookie, Chat ID — nằm ở thân hàm. */
+  const exportSource = readFileSync(join(ROOT, 'lib/runtime-export.js'), 'utf8');
+  assert.match(source, /async function exportBackup\(\.\.\.args\)\{return exportRuntime\.exportBackup\(\.\.\.args\);\}/,
+    'background.js phải uỷ quyền, không được giữ một bản sao thứ hai của hàm xuất');
+  const body = between(exportSource, 'async function exportBackup', '\nasync function ');
 
   assert.match(body, /const cleanTemplates\s*=\s*sanitizedTemplateState\(s\)/);
   assert.match(body, /const exportState\s*=\s*buildSafeBackupState\(s,cleanTemplates,DEFAULT_SETTINGS\)/);
@@ -145,8 +151,16 @@ test('the default e-GP route always loads the contractor-selection search bridge
   // EGP_SCAN_PAGE của lib/core.js là nguồn sự thật duy nhất về phạm vi content
   // script; tests/content-script-scope.test.js đối chiếu nó với manifest.
   assert.match(source, /const EGP_DEFAULT_URL=EGP_SCAN_PAGE;/);
-  assert.match(source, /chrome\.tabs\.create\(\{url:EGP_SEARCH_PAGE,/);
-  assert.doesNotMatch(source, /const EGP_DEFAULT_URL\s*=\s*['"][^'"]*\/home/);
+  /* 4.11.0 dời việc mở/tái dùng tab danh sách sang lib/runtime-query.js. Điều
+     cần giữ không đổi: tab đó mở TRANG TÌM KIẾM, không phải trang chủ — mở
+     trang chủ thì bridge không gắn được và lượt quét trả về 0 gói. */
+  const queryRuntime = readFileSync(join(ROOT, 'lib/runtime-query.js'), 'utf8');
+  assert.match(queryRuntime, /tabs\.create\(\{url:EGP_SEARCH_PAGE,/);
+  assert.match(queryRuntime, /tabs\.update\(tab\.id,\{url:EGP_SEARCH_PAGE,/);
+  for (const src of [source, queryRuntime]) {
+    assert.doesNotMatch(src, /EGP_DEFAULT_URL\s*=\s*['"][^'"]*\/home/);
+    assert.doesNotMatch(src, /tabs\.create\(\{url:\s*['"][^'"]*web\/guest\/home/);
+  }
 
   // Route mặc định đúng vẫn CHƯA đủ: prepareScanTabFor còn tái dùng tab e-GP
   // đang mở nguyên trạng, kể cả trang chủ. Chốt luôn đường thứ hai này.

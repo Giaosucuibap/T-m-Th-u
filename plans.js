@@ -10,9 +10,11 @@ import { hardFilterReason } from './lib/hard-filter.js';
 import { safeSource } from './lib/workspace.js';
 import { formatMoney, formatDate } from './lib/core.js';
 import { TENDER_CATEGORIES, normalizeCategory, categoryLabel } from './lib/tender-categories.js';
+import { createWardPicker } from './ward-picker.js';
 
 const $ = (id) => document.getElementById(id);
 const send = async (type, payload = {}) => { try { return await chrome.runtime.sendMessage({ type, payload }); } catch(e) { return {ok:false,message:'Không kết nối được tiện ích: '+e.message}; } };
+const wardPicker=createWardPicker({send,province:$('province'),ward:$('ward'),list:$('ward-list'),hint:$('ward-hint')});
 
 let POLL = null;
 let LOOKUP = null;
@@ -71,25 +73,10 @@ async function loadProvinceOptions() {
 }
 
 async function loadWardOptions() {
-  const province = $('province').value.trim();
-  if (!province) {
-    fillDatalist('ward-list', []);
-    $('ward-hint').textContent = 'Chọn tỉnh trước để hiện danh sách xã/phường.';
-    return;
-  }
-  $('ward-hint').textContent = 'Đang lấy danh sách xã/phường…';
-  const res = await send('AREA_OPTIONS', { province });
-  if (!res || res.ok === false) {
-    $('ward-hint').textContent = (res && res.message) || 'Chưa lấy được danh sách xã/phường.';
-    return;
-  }
-  fillDatalist('ward-list', res.wards);
-  $('ward-hint').textContent = res.wards.length
-    ? `${res.wards.length} xã/phường của ${province} (gồm cả tên huyện/xã trước sáp nhập).`
-    : `Không thấy xã/phường nào cho "${province}". Kiểm tra lại tên tỉnh.`;
+  return wardPicker.load();
 }
 
-$('province').addEventListener('change', loadWardOptions);
+$('province').addEventListener('change',()=>{wardPicker.clear();loadWardOptions();});
 $('province').addEventListener('blur', loadWardOptions);
 loadProvinceOptions();
 
@@ -135,7 +122,7 @@ async function start() {
   const payload = {
     investor: $('investor').value.trim(),
     province: $('province').value.trim(),
-    ward: $('ward').value.trim(),
+    ...wardPicker.read(),
     keyword: $('keyword').value.trim(),
     category: normalizeCategory($('category').value),
     ...dateCriteria()
@@ -172,6 +159,7 @@ async function refresh() {
   if (!criteriaRestored) {
     criteriaRestored = true;
     const c = LOOKUP.criteria || {};
+    if(!dirtyCriteria.has('ward')&&!dirtyCriteria.has('province'))wardPicker.set(c.wardIdentities);
     for (const key of ['investor', 'province', 'ward', 'keyword', 'category']) {
       if (!dirtyCriteria.has(key)) $(key).value = key === 'category' ? normalizeCategory(c[key]) : (c[key] || '');
     }
@@ -328,7 +316,7 @@ $('reset').addEventListener('click', async () => {
   criteriaRestored = true;
   ['investor', 'province', 'ward', 'keyword', 'category', 'fromDate', 'toDate'].forEach((id) => { $(id).value = ''; dirtyCriteria.add(id); });
   $('period').value='';dirtyCriteria.add('period');syncDateRange();
-  fillDatalist('ward-list', []);
+  wardPicker.clear();
   $('ward-hint').textContent = 'Chọn tỉnh trước để hiện danh sách xã/phường.';
   stopPolling();
   await send('CANCEL_PLAN_LOOKUP');

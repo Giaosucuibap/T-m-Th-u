@@ -68,3 +68,17 @@ test('hướng dẫn cài đặt trong README không gắn cứng số phiên b�
   assert.deepEqual(hits, [],
     `các bước cài đặt nhắc số phiên bản cụ thể (${hits.join(', ')}); hãy viết trung tính`);
 });
+
+test('version_name — con số Chrome THẬT SỰ hiện cho người dùng — không được lệch', () => {
+  /* Bắt được khi kiểm tệp đã đóng gói của 4.12.0: `version` là 4.12.0 nhưng
+     `version_name` vẫn còn 4.11.0. Chrome hiển thị `version_name` nếu có, nên
+     người dùng mở chrome://extensions ra thấy bản cũ, báo lỗi theo bản cũ, và
+     người hỗ trợ đi dò một phiên bản không tồn tại.
+
+     Đây là loại lệch không bài thử nào trước đó chạm tới, vì mọi bài đều đọc
+     `version`. */
+  const manifest = JSON.parse(readFileSync(new URL('../manifest.json', import.meta.url), 'utf8'));
+  if (manifest.version_name === undefined) return; // không khai thì không có gì lệch
+  assert.equal(manifest.version_name, manifest.version,
+    'version_name lệch version — Chrome sẽ hiện số cũ cho người dùng');
+});

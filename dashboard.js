@@ -290,6 +290,7 @@ function resultCard(tender) {
         <div class="result-note">${esc(action.note)}</div>
         <div class="actions-row">
           <button class="btn" type="button" data-save-decision>Lưu quyết định</button>
+          <a class="btn light" href="checklist.html?key=${encodeURIComponent(tender.key)}">Checklist hồ sơ gói này</a>
           <button class="btn light" type="button" data-watch aria-pressed="${Boolean(tender.watchlisted)}"
             aria-label="${tender.watchlisted ? 'Bỏ theo dõi' : 'Theo dõi'} ${esc(tender.bidName || code)}">${tender.watchlisted ? '★ Theo dõi' : '☆ Theo dõi'}</button>
           <button class="btn light" type="button" data-delete
