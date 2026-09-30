@@ -1,0 +1,97 @@
+{
+  "catalog_release_id": "DEMO-1",
+  "is_demo": true,
+  "warning": "Số giả lập để kiểm phép tính; không dùng lập dự toán thực tế.",
+  "norm_id": "DEMO|D01|1|DEMO.001|base",
+  "document_id": "DEMO-NOT-A-LEGAL-DOCUMENT",
+  "revision": "1",
+  "code": "DEMO.001",
+  "name": "Công tác giả lập theo 100 m³",
+  "base_unit": "m3",
+  "source_unit_text": "100 m³",
+  "norm_basis_qty": "100",
+  "test_status": "verified",
+  "legal_status": "not_applicable",
+  "resources": [
+    {
+      "resource_id": "DEMO.VL1",
+      "group": "VL",
+      "unit": "kg",
+      "name": "Vật liệu thử"
+    },
+    {
+      "resource_id": "DEMO.NC1",
+      "group": "NC",
+      "unit": "cong",
+      "name": "Nhân công thử"
+    },
+    {
+      "resource_id": "DEMO.M1",
+      "group": "M",
+      "unit": "ca",
+      "name": "Máy thử"
+    }
+  ],
+  "consumptions": [
+    {
+      "line_id": "L1",
+      "resource_id": "DEMO.VL1",
+      "group": "VL",
+      "amount_kind": "quantity",
+      "amount": "10"
+    },
+    {
+      "line_id": "L2",
+      "resource_id": "DEMO.NC1",
+      "group": "NC",
+      "amount_kind": "quantity",
+      "amount": "2"
+    },
+    {
+      "line_id": "L3",
+      "resource_id": "DEMO.M1",
+      "group": "M",
+      "amount_kind": "quantity",
+      "amount": "1"
+    },
+    {
+      "line_id": "L4",
+      "resource_id": null,
+      "group": "VL",
+      "amount_kind": "percent",
+      "amount": "2",
+      "basis_ref": [
+        "L1"
+      ]
+    }
+  ],
+  "prices": [
+    {
+      "resource_id": "DEMO.VL1",
+      "unit_price": "20000"
+    },
+    {
+      "resource_id": "DEMO.NC1",
+      "unit_price": "400000"
+    },
+    {
+      "resource_id": "DEMO.M1",
+      "unit_price": "1000000"
+    }
+  ],
+  "project_quantity": "250",
+  "project_unit": "m3",
+  "unit_conversion": "1",
+  "expected": {
+    "norm_count": "2.5",
+    "VL_main": "500000",
+    "NC": "2000000",
+    "M": "2500000",
+    "VL_other": "10000",
+    "direct_cost": "5010000"
+  },
+  "source": {
+    "kind": "synthetic_test_fixture",
+    "note": "Không có văn bản pháp lý vì đây là ví dụ số học."
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "note": "Mau so dang ky tai lieu nguon. Chep thanh data/source/source_register.json (khong dua len Git) va dien gia tri THAT. Truong nao chua xac minh de null va ghi vao pending_fields.",
+  "documents": [
+    {
+      "document_id": "TT38-2026-BXD",
+      "doc_number": "38/2026/TT-BXD",
+      "authority": "Bo Xay dung",
+      "issue_date": null,
+      "effective_from": null,
+      "source_url": "https://vanban.chinhphu.vn/?docid=218632&pageid=27160&typegroupid=6",
+      "files": [
+        {"file": "data/source/TT38-2026/PhuLuc_I.pdf", "sha256": null, "received_at": null, "appendix": "I"}
+      ],
+      "pending_fields": ["issue_date", "effective_from", "files[].sha256", "files[].received_at"],
+      "verified_by": null
+    }
+  ]
+}

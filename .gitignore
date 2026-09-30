@@ -1,0 +1,19 @@
+~$*
+*.tmp
+*.log
+dist/
+build/
+__pycache__/
+.env
+.env.*
+
+# Tai lieu that va ho so doanh nghiep: KHONG dua len Git (kho dang de cong khai).
+# Chi giu file README huong dan trong cac thu muc nay.
+data/source/*
+!data/source/README.md
+data/staging/*
+!data/staging/README.md
+data/released/*
+!data/released/README.md
+tests/private_projects/*
+!tests/private_projects/README.md

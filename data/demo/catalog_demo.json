@@ -1,0 +1,153 @@
+{
+  "catalog_release_id": "DEMO-1",
+  "is_demo": true,
+  "warning": "Toàn bộ là số giả lập để kiểm tra thuật toán và giao diện. KHÔNG phải định mức, giá hay văn bản pháp lý. Không dùng lập dự toán thực tế.",
+  "include_norm_fixture": "norm_demo.json",
+  "documents": [
+    {
+      "document_id": "DEMO-NOT-A-LEGAL-DOCUMENT",
+      "namespace": "DEMO",
+      "doc_number": "DEMO (không phải văn bản pháp lý)",
+      "authority": "Không có",
+      "issue_date": "",
+      "effective_from": "",
+      "effective_to": "",
+      "source_url": "",
+      "source_file": "",
+      "source_sha256": ""
+    },
+    {
+      "document_id": "DEMO-TL-NOT-A-LEGAL-DOCUMENT",
+      "namespace": "DEMO-TL",
+      "doc_number": "DEMO thủy lợi (không phải văn bản pháp lý)",
+      "authority": "Không có",
+      "issue_date": "",
+      "effective_from": "",
+      "effective_to": "",
+      "source_url": "",
+      "source_file": "",
+      "source_sha256": ""
+    }
+  ],
+  "resources": [
+    {"resource_id": "DEMO.VL1", "namespace": "DEMO", "group": "VL", "name": "Vật liệu thử", "spec": "", "unit": "kg"},
+    {"resource_id": "DEMO.VL2", "namespace": "DEMO", "group": "VL", "name": "Vật liệu thử 2 (dạng vữa)", "spec": "", "unit": "m3"},
+    {"resource_id": "DEMO.VL3", "namespace": "DEMO", "group": "VL", "name": "Vật liệu thử 3", "spec": "", "unit": "kg"},
+    {"resource_id": "DEMO.NC1", "namespace": "DEMO", "group": "NC", "name": "Nhân công thử", "spec": "", "unit": "cong"},
+    {"resource_id": "DEMO.M1", "namespace": "DEMO", "group": "M", "name": "Máy thử", "spec": "", "unit": "ca"},
+    {"resource_id": "DEMO.M2", "namespace": "DEMO", "group": "M", "name": "Máy khoan thử", "spec": "", "unit": "ca"}
+  ],
+  "norms": [
+    {
+      "norm_id": "DEMO|D01|2|DEMO.001|base",
+      "namespace": "DEMO", "document_id": "DEMO-NOT-A-LEGAL-DOCUMENT", "revision": "2",
+      "code": "DEMO.001", "variant_id": "base",
+      "appendix": "DEMO", "chapter": "Chương DEMO 1", "group_name": "Nhóm DEMO",
+      "name": "[DEMO] Công tác giả lập theo 100 m³ (revision 2)",
+      "base_unit": "m3", "source_unit_text": "100 m³", "norm_basis_qty": "100",
+      "status": "verified", "conditions": "Giả lập: dùng để thử hai revision cùng mã.",
+      "consumptions": [
+        {"line_id": "L1", "resource_id": "DEMO.VL1", "group": "VL", "amount_kind": "quantity", "amount": "11"},
+        {"line_id": "L2", "resource_id": "DEMO.NC1", "group": "NC", "amount_kind": "quantity", "amount": "2.2"},
+        {"line_id": "L3", "resource_id": "DEMO.M1", "group": "M", "amount_kind": "quantity", "amount": "1"},
+        {"line_id": "L4", "resource_id": null, "group": "VL", "amount_kind": "percent", "amount": "2", "basis_ref": ["L1"]}
+      ]
+    },
+    {
+      "norm_id": "DEMO-TL|D02|1|DEMO.001|base",
+      "namespace": "DEMO-TL", "document_id": "DEMO-TL-NOT-A-LEGAL-DOCUMENT", "revision": "1",
+      "code": "DEMO.001", "variant_id": "base",
+      "appendix": "DEMO-TL", "chapter": "Chương DEMO thủy lợi", "group_name": "Nhóm DEMO thủy lợi",
+      "name": "[DEMO] Công tác giả lập cùng mã nhưng thuộc bộ thủy lợi DEMO",
+      "base_unit": "m3", "source_unit_text": "100 m³", "norm_basis_qty": "100",
+      "status": "verified", "conditions": "Giả lập: cùng chuỗi mã DEMO.001 nhưng khác bộ nguồn.",
+      "consumptions": [
+        {"line_id": "L1", "resource_id": "DEMO.VL1", "group": "VL", "amount_kind": "quantity", "amount": "9"},
+        {"line_id": "L2", "resource_id": "DEMO.NC1", "group": "NC", "amount_kind": "quantity", "amount": "3"},
+        {"line_id": "L3", "resource_id": "DEMO.M1", "group": "M", "amount_kind": "quantity", "amount": "0.5"}
+      ]
+    },
+    {
+      "norm_id": "DEMO|D01|1|DEMO.010|base",
+      "namespace": "DEMO", "document_id": "DEMO-NOT-A-LEGAL-DOCUMENT", "revision": "1",
+      "code": "DEMO.010", "variant_id": "base",
+      "appendix": "DEMO", "chapter": "Chương DEMO 2", "group_name": "Khoan và phụt vữa DEMO",
+      "name": "[DEMO] Khoan phụt vữa xi măng giả lập",
+      "base_unit": "m", "source_unit_text": "1 m", "norm_basis_qty": "1",
+      "status": "needs_review", "conditions": "Giả lập mã CẦN KIỂM: tra cứu được nhưng bị chặn xuất chính thức.",
+      "consumptions": [
+        {"line_id": "L1", "resource_id": "DEMO.VL2", "group": "VL", "amount_kind": "quantity", "amount": "0.05"},
+        {"line_id": "L2", "resource_id": "DEMO.NC1", "group": "NC", "amount_kind": "quantity", "amount": "0.8"},
+        {"line_id": "L3", "resource_id": "DEMO.M2", "group": "M", "amount_kind": "quantity", "amount": "0.12"}
+      ]
+    },
+    {
+      "norm_id": "DEMO|D01|1|DEMO.020|base",
+      "namespace": "DEMO", "document_id": "DEMO-NOT-A-LEGAL-DOCUMENT", "revision": "1",
+      "code": "DEMO.020", "variant_id": "base",
+      "appendix": "DEMO", "chapter": "Chương DEMO 3", "group_name": "Bê tông DEMO",
+      "name": "[DEMO] Bê tông kênh giả lập, vật liệu khác theo % nhóm VL",
+      "base_unit": "m3", "source_unit_text": "1 m³", "norm_basis_qty": "1",
+      "status": "verified", "conditions": "Giả lập: dòng % lấy cơ sở là toàn bộ vật liệu chính (nhóm VL).",
+      "consumptions": [
+        {"line_id": "L1", "resource_id": "DEMO.VL1", "group": "VL", "amount_kind": "quantity", "amount": "300"},
+        {"line_id": "L2", "resource_id": "DEMO.VL3", "group": "VL", "amount_kind": "quantity", "amount": "50"},
+        {"line_id": "L3", "resource_id": "DEMO.NC1", "group": "NC", "amount_kind": "quantity", "amount": "1.5"},
+        {"line_id": "L4", "resource_id": "DEMO.M1", "group": "M", "amount_kind": "quantity", "amount": "0.1"},
+        {"line_id": "L5", "resource_id": null, "group": "VL", "amount_kind": "percent", "amount": "1.5", "basis_ref": ["VL"]}
+      ]
+    },
+    {
+      "norm_id": "DEMO|D01|1|DEMO.030|base",
+      "namespace": "DEMO", "document_id": "DEMO-NOT-A-LEGAL-DOCUMENT", "revision": "1",
+      "code": "DEMO.030", "variant_id": "base",
+      "appendix": "DEMO", "chapter": "Chương DEMO 3", "group_name": "Gia công DEMO",
+      "name": "[DEMO] Công tác giả lập tính theo kg (thử đổi tấn sang kg)",
+      "base_unit": "kg", "source_unit_text": "1 kg", "norm_basis_qty": "1",
+      "status": "verified", "conditions": "Giả lập: nhập khối lượng bằng tấn, hệ số đổi 1000.",
+      "consumptions": [
+        {"line_id": "L1", "resource_id": "DEMO.VL3", "group": "VL", "amount_kind": "quantity", "amount": "1.02"},
+        {"line_id": "L2", "resource_id": "DEMO.NC1", "group": "NC", "amount_kind": "quantity", "amount": "0.01"}
+      ],
+      "group_status": {"M": "none_verified"}
+    },
+    {
+      "norm_id": "DEMO|D01|1|DEMO.040|base",
+      "namespace": "DEMO", "document_id": "DEMO-NOT-A-LEGAL-DOCUMENT", "revision": "1",
+      "code": "DEMO.040", "variant_id": "base",
+      "appendix": "DEMO", "chapter": "Chương DEMO 4", "group_name": "Đất DEMO",
+      "name": "[DEMO] Đắp đất giả lập, đơn vị m³ đầm chặt",
+      "base_unit": "m3_dam_chat", "source_unit_text": "100 m³ đầm chặt", "norm_basis_qty": "100",
+      "status": "verified", "conditions": "Giả lập: không được tự đổi m³ nguyên thổ sang m³ đầm chặt.",
+      "consumptions": [
+        {"line_id": "L1", "resource_id": "DEMO.NC1", "group": "NC", "amount_kind": "quantity", "amount": "5"},
+        {"line_id": "L2", "resource_id": "DEMO.M1", "group": "M", "amount_kind": "quantity", "amount": "0.8"}
+      ],
+      "group_status": {"VL": "none_verified"}
+    }
+  ],
+  "notes": [
+    {"note_id": "N-GEN-1", "scope": "document", "scope_key": "DEMO-NOT-A-LEGAL-DOCUMENT", "order": 1, "text": "[DEMO] Thuyết minh chung giả lập: số liệu chỉ để kiểm tra phép tính.", "source_ref": "DEMO"},
+    {"note_id": "N-CH2-1", "scope": "chapter", "scope_key": "Chương DEMO 2", "order": 1, "text": "[DEMO] Thuyết minh chương giả lập: khi chọn mã khoan phụt phải xác định cấp đất đá, đường kính, chiều sâu, loại vữa.", "source_ref": "DEMO"},
+    {"note_id": "N-010-1", "scope": "norm", "scope_key": "DEMO|D01|1|DEMO.010|base", "order": 1, "text": "[DEMO] Ghi chú mã giả lập: mã đang ở trạng thái cần kiểm.", "source_ref": "DEMO"}
+  ],
+  "demo_prices": [
+    {"price_id": "P.DEMO.VL1", "resource_id": "DEMO.VL1", "quoted_price": "20000", "tax_basis": "pre_vat", "includes_transport": "yes"},
+    {"price_id": "P.DEMO.VL2", "resource_id": "DEMO.VL2", "quoted_price": "1500000", "tax_basis": "pre_vat", "includes_transport": "no", "transport": "50000"},
+    {"price_id": "P.DEMO.VL3", "resource_id": "DEMO.VL3", "quoted_price": "15000", "tax_basis": "pre_vat", "includes_transport": "yes"},
+    {"price_id": "P.DEMO.NC1", "resource_id": "DEMO.NC1", "quoted_price": "400000", "tax_basis": "pre_vat", "includes_transport": "n/a"},
+    {"price_id": "P.DEMO.M1", "resource_id": "DEMO.M1", "quoted_price": "1000000", "tax_basis": "pre_vat", "includes_transport": "n/a"},
+    {"price_id": "P.DEMO.M2", "resource_id": "DEMO.M2", "quoted_price": "800000", "tax_basis": "pre_vat", "includes_transport": "n/a"}
+  ],
+  "demo_cost_profile": {
+    "profile_id": "DEMO-PROFILE",
+    "warning": "Tỷ lệ giả lập để thử cơ chế tính. KHÔNG phải tỷ lệ pháp lý. Người lập phải thay bằng bộ quy tắc có căn cứ.",
+    "rules": [
+      {"rule_id": "C", "label": "[DEMO] Chi phí gián tiếp giả lập", "rule_type": "percentage_on_basis", "base_refs": "T", "rate": "3.5", "rounding_stage": "round_cost"},
+      {"rule_id": "TL", "label": "[DEMO] Thu nhập chịu thuế tính trước giả lập", "rule_type": "percentage_on_basis", "base_refs": "T;C", "rate": "2.5", "rounding_stage": "round_cost"},
+      {"rule_id": "G", "label": "[DEMO] Chi phí trước thuế", "rule_type": "sum", "base_refs": "T;C;TL", "rounding_stage": "none"},
+      {"rule_id": "GTGT", "label": "[DEMO] Thuế giá trị gia tăng giả lập", "rule_type": "percentage_on_basis", "base_refs": "G", "rate": "7.5", "rounding_stage": "round_cost"},
+      {"rule_id": "GXD", "label": "[DEMO] Tổng chi phí sau thuế", "rule_type": "sum", "base_refs": "G;GTGT", "rounding_stage": "none"}
+    ]
+  }
+}

@@ -1,0 +1,86 @@
+[
+  {
+    "id": "S1",
+    "title": "Ohasoft tra cứu định mức 2026",
+    "url": "https://ohasoft.vn/Tra_cuu_dinh_muc_2026/",
+    "scope": "Quan sát trực tiếp giao diện, tìm kiếm và tab thuyết minh.",
+    "accessed": "2026-09-30"
+  },
+  {
+    "id": "S2",
+    "title": "Cổng Chính phủ TT 38 năm 2026 Bộ Xây dựng",
+    "url": "https://vanban.chinhphu.vn/?docid=218632&pageid=27160&typegroupid=6",
+    "scope": "Thuộc tính văn bản và danh sách 8 phụ lục.",
+    "accessed": "2026-09-30"
+  },
+  {
+    "id": "S3",
+    "title": "Cổng Chính phủ TT 37 năm 2026 Bộ Nông nghiệp và Môi trường",
+    "url": "https://vanban.chinhphu.vn/?docid=219382&pageid=27160",
+    "scope": "Thuộc tính văn bản và các tệp đính kèm.",
+    "accessed": "2026-09-30"
+  },
+  {
+    "id": "S4",
+    "title": "GXD giới thiệu Dự toán GXD",
+    "url": "https://gxd.vn/san-pham/phan-mem-du-toan-gxd.1",
+    "scope": "Mô tả chức năng của nhà cung cấp.",
+    "accessed": "2026-09-30"
+  },
+  {
+    "id": "S5",
+    "title": "G8 giới thiệu sản phẩm",
+    "url": "https://phanmemg8.vn/gioi-thieu-dich-vu-san-pham/",
+    "scope": "Mô tả sản phẩm; cần chạy thử bản cụ thể nếu đánh giá chất lượng.",
+    "accessed": "2026-09-30"
+  },
+  {
+    "id": "S6",
+    "title": "ETA giới thiệu tính năng",
+    "url": "https://dutoaneta.vn/tinh-nang-uu-viet-tren-du-toan-eta/",
+    "scope": "Mô tả tìm kiếm và nhập giá từ Excel.",
+    "accessed": "2026-09-30"
+  },
+  {
+    "id": "S7",
+    "title": "F1 nhập Excel giữ nguyên dữ liệu",
+    "url": "https://dutoanf1.com.vn/cach-nhap-excel-giu-nguyen-dinh-muc-don-gia-gia-thong-bao/",
+    "scope": "Hướng dẫn chức năng đã công bố; bài viết năm 2015.",
+    "accessed": "2026-09-30"
+  },
+  {
+    "id": "S8",
+    "title": "Microsoft Office Add ins platform overview",
+    "url": "https://learn.microsoft.com/en-us/office/dev/add-ins/overview/office-add-ins",
+    "scope": "Kiến trúc Office.js và nền tảng hỗ trợ.",
+    "accessed": "2026-09-30"
+  },
+  {
+    "id": "S9",
+    "title": "Microsoft VBA macros in Excel for the web",
+    "url": "https://support.microsoft.com/en-us/excel/work-with-vba-macros-in-excel-for-the-web",
+    "scope": "Giới hạn chạy VBA trên web.",
+    "accessed": "2026-09-30"
+  },
+  {
+    "id": "S10",
+    "title": "Claude Code Quickstart",
+    "url": "https://code.claude.com/docs/en/quickstart",
+    "scope": "Cài đặt, đăng nhập và làm việc trong thư mục dự án.",
+    "accessed": "2026-09-30"
+  },
+  {
+    "id": "S11",
+    "title": "OpenAI Codex CLI",
+    "url": "https://learn.chatgpt.com/docs/codex/cli?translationFallback=es-419",
+    "scope": "Cài công cụ, chạy codex, đăng nhập và mốc Git.",
+    "accessed": "2026-09-30"
+  },
+  {
+    "id": "S12",
+    "title": "Microsoft macro security",
+    "url": "https://learn.microsoft.com/en-us/microsoft-365-apps/security/internet-macros-blocked",
+    "scope": "Cách Office xử lý macro từ Internet.",
+    "accessed": "2026-09-30"
+  }
+]

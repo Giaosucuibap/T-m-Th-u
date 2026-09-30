@@ -1,0 +1,1169 @@
+{
+  "schema_version": "1.1",
+  "status": "implemented_logic_verified_in_libreoffice_not_excel",
+  "note": "Nguon duy nhat cho ten sheet, bang, cot. scripts/gen_vba.py sinh src/vba/modSchema.bas tu file nay; scripts/ta/project.py dung truc tiep. Cot co 'ext': true la phan mo rong so voi ban 1.0 (xem contracts/workbook_contract.md).",
+  "kinds": {
+    "key": "Khoa do add-in sinh, khong sua tay",
+    "value": "Gia tri do add-in ghi tu snapshot/catalog",
+    "input": "O nguoi lap nhap (nen vang nhat, chu xanh)",
+    "formula": "Cong thuc Excel chuan, khoa chong sua nham"
+  },
+  "sheets": [
+    {
+      "name": "TONG_HOP",
+      "title": "BẢNG TỔNG HỢP CHI PHÍ",
+      "header_row": 8
+    },
+    {
+      "name": "THONG_TIN",
+      "title": "THÔNG TIN CÔNG TRÌNH VÀ QUY ƯỚC",
+      "header_row": 4
+    },
+    {
+      "name": "TIEN_LUONG",
+      "title": "TIÊN LƯỢNG VÀ DỰ TOÁN CHI TIẾT",
+      "header_row": 4
+    },
+    {
+      "name": "CHIET_TINH",
+      "title": "CHIẾT TÍNH HAO PHÍ THEO TỪNG CÔNG TÁC",
+      "header_row": 4
+    },
+    {
+      "name": "TONG_HOP_VT",
+      "title": "TỔNG HỢP VẬT LIỆU – NHÂN CÔNG – MÁY",
+      "header_row": 4
+    },
+    {
+      "name": "GIA_DAU_VAO",
+      "title": "GIÁ ĐẦU VÀO (GIÁ HIỆN TRƯỜNG, NHÂN CÔNG, CA MÁY)",
+      "header_row": 4
+    },
+    {
+      "name": "QUY_TAC_CP",
+      "title": "QUY TẮC TÍNH CÁC KHOẢN CHI PHÍ",
+      "header_row": 4
+    },
+    {
+      "name": "KIEM_TRA",
+      "title": "KẾT QUẢ KIỂM TRA (CHỈ LÀ BÁO CÁO – KHÔNG DÙNG ĐỂ TÍNH)",
+      "header_row": 4
+    },
+    {
+      "name": "DM_SNAPSHOT",
+      "title": "BẢN SAO ĐỊNH MỨC ĐÃ DÙNG TRONG CÔNG TRÌNH (KHÔNG SỬA TAY)",
+      "header_row": 4
+    },
+    {
+      "name": "NHAT_KY",
+      "title": "NHẬT KÝ THAY ĐỔI",
+      "header_row": 4
+    }
+  ],
+  "tables": [
+    {
+      "sheet": "TONG_HOP",
+      "name": "tblSummary",
+      "first_col": 1,
+      "columns": [
+        {
+          "name": "cost_id",
+          "kind": "key",
+          "caption": "Ký hiệu",
+          "width": 10
+        },
+        {
+          "name": "item_group",
+          "kind": "value",
+          "caption": "Phạm vi",
+          "width": 10
+        },
+        {
+          "name": "cost_label",
+          "kind": "value",
+          "caption": "Khoản mục chi phí",
+          "width": 42
+        },
+        {
+          "name": "basis",
+          "kind": "value",
+          "caption": "Cơ sở tính",
+          "width": 16
+        },
+        {
+          "name": "rate",
+          "kind": "formula",
+          "caption": "Tỷ lệ (%)",
+          "format": "rate",
+          "width": 10
+        },
+        {
+          "name": "amount",
+          "kind": "formula",
+          "caption": "Thành tiền",
+          "format": "money",
+          "width": 20
+        },
+        {
+          "name": "source_ref",
+          "kind": "value",
+          "caption": "Căn cứ",
+          "width": 30
+        },
+        {
+          "name": "status",
+          "kind": "value",
+          "caption": "Trạng thái",
+          "width": 14
+        }
+      ]
+    },
+    {
+      "sheet": "THONG_TIN",
+      "name": "tblProject",
+      "first_col": 1,
+      "columns": [
+        {
+          "name": "key",
+          "kind": "key",
+          "caption": "Khóa",
+          "width": 24
+        },
+        {
+          "name": "label",
+          "kind": "value",
+          "caption": "Nội dung",
+          "width": 36,
+          "ext": true
+        },
+        {
+          "name": "value",
+          "kind": "input",
+          "caption": "Giá trị",
+          "width": 40
+        },
+        {
+          "name": "source_ref",
+          "kind": "input",
+          "caption": "Căn cứ / ghi chú",
+          "width": 40
+        }
+      ]
+    },
+    {
+      "sheet": "TIEN_LUONG",
+      "name": "tblItems",
+      "first_col": 1,
+      "columns": [
+        {
+          "name": "item_id",
+          "kind": "key",
+          "caption": "Mã dòng",
+          "width": 9
+        },
+        {
+          "name": "group_id",
+          "kind": "input",
+          "caption": "Hạng mục",
+          "width": 12
+        },
+        {
+          "name": "code",
+          "kind": "value",
+          "caption": "Mã hiệu ĐM",
+          "width": 12
+        },
+        {
+          "name": "description",
+          "kind": "input",
+          "caption": "Nội dung công tác",
+          "width": 40
+        },
+        {
+          "name": "norm_unit_text",
+          "kind": "formula",
+          "caption": "Đơn vị ĐM",
+          "width": 10,
+          "ext": true
+        },
+        {
+          "name": "input_unit",
+          "kind": "input",
+          "caption": "Đơn vị nhập",
+          "width": 9
+        },
+        {
+          "name": "input_quantity",
+          "kind": "input",
+          "caption": "Khối lượng",
+          "format": "qty",
+          "width": 12
+        },
+        {
+          "name": "unit_conversion",
+          "kind": "input",
+          "caption": "Hệ số đổi ĐV",
+          "format": "qty",
+          "width": 10
+        },
+        {
+          "name": "conversion_basis",
+          "kind": "input",
+          "caption": "Căn cứ đổi ĐV",
+          "width": 18,
+          "ext": true
+        },
+        {
+          "name": "norm_basis_qty",
+          "kind": "formula",
+          "caption": "Quy mô ĐM",
+          "format": "qty",
+          "width": 9
+        },
+        {
+          "name": "norm_count",
+          "kind": "formula",
+          "caption": "Số đơn vị ĐM",
+          "format": "qty",
+          "width": 11
+        },
+        {
+          "name": "cost_VL",
+          "kind": "formula",
+          "caption": "Thành tiền VL",
+          "format": "money",
+          "width": 15,
+          "ext": true
+        },
+        {
+          "name": "cost_NC",
+          "kind": "formula",
+          "caption": "Thành tiền NC",
+          "format": "money",
+          "width": 15,
+          "ext": true
+        },
+        {
+          "name": "cost_M",
+          "kind": "formula",
+          "caption": "Thành tiền M",
+          "format": "money",
+          "width": 15,
+          "ext": true
+        },
+        {
+          "name": "direct_cost",
+          "kind": "formula",
+          "caption": "Chi phí trực tiếp",
+          "format": "money",
+          "width": 16,
+          "ext": true
+        },
+        {
+          "name": "unit_price",
+          "kind": "formula",
+          "caption": "Đơn giá TK",
+          "format": "money",
+          "width": 14,
+          "ext": true
+        },
+        {
+          "name": "quantity_note",
+          "kind": "input",
+          "caption": "Diễn giải khối lượng",
+          "width": 28
+        },
+        {
+          "name": "status",
+          "kind": "formula",
+          "caption": "Trạng thái mã",
+          "width": 12
+        },
+        {
+          "name": "norm_id",
+          "kind": "value",
+          "caption": "Khóa định mức",
+          "width": 26
+        },
+        {
+          "name": "snapshot_id",
+          "kind": "value",
+          "caption": "Snapshot",
+          "width": 10
+        }
+      ]
+    },
+    {
+      "sheet": "CHIET_TINH",
+      "name": "tblAnalysis",
+      "first_col": 1,
+      "columns": [
+        {
+          "name": "analysis_id",
+          "kind": "key",
+          "caption": "Mã dòng CT",
+          "width": 11
+        },
+        {
+          "name": "item_id",
+          "kind": "value",
+          "caption": "Mã dòng TL",
+          "width": 9
+        },
+        {
+          "name": "item_code",
+          "kind": "formula",
+          "caption": "Mã hiệu ĐM",
+          "width": 12,
+          "ext": true
+        },
+        {
+          "name": "snapshot_line_id",
+          "kind": "value",
+          "caption": "Dòng hao phí",
+          "width": 13
+        },
+        {
+          "name": "resource_id",
+          "kind": "value",
+          "caption": "Mã tài nguyên",
+          "width": 12
+        },
+        {
+          "name": "resource_spec",
+          "kind": "value",
+          "caption": "Tên / quy cách",
+          "width": 30
+        },
+        {
+          "name": "group",
+          "kind": "value",
+          "caption": "Nhóm",
+          "width": 6
+        },
+        {
+          "name": "amount_kind",
+          "kind": "value",
+          "caption": "Loại",
+          "width": 9
+        },
+        {
+          "name": "resource_unit",
+          "kind": "value",
+          "caption": "Đơn vị",
+          "width": 7
+        },
+        {
+          "name": "original_amount",
+          "kind": "formula",
+          "caption": "Hao phí gốc",
+          "format": "amount",
+          "width": 11
+        },
+        {
+          "name": "adjustment_factor",
+          "kind": "input",
+          "caption": "Hệ số điều chỉnh",
+          "format": "amount",
+          "width": 10
+        },
+        {
+          "name": "effective_amount",
+          "kind": "formula",
+          "caption": "Hao phí áp dụng",
+          "format": "amount",
+          "width": 11
+        },
+        {
+          "name": "norm_count",
+          "kind": "formula",
+          "caption": "Số đơn vị ĐM",
+          "format": "qty",
+          "width": 11
+        },
+        {
+          "name": "total_quantity",
+          "kind": "formula",
+          "caption": "Lượng tài nguyên",
+          "format": "qty",
+          "width": 13
+        },
+        {
+          "name": "price_id",
+          "kind": "input",
+          "caption": "Mã giá",
+          "width": 14
+        },
+        {
+          "name": "price",
+          "kind": "formula",
+          "caption": "Giá áp dụng",
+          "format": "money",
+          "width": 13
+        },
+        {
+          "name": "basis_ref",
+          "kind": "value",
+          "caption": "Cơ sở % (dòng/nhóm)",
+          "width": 14
+        },
+        {
+          "name": "qty_cost",
+          "kind": "formula",
+          "caption": "Tiền theo lượng",
+          "format": "money",
+          "width": 14,
+          "ext": true
+        },
+        {
+          "name": "cost",
+          "kind": "formula",
+          "caption": "Thành tiền",
+          "format": "money",
+          "width": 14
+        },
+        {
+          "name": "status",
+          "kind": "value",
+          "caption": "Trạng thái dòng",
+          "width": 12
+        }
+      ]
+    },
+    {
+      "sheet": "TONG_HOP_VT",
+      "name": "tblResourceSummary",
+      "first_col": 1,
+      "columns": [
+        {
+          "name": "resource_price_key",
+          "kind": "key",
+          "caption": "Khóa tài nguyên–giá",
+          "width": 26
+        },
+        {
+          "name": "resource_id",
+          "kind": "value",
+          "caption": "Mã tài nguyên",
+          "width": 12
+        },
+        {
+          "name": "group",
+          "kind": "value",
+          "caption": "Nhóm",
+          "width": 6,
+          "ext": true
+        },
+        {
+          "name": "spec",
+          "kind": "value",
+          "caption": "Tên / quy cách",
+          "width": 32
+        },
+        {
+          "name": "unit",
+          "kind": "value",
+          "caption": "Đơn vị",
+          "width": 8
+        },
+        {
+          "name": "price_id",
+          "kind": "value",
+          "caption": "Mã giá",
+          "width": 14
+        },
+        {
+          "name": "quantity",
+          "kind": "formula",
+          "caption": "Tổng lượng",
+          "format": "qty",
+          "width": 14
+        },
+        {
+          "name": "price",
+          "kind": "formula",
+          "caption": "Giá áp dụng",
+          "format": "money",
+          "width": 14
+        },
+        {
+          "name": "cost",
+          "kind": "formula",
+          "caption": "Thành tiền",
+          "format": "money",
+          "width": 16
+        }
+      ]
+    },
+    {
+      "sheet": "GIA_DAU_VAO",
+      "name": "tblPrices",
+      "first_col": 1,
+      "columns": [
+        {
+          "name": "price_id",
+          "kind": "key",
+          "caption": "Mã giá",
+          "width": 14
+        },
+        {
+          "name": "resource_id",
+          "kind": "value",
+          "caption": "Mã tài nguyên",
+          "width": 12
+        },
+        {
+          "name": "group",
+          "kind": "value",
+          "caption": "Nhóm",
+          "width": 6,
+          "ext": true
+        },
+        {
+          "name": "spec",
+          "kind": "value",
+          "caption": "Tên / quy cách",
+          "width": 30
+        },
+        {
+          "name": "unit",
+          "kind": "value",
+          "caption": "Đơn vị",
+          "width": 7
+        },
+        {
+          "name": "locality",
+          "kind": "input",
+          "caption": "Địa bàn",
+          "width": 12
+        },
+        {
+          "name": "price_date",
+          "kind": "input",
+          "caption": "Kỳ giá",
+          "width": 10
+        },
+        {
+          "name": "source_ref",
+          "kind": "input",
+          "caption": "Nguồn giá",
+          "width": 24
+        },
+        {
+          "name": "quoted_price",
+          "kind": "input",
+          "caption": "Giá gốc",
+          "format": "money",
+          "width": 13
+        },
+        {
+          "name": "tax_basis",
+          "kind": "input",
+          "caption": "Thuế (pre_vat/incl_vat)",
+          "width": 11
+        },
+        {
+          "name": "includes_transport",
+          "kind": "input",
+          "caption": "Đã gồm VC? (yes/no/n/a)",
+          "width": 11
+        },
+        {
+          "name": "transport",
+          "kind": "input",
+          "caption": "Cước vận chuyển",
+          "format": "money",
+          "width": 12
+        },
+        {
+          "name": "handling",
+          "kind": "input",
+          "caption": "Bốc xếp",
+          "format": "money",
+          "width": 11
+        },
+        {
+          "name": "effective_price",
+          "kind": "formula",
+          "caption": "Giá áp dụng",
+          "format": "money",
+          "width": 13
+        },
+        {
+          "name": "zero_reason",
+          "kind": "input",
+          "caption": "Lý do giá 0",
+          "width": 16
+        },
+        {
+          "name": "reviewer",
+          "kind": "input",
+          "caption": "Người xác nhận",
+          "width": 14
+        },
+        {
+          "name": "status",
+          "kind": "formula",
+          "caption": "Trạng thái",
+          "width": 10
+        }
+      ]
+    },
+    {
+      "sheet": "QUY_TAC_CP",
+      "name": "tblCostRules",
+      "first_col": 1,
+      "columns": [
+        {
+          "name": "rule_id",
+          "kind": "input",
+          "caption": "Ký hiệu",
+          "width": 9
+        },
+        {
+          "name": "profile_id",
+          "kind": "input",
+          "caption": "Bộ quy tắc",
+          "width": 14
+        },
+        {
+          "name": "label",
+          "kind": "input",
+          "caption": "Tên khoản",
+          "width": 36
+        },
+        {
+          "name": "rule_type",
+          "kind": "input",
+          "caption": "Loại (percentage_on_basis/sum/fixed)",
+          "width": 20
+        },
+        {
+          "name": "base_refs",
+          "kind": "input",
+          "caption": "Cơ sở (VD: T;C)",
+          "width": 14
+        },
+        {
+          "name": "rate",
+          "kind": "input",
+          "caption": "Tỷ lệ (%)",
+          "format": "rate",
+          "width": 10
+        },
+        {
+          "name": "fixed_amount",
+          "kind": "input",
+          "caption": "Giá trị cố định",
+          "format": "money",
+          "width": 14
+        },
+        {
+          "name": "rounding_stage",
+          "kind": "input",
+          "caption": "Làm tròn (round_cost/none)",
+          "width": 13
+        },
+        {
+          "name": "source_ref",
+          "kind": "input",
+          "caption": "Căn cứ",
+          "width": 30
+        },
+        {
+          "name": "reviewer",
+          "kind": "input",
+          "caption": "Người kiểm",
+          "width": 14
+        },
+        {
+          "name": "status",
+          "kind": "input",
+          "caption": "Trạng thái (draft/approved/demo)",
+          "width": 14
+        }
+      ]
+    },
+    {
+      "sheet": "KIEM_TRA",
+      "name": "tblChecks",
+      "first_col": 1,
+      "columns": [
+        {
+          "name": "check_id",
+          "kind": "key",
+          "caption": "STT",
+          "width": 7
+        },
+        {
+          "name": "severity",
+          "kind": "value",
+          "caption": "Mức",
+          "width": 10
+        },
+        {
+          "name": "error_code",
+          "kind": "value",
+          "caption": "Mã lỗi",
+          "width": 26,
+          "ext": true
+        },
+        {
+          "name": "item_id",
+          "kind": "value",
+          "caption": "Mã dòng",
+          "width": 10
+        },
+        {
+          "name": "location",
+          "kind": "value",
+          "caption": "Vị trí",
+          "width": 22
+        },
+        {
+          "name": "message",
+          "kind": "value",
+          "caption": "Mô tả",
+          "width": 60
+        },
+        {
+          "name": "resolution",
+          "kind": "value",
+          "caption": "Cách xử lý",
+          "width": 40
+        },
+        {
+          "name": "status",
+          "kind": "value",
+          "caption": "Trạng thái",
+          "width": 10
+        }
+      ]
+    },
+    {
+      "sheet": "DM_SNAPSHOT",
+      "name": "tblSnapshotNorms",
+      "first_col": 1,
+      "columns": [
+        {
+          "name": "snapshot_id",
+          "kind": "key",
+          "caption": "Snapshot",
+          "width": 10
+        },
+        {
+          "name": "norm_id",
+          "kind": "value",
+          "caption": "Khóa định mức",
+          "width": 26
+        },
+        {
+          "name": "catalog_release_id",
+          "kind": "value",
+          "caption": "Bộ phát hành",
+          "width": 11,
+          "ext": true
+        },
+        {
+          "name": "namespace",
+          "kind": "value",
+          "caption": "Bộ nguồn",
+          "width": 9,
+          "ext": true
+        },
+        {
+          "name": "document_id",
+          "kind": "value",
+          "caption": "Văn bản",
+          "width": 18
+        },
+        {
+          "name": "catalog_revision",
+          "kind": "value",
+          "caption": "Revision",
+          "width": 8
+        },
+        {
+          "name": "code",
+          "kind": "value",
+          "caption": "Mã hiệu",
+          "width": 11
+        },
+        {
+          "name": "description",
+          "kind": "value",
+          "caption": "Tên công tác",
+          "width": 36
+        },
+        {
+          "name": "source_unit_text",
+          "kind": "value",
+          "caption": "Đơn vị nguồn",
+          "width": 10
+        },
+        {
+          "name": "base_unit",
+          "kind": "value",
+          "caption": "Đơn vị cơ sở",
+          "width": 10
+        },
+        {
+          "name": "norm_basis_qty",
+          "kind": "value",
+          "caption": "Quy mô ĐM",
+          "format": "qty",
+          "width": 9
+        },
+        {
+          "name": "vl_status",
+          "kind": "value",
+          "caption": "Nhóm VL",
+          "width": 12,
+          "ext": true
+        },
+        {
+          "name": "nc_status",
+          "kind": "value",
+          "caption": "Nhóm NC",
+          "width": 12,
+          "ext": true
+        },
+        {
+          "name": "m_status",
+          "kind": "value",
+          "caption": "Nhóm M",
+          "width": 12,
+          "ext": true
+        },
+        {
+          "name": "conditions",
+          "kind": "value",
+          "caption": "Điều kiện áp dụng",
+          "width": 30,
+          "ext": true
+        },
+        {
+          "name": "source_ref",
+          "kind": "value",
+          "caption": "Nguồn (tệp/trang/bảng)",
+          "width": 24
+        },
+        {
+          "name": "status",
+          "kind": "value",
+          "caption": "Trạng thái kiểm",
+          "width": 12
+        },
+        {
+          "name": "is_demo",
+          "kind": "value",
+          "caption": "DEMO?",
+          "width": 7
+        },
+        {
+          "name": "pinned_at",
+          "kind": "value",
+          "caption": "Thời điểm chốt",
+          "width": 18,
+          "ext": true
+        }
+      ]
+    },
+    {
+      "sheet": "DM_SNAPSHOT",
+      "name": "tblSnapshotLines",
+      "first_col": 21,
+      "columns": [
+        {
+          "name": "snapshot_line_id",
+          "kind": "key",
+          "caption": "Dòng hao phí",
+          "width": 13
+        },
+        {
+          "name": "snapshot_id",
+          "kind": "value",
+          "caption": "Snapshot",
+          "width": 10
+        },
+        {
+          "name": "local_line_id",
+          "kind": "value",
+          "caption": "Dòng gốc",
+          "width": 8,
+          "ext": true
+        },
+        {
+          "name": "resource_id",
+          "kind": "value",
+          "caption": "Mã tài nguyên",
+          "width": 12
+        },
+        {
+          "name": "resource_name",
+          "kind": "value",
+          "caption": "Tên tài nguyên",
+          "width": 28,
+          "ext": true
+        },
+        {
+          "name": "resource_unit",
+          "kind": "value",
+          "caption": "Đơn vị",
+          "width": 7,
+          "ext": true
+        },
+        {
+          "name": "group",
+          "kind": "value",
+          "caption": "Nhóm",
+          "width": 6
+        },
+        {
+          "name": "amount_kind",
+          "kind": "value",
+          "caption": "Loại",
+          "width": 9
+        },
+        {
+          "name": "amount",
+          "kind": "value",
+          "caption": "Hao phí",
+          "format": "amount",
+          "width": 10
+        },
+        {
+          "name": "amount_text",
+          "kind": "value",
+          "caption": "Chuỗi gốc",
+          "width": 9,
+          "ext": true
+        },
+        {
+          "name": "basis_ref",
+          "kind": "value",
+          "caption": "Cơ sở %",
+          "width": 13
+        },
+        {
+          "name": "status",
+          "kind": "value",
+          "caption": "Trạng thái",
+          "width": 11,
+          "ext": true
+        },
+        {
+          "name": "source_ref",
+          "kind": "value",
+          "caption": "Nguồn",
+          "width": 20
+        }
+      ]
+    },
+    {
+      "sheet": "DM_SNAPSHOT",
+      "name": "tblSnapshotNotes",
+      "first_col": 35,
+      "columns": [
+        {
+          "name": "note_id",
+          "kind": "key",
+          "caption": "Mã ghi chú",
+          "width": 12
+        },
+        {
+          "name": "snapshot_id",
+          "kind": "value",
+          "caption": "Snapshot",
+          "width": 10
+        },
+        {
+          "name": "scope",
+          "kind": "value",
+          "caption": "Phạm vi",
+          "width": 10
+        },
+        {
+          "name": "text",
+          "kind": "value",
+          "caption": "Nội dung thuyết minh",
+          "width": 60
+        },
+        {
+          "name": "source_ref",
+          "kind": "value",
+          "caption": "Nguồn",
+          "width": 20
+        }
+      ]
+    },
+    {
+      "sheet": "NHAT_KY",
+      "name": "tblAudit",
+      "first_col": 1,
+      "columns": [
+        {
+          "name": "event_id",
+          "kind": "key",
+          "caption": "STT",
+          "width": 8
+        },
+        {
+          "name": "timestamp",
+          "kind": "value",
+          "caption": "Thời điểm",
+          "width": 19
+        },
+        {
+          "name": "user",
+          "kind": "value",
+          "caption": "Người thực hiện",
+          "width": 16
+        },
+        {
+          "name": "action",
+          "kind": "value",
+          "caption": "Thao tác",
+          "width": 16
+        },
+        {
+          "name": "item_id",
+          "kind": "value",
+          "caption": "Mã dòng",
+          "width": 10
+        },
+        {
+          "name": "field",
+          "kind": "value",
+          "caption": "Trường",
+          "width": 16
+        },
+        {
+          "name": "before",
+          "kind": "value",
+          "caption": "Trước",
+          "width": 16
+        },
+        {
+          "name": "after",
+          "kind": "value",
+          "caption": "Sau",
+          "width": 16
+        },
+        {
+          "name": "reason",
+          "kind": "value",
+          "caption": "Lý do",
+          "width": 30
+        },
+        {
+          "name": "source_ref",
+          "kind": "value",
+          "caption": "Căn cứ",
+          "width": 24
+        }
+      ]
+    }
+  ],
+  "project_keys": [
+    {
+      "key": "schema_version",
+      "label": "Phiên bản cấu trúc file",
+      "value": "1.1"
+    },
+    {
+      "key": "code_version",
+      "label": "Phiên bản add-in đã tạo file",
+      "value": "0.1.0"
+    },
+    {
+      "key": "project_name",
+      "label": "Tên công trình",
+      "value": ""
+    },
+    {
+      "key": "project_item",
+      "label": "Hạng mục",
+      "value": ""
+    },
+    {
+      "key": "owner",
+      "label": "Chủ đầu tư",
+      "value": ""
+    },
+    {
+      "key": "locality",
+      "label": "Địa bàn xây dựng",
+      "value": ""
+    },
+    {
+      "key": "price_period",
+      "label": "Thời điểm lập giá",
+      "value": ""
+    },
+    {
+      "key": "catalog_release_id",
+      "label": "Bộ định mức đã chốt cho công trình",
+      "value": ""
+    },
+    {
+      "key": "cost_rule_profile_id",
+      "label": "Bộ quy tắc chi phí áp dụng",
+      "value": ""
+    },
+    {
+      "key": "round_cost_digits",
+      "label": "Số chữ số thập phân làm tròn thành tiền",
+      "value": 0
+    },
+    {
+      "key": "round_price_digits",
+      "label": "Số chữ số thập phân làm tròn giá áp dụng",
+      "value": 0
+    },
+    {
+      "key": "currency",
+      "label": "Đơn vị tiền",
+      "value": "VND"
+    },
+    {
+      "key": "prepared_by",
+      "label": "Người lập",
+      "value": ""
+    },
+    {
+      "key": "doc_status",
+      "label": "Trạng thái hồ sơ (draft/issued)",
+      "value": "draft"
+    }
+  ],
+  "defined_names": {
+    "TA_RoundCost": "INDEX(tblProject[value],MATCH(\"round_cost_digits\",tblProject[key],0))",
+    "TA_RoundPrice": "INDEX(tblProject[value],MATCH(\"round_price_digits\",tblProject[key],0))"
+  },
+  "lists": {
+    "tax_basis": [
+      "pre_vat",
+      "incl_vat"
+    ],
+    "includes_transport": [
+      "yes",
+      "no",
+      "n/a"
+    ],
+    "rule_type": [
+      "percentage_on_basis",
+      "sum",
+      "fixed"
+    ],
+    "rounding_stage": [
+      "round_cost",
+      "none"
+    ],
+    "rule_status": [
+      "draft",
+      "approved",
+      "demo"
+    ]
+  }
+}

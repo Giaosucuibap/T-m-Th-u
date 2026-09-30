@@ -1,0 +1,203 @@
+{
+  "purpose": "Đặc tả kiểm thử để người lập trình hiện thực, chưa phải kết quả chạy Excel.",
+  "is_demo": true,
+  "cases": [
+    {
+      "id": "G01",
+      "name": "Quy đổi 100 m³",
+      "input": {
+        "q": "250",
+        "conversion": "1",
+        "norm_basis": "100"
+      },
+      "expected": {
+        "norm_count": "2.5"
+      }
+    },
+    {
+      "id": "G02",
+      "name": "VL vật lý",
+      "input": {
+        "norm_count": "2.5",
+        "consumption": "10",
+        "price": "20000"
+      },
+      "expected": {
+        "quantity": "25",
+        "cost": "500000"
+      }
+    },
+    {
+      "id": "G03",
+      "name": "NC",
+      "input": {
+        "norm_count": "2.5",
+        "consumption": "2",
+        "price": "400000"
+      },
+      "expected": {
+        "quantity": "5",
+        "cost": "2000000"
+      }
+    },
+    {
+      "id": "G04",
+      "name": "Máy",
+      "input": {
+        "norm_count": "2.5",
+        "consumption": "1",
+        "price": "1000000"
+      },
+      "expected": {
+        "quantity": "2.5",
+        "cost": "2500000"
+      }
+    },
+    {
+      "id": "G05",
+      "name": "VL khác 2% VL chính",
+      "input": {
+        "base": "500000",
+        "percent": "2"
+      },
+      "expected": {
+        "cost": "10000"
+      }
+    },
+    {
+      "id": "G06",
+      "name": "Tổng trực tiếp",
+      "input": {
+        "costs": [
+          "500000",
+          "2000000",
+          "2500000",
+          "10000"
+        ]
+      },
+      "expected": {
+        "sum": "5010000"
+      }
+    },
+    {
+      "id": "G07",
+      "name": "Hệ số NC riêng 1,1",
+      "input": {
+        "norm_count": "2.5",
+        "consumption": "2",
+        "factor": "1.1",
+        "price": "400000"
+      },
+      "expected": {
+        "quantity": "5.5",
+        "cost": "2200000",
+        "other_groups_unchanged": true
+      }
+    },
+    {
+      "id": "G08",
+      "name": "Đổi tấn sang kg trong cùng vật liệu",
+      "input": {
+        "q": "1.2",
+        "conversion": "1000",
+        "norm_basis": "1"
+      },
+      "expected": {
+        "norm_count": "1200"
+      }
+    },
+    {
+      "id": "G09",
+      "name": "Thiếu giá",
+      "input": {
+        "price": null
+      },
+      "expected": {
+        "error": "MISSING_PRICE",
+        "official_export": false
+      }
+    },
+    {
+      "id": "G10",
+      "name": "Mẫu số bằng 0",
+      "input": {
+        "norm_basis": "0"
+      },
+      "expected": {
+        "error": "INVALID_NORM_BASIS"
+      }
+    },
+    {
+      "id": "G11",
+      "name": "Vòng tham chiếu phần trăm",
+      "input": {
+        "line_id": "L4",
+        "basis_ref": [
+          "L4"
+        ]
+      },
+      "expected": {
+        "error": "CIRCULAR_BASIS"
+      }
+    },
+    {
+      "id": "G12",
+      "name": "Dữ liệu DEMO",
+      "input": {
+        "is_demo": true
+      },
+      "expected": {
+        "official_export": false,
+        "draft_allowed": true
+      }
+    },
+    {
+      "id": "G13",
+      "name": "Đổi trạng thái đất thiếu căn cứ",
+      "input": {
+        "from": "m3_nguyen_tho",
+        "to": "m3_dam_chat",
+        "conversion": null
+      },
+      "expected": {
+        "error": "MISSING_PHYSICAL_CONVERSION"
+      }
+    },
+    {
+      "id": "G14",
+      "name": "Excel ROUND giả định 0 chữ số",
+      "input": {
+        "number": "2.5",
+        "places": 0
+      },
+      "expected": {
+        "result": "3"
+      }
+    },
+    {
+      "id": "G15",
+      "name": "Đã gồm vận chuyển",
+      "input": {
+        "quoted_price": "110000",
+        "includes_transport": true,
+        "additional_transport": "10000"
+      },
+      "expected": {
+        "effective_price": "110000",
+        "warning": "DUPLICATE_TRANSPORT"
+      }
+    },
+    {
+      "id": "G16",
+      "name": "Thư viện thay đổi",
+      "input": {
+        "project_catalog": "v1",
+        "installed_catalog": "v2"
+      },
+      "expected": {
+        "project_catalog": "v1",
+        "auto_update": false
+      }
+    }
+  ]
+}
