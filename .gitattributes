@@ -7,3 +7,4 @@
 *.xltx binary
 *.xlam binary
 *.docx binary
+*.bat text eol=crlf
