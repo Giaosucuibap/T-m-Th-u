@@ -1,0 +1,9 @@
+*.bas text eol=crlf
+*.cls text eol=crlf
+*.frm text eol=crlf
+*.vba text eol=crlf
+*.ps1 text eol=crlf
+*.xlsx binary
+*.xltx binary
+*.xlam binary
+*.docx binary

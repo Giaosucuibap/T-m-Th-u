@@ -1,0 +1,38 @@
+{
+  "note": "Cong thuc Excel chuan (ten ham tieng Anh, dau phay) cho cac cot kind=formula. VBA ghi bang Range.Formula; Python ghi nguyen chuoi. Khong dung UDF, khong IFERROR(...,0). Thieu du lieu -> #N/A, khong bien thanh 0. Sinh modFormulas.bas bang scripts/gen_vba.py.",
+  "formulas": {
+    "tblItems.norm_unit_text": "=INDEX(tblSnapshotNorms[source_unit_text],MATCH(tblItems[[#This Row],[snapshot_id]],tblSnapshotNorms[snapshot_id],0))",
+    "tblItems.norm_basis_qty": "=IF(ISNUMBER(INDEX(tblSnapshotNorms[norm_basis_qty],MATCH(tblItems[[#This Row],[snapshot_id]],tblSnapshotNorms[snapshot_id],0))),INDEX(tblSnapshotNorms[norm_basis_qty],MATCH(tblItems[[#This Row],[snapshot_id]],tblSnapshotNorms[snapshot_id],0)),NA())",
+    "tblItems.norm_count": "=IF(AND(ISNUMBER(tblItems[[#This Row],[input_quantity]]),ISNUMBER(tblItems[[#This Row],[unit_conversion]]),ISNUMBER(tblItems[[#This Row],[norm_basis_qty]])),IF(AND(tblItems[[#This Row],[norm_basis_qty]]>0,tblItems[[#This Row],[unit_conversion]]>0),tblItems[[#This Row],[input_quantity]]*tblItems[[#This Row],[unit_conversion]]/tblItems[[#This Row],[norm_basis_qty]],NA()),NA())",
+    "tblItems.cost_VL": "=SUMIFS(tblAnalysis[cost],tblAnalysis[item_id],tblItems[[#This Row],[item_id]],tblAnalysis[group],\"VL\")",
+    "tblItems.cost_NC": "=SUMIFS(tblAnalysis[cost],tblAnalysis[item_id],tblItems[[#This Row],[item_id]],tblAnalysis[group],\"NC\")",
+    "tblItems.cost_M": "=SUMIFS(tblAnalysis[cost],tblAnalysis[item_id],tblItems[[#This Row],[item_id]],tblAnalysis[group],\"M\")",
+    "tblItems.direct_cost": "=tblItems[[#This Row],[cost_VL]]+tblItems[[#This Row],[cost_NC]]+tblItems[[#This Row],[cost_M]]",
+    "tblItems.unit_price": "=IF(AND(ISNUMBER(tblItems[[#This Row],[direct_cost]]),ISNUMBER(tblItems[[#This Row],[input_quantity]])),IF(tblItems[[#This Row],[input_quantity]]>0,tblItems[[#This Row],[direct_cost]]/tblItems[[#This Row],[input_quantity]],\"\"),NA())",
+    "tblItems.status": "=IF(INDEX(tblSnapshotNorms[is_demo],MATCH(tblItems[[#This Row],[snapshot_id]],tblSnapshotNorms[snapshot_id],0))=TRUE,\"demo\",INDEX(tblSnapshotNorms[status],MATCH(tblItems[[#This Row],[snapshot_id]],tblSnapshotNorms[snapshot_id],0)))",
+
+    "tblAnalysis.item_code": "=INDEX(tblItems[code],MATCH(tblAnalysis[[#This Row],[item_id]],tblItems[item_id],0))",
+    "tblAnalysis.original_amount": "=IF(ISNUMBER(INDEX(tblSnapshotLines[amount],MATCH(tblAnalysis[[#This Row],[snapshot_line_id]],tblSnapshotLines[snapshot_line_id],0))),INDEX(tblSnapshotLines[amount],MATCH(tblAnalysis[[#This Row],[snapshot_line_id]],tblSnapshotLines[snapshot_line_id],0)),NA())",
+    "tblAnalysis.effective_amount": "=IF(ISNUMBER(tblAnalysis[[#This Row],[adjustment_factor]]),tblAnalysis[[#This Row],[original_amount]]*tblAnalysis[[#This Row],[adjustment_factor]],NA())",
+    "tblAnalysis.norm_count": "=INDEX(tblItems[norm_count],MATCH(tblAnalysis[[#This Row],[item_id]],tblItems[item_id],0))",
+    "tblAnalysis.total_quantity": "=IF(tblAnalysis[[#This Row],[amount_kind]]=\"quantity\",tblAnalysis[[#This Row],[norm_count]]*tblAnalysis[[#This Row],[effective_amount]],\"\")",
+    "tblAnalysis.price": "=IF(tblAnalysis[[#This Row],[amount_kind]]=\"quantity\",IF(ISNUMBER(INDEX(tblPrices[effective_price],MATCH(tblAnalysis[[#This Row],[price_id]],tblPrices[price_id],0))),INDEX(tblPrices[effective_price],MATCH(tblAnalysis[[#This Row],[price_id]],tblPrices[price_id],0)),NA()),\"\")",
+    "tblAnalysis.qty_cost": "=IF(tblAnalysis[[#This Row],[amount_kind]]=\"quantity\",ROUND(tblAnalysis[[#This Row],[total_quantity]]*tblAnalysis[[#This Row],[price]],TA_RoundCost),\"\")",
+    "tblAnalysis.cost": "=IF(tblAnalysis[[#This Row],[amount_kind]]=\"quantity\",tblAnalysis[[#This Row],[qty_cost]],IF(tblAnalysis[[#This Row],[amount_kind]]=\"percent\",IF(COUNTIFS(tblAnalysis[item_id],tblAnalysis[[#This Row],[item_id]],tblAnalysis[snapshot_line_id],tblAnalysis[[#This Row],[basis_ref]],tblAnalysis[amount_kind],\"quantity\")+COUNTIFS(tblAnalysis[item_id],tblAnalysis[[#This Row],[item_id]],tblAnalysis[group],tblAnalysis[[#This Row],[basis_ref]],tblAnalysis[amount_kind],\"quantity\")=0,NA(),ROUND(tblAnalysis[[#This Row],[effective_amount]]/100*(SUMIFS(tblAnalysis[qty_cost],tblAnalysis[item_id],tblAnalysis[[#This Row],[item_id]],tblAnalysis[snapshot_line_id],tblAnalysis[[#This Row],[basis_ref]])+SUMIFS(tblAnalysis[qty_cost],tblAnalysis[item_id],tblAnalysis[[#This Row],[item_id]],tblAnalysis[group],tblAnalysis[[#This Row],[basis_ref]])),TA_RoundCost)),NA()))",
+
+    "tblResourceSummary.quantity": "=SUMIFS(tblAnalysis[total_quantity],tblAnalysis[resource_id],tblResourceSummary[[#This Row],[resource_id]],tblAnalysis[price_id],tblResourceSummary[[#This Row],[price_id]])",
+    "tblResourceSummary.price": "=IF(ISNUMBER(INDEX(tblPrices[effective_price],MATCH(tblResourceSummary[[#This Row],[price_id]],tblPrices[price_id],0))),INDEX(tblPrices[effective_price],MATCH(tblResourceSummary[[#This Row],[price_id]],tblPrices[price_id],0)),NA())",
+    "tblResourceSummary.cost": "=SUMIFS(tblAnalysis[qty_cost],tblAnalysis[resource_id],tblResourceSummary[[#This Row],[resource_id]],tblAnalysis[price_id],tblResourceSummary[[#This Row],[price_id]])",
+
+    "tblPrices.effective_price": "=IF(NOT(ISNUMBER(tblPrices[[#This Row],[quoted_price]])),NA(),IF(AND(tblPrices[[#This Row],[quoted_price]]=0,OR(tblPrices[[#This Row],[zero_reason]]=\"\",tblPrices[[#This Row],[reviewer]]=\"\")),NA(),IF(tblPrices[[#This Row],[includes_transport]]=\"no\",IF(ISNUMBER(tblPrices[[#This Row],[transport]]),ROUND(tblPrices[[#This Row],[quoted_price]]+tblPrices[[#This Row],[transport]]+N(tblPrices[[#This Row],[handling]]),TA_RoundPrice),NA()),IF(OR(tblPrices[[#This Row],[includes_transport]]=\"yes\",tblPrices[[#This Row],[includes_transport]]=\"n/a\"),ROUND(tblPrices[[#This Row],[quoted_price]]+N(tblPrices[[#This Row],[handling]]),TA_RoundPrice),NA()))))",
+    "tblPrices.status": "=IF(ISNUMBER(tblPrices[[#This Row],[effective_price]]),\"ok\",\"missing\")",
+
+    "summary.group_sum": "=SUMIFS(tblAnalysis[cost],tblAnalysis[group],\"{GROUP}\")",
+    "summary.rule_rate": "=IF(ISNUMBER(INDEX(tblCostRules[rate],MATCH(\"{RULE}\",tblCostRules[rule_id],0))),INDEX(tblCostRules[rate],MATCH(\"{RULE}\",tblCostRules[rule_id],0)),NA())",
+    "summary.rule_fixed": "=IF(ISNUMBER(INDEX(tblCostRules[fixed_amount],MATCH(\"{RULE}\",tblCostRules[rule_id],0))),INDEX(tblCostRules[fixed_amount],MATCH(\"{RULE}\",tblCostRules[rule_id],0)),NA())",
+    "banner.project_name": "=INDEX(tblProject[value],MATCH(\"project_name\",tblProject[key],0))&\"\"",
+    "banner.error_lines": "=SUMPRODUCT(--ISERROR(tblAnalysis[cost]))",
+    "banner.demo_norms": "=COUNTIF(tblSnapshotNorms[is_demo],TRUE)",
+    "banner.draft_direct": "=SUMIF(tblAnalysis[cost],\"<9.99E+307\")"
+  }
+}

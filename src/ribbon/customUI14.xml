@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<!-- Ribbon "Truong An" cho TA_Estimate.xlam. scripts/build_addin.ps1 dua file nay vao goi .xlam
+     (customUI/customUI14.xml + quan he trong _rels/.rels). Moi nut goi TA_RibbonAction (modEntry). -->
+<customUI xmlns="http://schemas.microsoft.com/office/2009/07/customui">
+  <ribbon>
+    <tabs>
+      <tab id="taTab" label="Trường An">
+        <group id="taGrpProject" label="Công trình">
+          <button id="taNewProject" label="Công trình mới" size="large" imageMso="FileNew" onAction="TA_RibbonAction"
+                  screentip="Tạo file công trình mới đúng cấu trúc TA Estimate"/>
+          <button id="taBuildTemplate" label="Tạo mẫu .xltx" imageMso="FileSaveAs" onAction="TA_RibbonAction"/>
+          <button id="taBackup" label="Sao lưu" imageMso="FileSave" onAction="TA_RibbonAction"/>
+        </group>
+        <group id="taGrpCatalog" label="Định mức">
+          <button id="taSearch" label="Tra cứu và chèn" size="large" imageMso="FindDialog" onAction="TA_RibbonAction"
+                  screentip="Tìm theo mã hoặc từ khóa có dấu/không dấu, xem hao phí và thuyết minh"/>
+          <button id="taLoadCatalog" label="Nạp thư viện" imageMso="FileOpen" onAction="TA_RibbonAction"/>
+          <button id="taInsertByCode" label="Chèn theo mã" imageMso="TableInsert" onAction="TA_RibbonAction"/>
+        </group>
+        <group id="taGrpEstimate" label="Dự toán">
+          <button id="taApplyFactor" label="Áp hệ số" imageMso="FunctionWizard" onAction="TA_RibbonAction"
+                  screentip="Áp hệ số VL/NC/M cho dòng công tác đang chọn, bắt buộc ghi căn cứ"/>
+          <button id="taRefresh" label="Cập nhật tổng hợp" size="large" imageMso="Refresh" onAction="TA_RibbonAction"/>
+        </group>
+        <group id="taGrpCheck" label="Kiểm tra">
+          <button id="taValidate" label="Kiểm tra hồ sơ" size="large" imageMso="DataValidation" onAction="TA_RibbonAction"/>
+          <button id="taCheckIssue" label="Kiểm tra phát hành" imageMso="AcceptInvitation" onAction="TA_RibbonAction"/>
+          <button id="taSelfTest" label="Tự kiểm tra add-in" imageMso="HappyFace" onAction="TA_RibbonAction"/>
+          <button id="taAbout" label="Thông tin" imageMso="Help" onAction="TA_RibbonAction"/>
+        </group>
+      </tab>
+    </tabs>
+  </ribbon>
+</customUI>

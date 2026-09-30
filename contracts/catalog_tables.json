@@ -1,0 +1,15 @@
+{
+  "schema_version": "1.0",
+  "note": "Cau truc Catalog_<release>.xlsx: moi sheet mot Excel Table bat dau o A1, chi chua gia tri (khong cong thuc, khong macro, khong lien ket ngoai). Add-in mo chi doc, nap mang qua Value2 roi dong file.",
+  "tables": [
+    {"sheet": "MANIFEST", "name": "tblCatManifest", "columns": ["key", "value"]},
+    {"sheet": "DOCUMENTS", "name": "tblCatDocuments", "columns": ["document_id", "namespace", "doc_number", "authority", "issue_date", "effective_from", "effective_to", "source_url", "source_file", "source_sha256"]},
+    {"sheet": "NORMS", "name": "tblCatNorms", "columns": ["norm_id", "namespace", "document_id", "revision", "code", "variant_id", "appendix", "chapter", "group_name", "name", "base_unit", "source_unit_text", "norm_basis_qty", "status", "is_demo", "vl_status", "nc_status", "m_status", "conditions", "source_ref"]},
+    {"sheet": "RESOURCES", "name": "tblCatResources", "columns": ["resource_id", "namespace", "group", "name", "spec", "unit"]},
+    {"sheet": "LINES", "name": "tblCatLines", "columns": ["norm_id", "line_id", "resource_id", "group", "amount_kind", "amount", "amount_text", "basis_ref", "status", "source_ref"]},
+    {"sheet": "NOTES", "name": "tblCatNotes", "columns": ["note_id", "scope", "scope_key", "order", "text", "source_ref"]}
+  ],
+  "manifest_keys": ["catalog_release_id", "catalog_schema_version", "is_demo", "created_at", "warning", "norm_count", "line_count", "supported_codes_note"],
+  "status_values": ["verified", "needs_review"],
+  "group_status_values": ["present", "none_verified", "unknown"]
+}
