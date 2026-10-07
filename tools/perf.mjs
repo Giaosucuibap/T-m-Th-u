@@ -1,7 +1,7 @@
 /* Đo tốc độ LỌC + CHẤM trên kho lớn: đây là đường người dùng gặp mỗi lần gõ
    vào ô tìm hoặc đổi bộ lọc. Đo trung vị 7 lượt, bỏ lượt đầu (khởi động JIT). */
-import { createResultView } from '../lib/result-view.js';
-import { createSearchIndex, selectIndexedRows } from '../lib/search-index.js';
+import { createResultView } from '../GiaoSuCuiBap/lib/result-view.js';
+import { createSearchIndex, selectIndexedRows } from '../GiaoSuCuiBap/lib/search-index.js';
 
 const N = Number(process.argv[2] || 20000);
 const P = ['68','75','56','66','64','51'];
@@ -22,7 +22,7 @@ do_('dựng chỉ mục (1 lần mỗi lượt tra)', ()=>createSearchIndex(kho)
 const idx = createSearchIndex(kho);
 do_('chọn theo mã tỉnh qua chỉ mục', ()=>selectIndexedRows(idx,{provinceCodes:['68']}));
 do_('chọn theo khoảng ngày đóng thầu', ()=>selectIndexedRows(idx,{closeFrom:Date.UTC(2026,10,1),closeTo:Date.UTC(2026,10,30)}));
-import { resultRows } from '../lib/result-view.js';
+import { resultRows } from '../GiaoSuCuiBap/lib/result-view.js';
 do_('KHÔNG tái dùng chỉ mục (chấm lại cả kho)', ()=>createResultView(kho,luot,{criteriaState:'',text:'thủy lợi'}));
 const idxDaCham = createSearchIndex(resultRows(kho,luot));
 do_('CÓ tái dùng chỉ mục — đúng cách search.js làm', ()=>createResultView(kho,luot,{criteriaState:'',text:'thủy lợi'},{index:idxDaCham}));

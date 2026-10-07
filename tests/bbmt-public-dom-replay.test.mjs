@@ -2,11 +2,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
-import {normalizeBidderTable} from '../lib/bbmt.js';
+import {normalizeBidderTable} from '../GiaoSuCuiBap/lib/bbmt.js';
 
 // Record/replay evidence, explicitly not a fresh live extension scan.
 const evidence=JSON.parse(fs.readFileSync(new URL('./fixtures/egp-public-dom-IB2600486024-20260906.json',import.meta.url),'utf8'));
-const source=fs.readFileSync(new URL('../content.js',import.meta.url),'utf8');
+const source=fs.readFileSync(new URL('../GiaoSuCuiBap/content.js',import.meta.url),'utf8');
 const begin=source.indexOf('  function bbmtAdaptDomSnapshot('),end=source.indexOf('  /* BBMT_DOM_ADAPTER_END */',begin);
 assert.ok(begin>=0&&end>begin);
 const adapt=vm.runInNewContext(source.slice(begin,end)+'\nbbmtAdaptDomSnapshot;',{URL});

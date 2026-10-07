@@ -1,15 +1,15 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { inferGatesFromHsmt, extractPdfStrings } from '../lib/hsmt-read.js';
-import { contractWindowYears, contractExpiryAlert } from '../lib/checklist-due.js';
-import { applyApproval, approvalLabel, approvalSignature } from '../lib/approval.js';
-import { marketBidPercentiles } from '../lib/rivals.js';
-import { buildChecklistPack, mergeChecklistPack, verifyChecklistPack } from '../lib/sync-pack.js';
-import { parentCodeOf, placeOf } from '../lib/heatmap.js';
-import { buildOutlineDocx } from '../lib/docx-lite.js';
-import { methodOutline } from '../lib/method-outline.js';
-import { filterAuditLog, guaranteeReminder } from '../lib/audit-filter.js';
-import { coordsForCode } from '../lib/province-codes.js';
+import { inferGatesFromHsmt, extractPdfStrings } from '../GiaoSuCuiBap/lib/hsmt-read.js';
+import { contractWindowYears, contractExpiryAlert } from '../GiaoSuCuiBap/lib/checklist-due.js';
+import { applyApproval, approvalLabel, approvalSignature } from '../GiaoSuCuiBap/lib/approval.js';
+import { marketBidPercentiles } from '../GiaoSuCuiBap/lib/rivals.js';
+import { buildChecklistPack, mergeChecklistPack, verifyChecklistPack } from '../GiaoSuCuiBap/lib/sync-pack.js';
+import { parentCodeOf, placeOf } from '../GiaoSuCuiBap/lib/heatmap.js';
+import { buildOutlineDocx } from '../GiaoSuCuiBap/lib/docx-lite.js';
+import { methodOutline } from '../GiaoSuCuiBap/lib/method-outline.js';
+import { filterAuditLog, guaranteeReminder } from '../GiaoSuCuiBap/lib/audit-filter.js';
+import { coordsForCode } from '../GiaoSuCuiBap/lib/province-codes.js';
 
 test('HSMT chỉ nhận diện từ khóa; không tự xác nhận năng lực', () => {
   const g = inferGatesFromHsmt('Yêu cầu hợp đồng tương tự và nhân sự chủ chốt, thiết bị thi công, năng lực tài chính.');

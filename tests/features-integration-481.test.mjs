@@ -1,14 +1,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { similarWorkType, checklistProgress, checklistItemsFor, normalizeCapability, applyCapability } from '../lib/capability.js';
-import { normalizeContract, safeContracts, bestContractMatch, MATCH_LABEL } from '../lib/contracts.js';
-import { inferGatesFromHsmt, extractPdfStrings } from '../lib/hsmt-read.js';
-import { contractMatrix, matrixSummary } from '../lib/hsmt-matrix.js';
-import { contractExpiryAlert, contractWindowYears, checklistDueItems } from '../lib/checklist-due.js';
-import { applyApproval, approvalLabel } from '../lib/approval.js';
-import { localRivals, marketBidPercentiles } from '../lib/rivals.js';
-import { buildChecklistPack, mergeChecklistPack, verifyChecklistPack } from '../lib/sync-pack.js';
-import { buildOutlineDocx } from '../lib/docx-lite.js';
+import { similarWorkType, checklistProgress, checklistItemsFor, normalizeCapability, applyCapability } from '../GiaoSuCuiBap/lib/capability.js';
+import { normalizeContract, safeContracts, bestContractMatch, MATCH_LABEL } from '../GiaoSuCuiBap/lib/contracts.js';
+import { inferGatesFromHsmt, extractPdfStrings } from '../GiaoSuCuiBap/lib/hsmt-read.js';
+import { contractMatrix, matrixSummary } from '../GiaoSuCuiBap/lib/hsmt-matrix.js';
+import { contractExpiryAlert, contractWindowYears, checklistDueItems } from '../GiaoSuCuiBap/lib/checklist-due.js';
+import { applyApproval, approvalLabel } from '../GiaoSuCuiBap/lib/approval.js';
+import { localRivals, marketBidPercentiles } from '../GiaoSuCuiBap/lib/rivals.js';
+import { buildChecklistPack, mergeChecklistPack, verifyChecklistPack } from '../GiaoSuCuiBap/lib/sync-pack.js';
+import { buildOutlineDocx } from '../GiaoSuCuiBap/lib/docx-lite.js';
 
 const OLD = '2026-09-01T00:00:00.000Z', NEW = '2026-09-10T00:00:00.000Z';
 const checklist = (at, owner = 'An', done = true) => ({ items: { hsmt: done }, owner, updatedAt: at });

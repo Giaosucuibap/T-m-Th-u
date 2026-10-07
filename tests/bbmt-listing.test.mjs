@@ -2,12 +2,12 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
-import {normalizeBbmtPackage,bbmtDateRange,bbmtInDateRange,bbmtReadStateOf,bbmtStamp} from '../lib/bbmt.js';
-import {passesHardFilter} from '../lib/hard-filter.js';
-import {dateGate,coverageOf} from '../lib/match-gate.js';
-import {matchesAdditionalKeyword} from '../lib/workspace.js';
+import {normalizeBbmtPackage,bbmtDateRange,bbmtInDateRange,bbmtReadStateOf,bbmtStamp} from '../GiaoSuCuiBap/lib/bbmt.js';
+import {passesHardFilter} from '../GiaoSuCuiBap/lib/hard-filter.js';
+import {dateGate,coverageOf} from '../GiaoSuCuiBap/lib/match-gate.js';
+import {matchesAdditionalKeyword} from '../GiaoSuCuiBap/lib/workspace.js';
 
-const background=fs.readFileSync(new URL('../background.js',import.meta.url),'utf8');
+const background=fs.readFileSync(new URL('../GiaoSuCuiBap/background.js',import.meta.url),'utf8');
 function sourceFunction(name){
   const start=background.search(new RegExp(`(?:async )?function ${name}\\(`));
   assert.ok(start>=0,name);
@@ -21,6 +21,7 @@ function listingHarness(){
     normalizeBbmtPackage,bbmtDateRange,bbmtInDateRange,bbmtReadStateOf,bbmtStamp,matchesAdditionalKeyword,passesHardFilter,dateGate,coverageOf,
     restoreOpening:p=>p,KEYS:{bidOpenScan:'bidOpenScan'},TIMEOUT_PREFIX:'fixture-',
     getState:async()=>structuredClone(state),getBidScan:async()=>structuredClone(state.bidOpenScan),withLock:async f=>f(),
+    appStorage:{get:async defaults=>structuredClone(Object.fromEntries(Object.entries(defaults).map(([key,value])=>[key,Object.hasOwn(state,key)?state[key]:value])))},
     save:async patch=>{state={...state,...structuredClone(patch)};},
     chrome:{storage:{local:{get:async()=>({bidOpenCache:{}})}},alarms:{clear:async()=>true}},
     startBidOpenDetailPhase:async()=>{phaseSnapshots.push(structuredClone(state.bidOpenScan));},
@@ -28,7 +29,7 @@ function listingHarness(){
     flushObservations:async()=>{},summarizeBidOpenings:()=>({}),lookupKind:()=>({}),
     isLookupActive:(_,scan)=>['LISTING','SCANNING'].includes(scan.status)
   });
-  vm.runInContext(sourceFunction('extendSourceKeys')+'\n'+sourceFunction('receivedPageIndexes')+'\n'+sourceFunction('pageCoverage')+'\n'+sourceFunction('ingestBidOpenList')+'\n'+sourceFunction('finalizeBidOpenScan'),context);
+  vm.runInContext(sourceFunction('readJobState')+'\n'+sourceFunction('extendSourceKeys')+'\n'+sourceFunction('receivedPageIndexes')+'\n'+sourceFunction('pageCoverage')+'\n'+sourceFunction('ingestBidOpenList')+'\n'+sourceFunction('finalizeBidOpenScan'),context);
   return {
     get scan(){return structuredClone(state.bidOpenScan);},phaseSnapshots,
     async page(payload){

@@ -1,0 +1,109 @@
+{
+  "provenance": {
+    "kind": "sanitized public native response",
+    "record": "PL2600333000",
+    "seenAt": "2026-10-05T04:49:24.386Z",
+    "path": "/o/egp-portal-contractor-selection-v2/services/expose/lcnt/bid-po-bidp-plan-project-view/get-by-id",
+    "sourceFile": "test-results/4.16.0/native-controls/native-controls.json",
+    "sourceFileSha256": "d5ada9964002329ad6c7c00e123e887d7a716591730a79cf97b3ec9733c3dc4a",
+    "fixture": true,
+    "liveTest": false
+  },
+  "data": {
+    "bidPoBidpPlanProjectDetailView": {
+      "id": "f87391ba-3d03-4330-b623-2e817fe296c6",
+      "planVersion": "00",
+      "name": "Kế hoạch lựa chọn nhà thầu bổ sung Dự án: Nâng cấp, cải tạo Quốc lộ 27 đoạn Km83+000 đến Km106+000",
+      "decisionDate": "2026-10-02T23:59:59",
+      "publicDate": "2026-10-02T15:56:06.643",
+      "bidPack": 6,
+      "planNo": "PL2600333000"
+    },
+    "bidpPlanDetailToProjectList": [
+      {
+        "id": "51ad61e9-0ec9-4210-90da-483693ea98f2",
+        "bidNo": "BP2600838007",
+        "idPlan": "f87391ba-3d03-4330-b623-2e817fe296c6",
+        "planNo": "PL2600333000",
+        "bidName": "Số 14 - Lập phương án rà phá bom mìn, vật nổ",
+        "bidPrice": 51197946,
+        "bidPriceUnit": "VND",
+        "bidField": "TV",
+        "investorCode": null,
+        "notifyNo": null,
+        "notifyVersion": null,
+        "investorName": "Ban Quản lý dự án đầu tư xây dựng số 1"
+      },
+      {
+        "id": "ac8eff30-998e-48dc-87ab-8f4646e0ece9",
+        "bidNo": "BP2600838021",
+        "idPlan": "f87391ba-3d03-4330-b623-2e817fe296c6",
+        "planNo": "PL2600333000",
+        "bidName": "Số 15 - Thi công Rà phá bom mìn, vật nổ",
+        "bidPrice": 1788792936,
+        "bidPriceUnit": "VND",
+        "bidField": "XL",
+        "investorCode": null,
+        "notifyNo": null,
+        "notifyVersion": null,
+        "investorName": "Ban Quản lý dự án đầu tư xây dựng số 1"
+      },
+      {
+        "id": "8795a2e3-3fb0-40bf-8d42-6360c4b0910a",
+        "bidNo": "BP2600838043",
+        "idPlan": "f87391ba-3d03-4330-b623-2e817fe296c6",
+        "planNo": "PL2600333000",
+        "bidName": "Số 16 - Giám sát thi công rà phá bom mìn, vật nổ",
+        "bidPrice": 71728323,
+        "bidPriceUnit": "VND",
+        "bidField": "TV",
+        "investorCode": null,
+        "notifyNo": null,
+        "notifyVersion": null,
+        "investorName": "Ban Quản lý dự án đầu tư xây dựng số 1"
+      },
+      {
+        "id": "e37a6dcc-c3bf-48e0-88df-dd03416b0e98",
+        "bidNo": "BP2600838106",
+        "idPlan": "f87391ba-3d03-4330-b623-2e817fe296c6",
+        "planNo": "PL2600333000",
+        "bidName": "Số 17 - Thi công xây dựng công trình",
+        "bidPrice": 744649682068,
+        "bidPriceUnit": "VND",
+        "bidField": "XL",
+        "investorCode": null,
+        "notifyNo": null,
+        "notifyVersion": null,
+        "investorName": "Ban Quản lý dự án đầu tư xây dựng số 1"
+      },
+      {
+        "id": "4bb252ed-bf73-4723-b209-0813c1abdf27",
+        "bidNo": "BP2600838169",
+        "idPlan": "f87391ba-3d03-4330-b623-2e817fe296c6",
+        "planNo": "PL2600333000",
+        "bidName": "Số 18 - Tư vấn giám sát thi công xây dựng công trình",
+        "bidPrice": 6494920366,
+        "bidPriceUnit": "VND",
+        "bidField": "TV",
+        "investorCode": null,
+        "notifyNo": null,
+        "notifyVersion": null,
+        "investorName": "Ban Quản lý dự án đầu tư xây dựng số 1"
+      },
+      {
+        "id": "13499d36-50bf-4424-a7d6-a0902f798b1b",
+        "bidNo": "BP2600838189",
+        "idPlan": "f87391ba-3d03-4330-b623-2e817fe296c6",
+        "planNo": "PL2600333000",
+        "bidName": "Số 19 - Bảo hiểm công trình",
+        "bidPrice": 2223659215,
+        "bidPriceUnit": "VND",
+        "bidField": "PTV",
+        "investorCode": null,
+        "notifyNo": null,
+        "notifyVersion": null,
+        "investorName": "Ban Quản lý dự án đầu tư xây dựng số 1"
+      }
+    ]
+  }
+}

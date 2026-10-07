@@ -1,17 +1,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { matchesTenderCategory } from '../lib/tender-categories.js';
-import { validateCriteria, safeSavedSearches, matchesLocalFilters } from '../lib/workspace.js';
-import { normalizeKhlcntPlan, filterPlansByArea, filterPlansByCategory, filterPlansByLocalCriteria, auditPlans } from '../lib/khlcnt.js';
-import { DEFAULT_SETTINGS, normalizeCandidate, mergeTender } from '../lib/core.js';
-import { sanitizeBackupFeatures, sanitizeBackupTenderMetadata, buildSafeBackupState } from '../lib/backup.js';
-import { findPriorTenderVersion, newTenderChanges, deadlineReminderState, shouldRemindDeadline, lifecycleLabel } from '../lib/lifecycle.js';
+import { matchesTenderCategory } from '../GiaoSuCuiBap/lib/tender-categories.js';
+import { validateCriteria, safeSavedSearches, matchesLocalFilters } from '../GiaoSuCuiBap/lib/workspace.js';
+import { normalizeKhlcntPlan, filterPlansByArea, filterPlansByCategory, filterPlansByLocalCriteria, auditPlans } from '../GiaoSuCuiBap/lib/khlcnt.js';
+import { DEFAULT_SETTINGS, normalizeCandidate, mergeTender } from '../GiaoSuCuiBap/lib/core.js';
+import { sanitizeBackupFeatures, sanitizeBackupTenderMetadata, buildSafeBackupState } from '../GiaoSuCuiBap/lib/backup.js';
+import { findPriorTenderVersion, newTenderChanges, deadlineReminderState, shouldRemindDeadline, lifecycleLabel } from '../GiaoSuCuiBap/lib/lifecycle.js';
 
-test('4.8.1 acronyms classify unlabeled consulting tasks without overriding source field or Ban QLDA', () => {
+test('4.11.0 acronyms identify subtypes only for source-classified consulting tasks without overriding field or Ban QLDA', () => {
   for (const [acronym, category] of [['TVTK','TV_DESIGN'],['TVGS','TV_SUPERVISION'],['GSXL','TV_SUPERVISION'],['TVKS','TV_SURVEY'],['TVTT','TV_APPRAISAL'],['TVTĐ','TV_APPRAISAL'],['TVQLDA','TV_PROJECT_MANAGEMENT'],['QLDA','TV_PROJECT_MANAGEMENT']]) {
-    /* 4.11.0: viết tắt trong TÊN gói vẫn phân nhánh tư vấn được, nhưng chỉ
-       khi e-GP đã khai lĩnh vực gốc là TV. Tên gói không tự nâng một gói chưa
-       khai lĩnh vực lên thành Tư vấn — nó vào nhóm "Chưa đủ dữ liệu". */
     assert.equal(matchesTenderCategory({bidName:`Gói thầu số 02: ${acronym} công trình`,investField:'TV'}, category), true, acronym);
     assert.equal(matchesTenderCategory({bidName:`Gói thầu số 02: ${acronym} công trình`}, category), false, acronym);
     assert.equal(matchesTenderCategory({bidName:`${acronym} công trình`,investField:'HH'}, category), false);
@@ -29,14 +26,9 @@ test('4.8.1 local mandatory/excluded terms persist and stay tied to package titl
   assert.equal(matchesLocalFilters({bidName:'Mua sắm bàn ghế',projectName:'Xây dựng kênh mương'},c.criteria),false);
 });
 
-/* 4.11.0: lĩnh vực phải do CHÍNH gói con khai, nên bản mẫu dùng `bidNamePlanNew`
-   — đúng dạng e-GP trả về khi có dữ liệu từng gói. Khai `investField` ở mức kế
-   hoạch chỉ nói kế hoạch có những loại nào, không nói gói nào thuộc loại nào. */
 const mixedPlan = () => normalizeKhlcntPlan({planNo:'PL2600000001',investField:['XL','TV'],
-  bidNamePlanNew:[{name:'Thi công kênh mương',investField:'XL'},
-    {name:'Tư vấn thiết kế kênh mương',investField:'TV'},
-    {name:'Tư vấn giám sát kênh mương',investField:'TV'},
-    {name:'Tư vấn giám sát phần mềm',investField:'TV'}],
+  bidName:['Thi công kênh mương','Tư vấn thiết kế kênh mương','Tư vấn giám sát kênh mương','Tư vấn giám sát phần mềm'],
+  bidNamePlanNew:[{name:'Thi công kênh mương',investField:'XL',bidPrice:8e9},{name:'Tư vấn thiết kế kênh mương',investField:'TV',bidPrice:2e8},{name:'Tư vấn giám sát kênh mương',investField:'TV',bidPrice:3e8},{name:'Tư vấn giám sát phần mềm',investField:'TV',bidPrice:5e7}],
   bidPrice:[8e9,2e8,3e8,5e7]});
 
 test('4.8.1 multi-province KHLCNT retains either requested province and audits the same scope', () => {

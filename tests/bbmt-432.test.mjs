@@ -2,8 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
-import {normalizeBbmtPackage,normalizeBidder,normalizeBidderTable,parseOpeningMoney,formatOpeningMoney,sameBbmtDetailPage,bbmtReadStateOf,bbmtReadState} from '../lib/bbmt.js';
-import {openingFingerprint,cacheOpening,restoreOpening,trimOpeningCache} from '../lib/bbmt-cache.js';
+import {normalizeBbmtPackage,normalizeBidder,normalizeBidderTable,parseOpeningMoney,formatOpeningMoney,sameBbmtDetailPage,bbmtReadStateOf,bbmtReadState} from '../GiaoSuCuiBap/lib/bbmt.js';
+import {openingFingerprint,cacheOpening,restoreOpening,trimOpeningCache} from '../GiaoSuCuiBap/lib/bbmt-cache.js';
 
 const raw={notifyNo:'IB2699990001',notifyId:'notice-1',id:'notice-1',bidOpenId:'opening-1',notifyVersion:'00',bidPrice:3000000000,numBidderJoin:1,publicDateKqmt:'2026-09-05T03:00:00Z'};
 const pkg=normalizeBbmtPackage(raw);
@@ -41,7 +41,7 @@ test('Approved estimate learned only from detail survives cache restore against 
   assert.equal(restoreOpening(pkg,{...entry,schemaVersion:undefined}).fromCache,undefined);
 });
 
-const background=fs.readFileSync(new URL('../background.js',import.meta.url),'utf8');
+const background=fs.readFileSync(new URL('../GiaoSuCuiBap/background.js',import.meta.url),'utf8');
 function sourceFunction(name){
   const start=background.search(new RegExp(`(?:async )?function ${name}\\(`));
   assert.ok(start>=0,name);

@@ -1,14 +1,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { contractMatrix, matrixSummary, HSMT_GATES } from '../lib/hsmt-matrix.js';
-import { checklistDueItems, contractExpiryAlert } from '../lib/checklist-due.js';
-import { coordsForCode, provinceCodeOf } from '../lib/province-codes.js';
-import { tokenDiff, highlightDiff } from '../lib/html-diff.js';
-import { applyApproval, approvalLabel } from '../lib/approval.js';
-import { marketBidPercentiles } from '../lib/rivals.js';
-import { buildChecklistPack, mergeChecklistPack } from '../lib/sync-pack.js';
-import { methodOutline } from '../lib/method-outline.js';
-import { placeOf } from '../lib/heatmap.js';
+import { contractMatrix, matrixSummary, HSMT_GATES } from '../GiaoSuCuiBap/lib/hsmt-matrix.js';
+import { checklistDueItems, contractExpiryAlert } from '../GiaoSuCuiBap/lib/checklist-due.js';
+import { coordsForCode, provinceCodeOf } from '../GiaoSuCuiBap/lib/province-codes.js';
+import { tokenDiff, highlightDiff } from '../GiaoSuCuiBap/lib/html-diff.js';
+import { applyApproval, approvalLabel } from '../GiaoSuCuiBap/lib/approval.js';
+import { marketBidPercentiles } from '../GiaoSuCuiBap/lib/rivals.js';
+import { buildChecklistPack, mergeChecklistPack } from '../GiaoSuCuiBap/lib/sync-pack.js';
+import { methodOutline } from '../GiaoSuCuiBap/lib/method-outline.js';
+import { placeOf } from '../GiaoSuCuiBap/lib/heatmap.js';
 
 test('ma trận HĐ × cửa HSMT', () => {
   assert.equal(HSMT_GATES.length, 4);

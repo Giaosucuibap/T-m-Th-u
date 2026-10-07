@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
 
-const source=fs.readFileSync(new URL('../content.js',import.meta.url),'utf8');
+const source=fs.readFileSync(new URL('../GiaoSuCuiBap/content.js',import.meta.url),'utf8');
 const begin=source.indexOf('  function bbmtAdaptDomSnapshot('),end=source.indexOf('  /* BBMT_DOM_ADAPTER_END */',begin);
 assert.ok(begin>0&&end>begin,'Content-script adapter must remain directly testable');
 const adapt=vm.runInNewContext(source.slice(begin,end)+'\nbbmtAdaptDomSnapshot;',{URL});

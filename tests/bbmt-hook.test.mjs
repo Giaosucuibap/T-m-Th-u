@@ -2,9 +2,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import vm from 'node:vm';
-import { normalizeBidder } from '../lib/bbmt.js';
+import { normalizeBidder } from '../GiaoSuCuiBap/lib/bbmt.js';
 
-const source = await fs.readFile(new URL('../page-hook.js', import.meta.url), 'utf8');
+const source = await fs.readFile(new URL('../GiaoSuCuiBap/page-hook.js', import.meta.url), 'utf8');
 const pageUrl = 'https://muasamcong.mpi.gov.vn/vi/web/guest/contractor-selection?render=detail-v2&notifyNo=IB2600486024&step=bbmt';
 const endpoint = 'https://muasamcong.mpi.gov.vn/o/egp-portal-contractor-selection-v2/services/expose/ldtkqmt/bid-notification-p/bid-open';
 // Values were read from the public native e-GP table on 2026-09-05. Envelope

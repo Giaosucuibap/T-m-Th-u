@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { coordsForCode, normalizeAreaCode, provinceCodeOf, lookupAreaCode } from '../lib/province-codes.js';
-import { placeOf, parentCodeOf, districtHeat } from '../lib/heatmap.js';
+import { coordsForCode, normalizeAreaCode, provinceCodeOf, lookupAreaCode } from '../GiaoSuCuiBap/lib/province-codes.js';
+import { placeOf, parentCodeOf, districtHeat } from '../GiaoSuCuiBap/lib/heatmap.js';
 
 test('unknown locations have no invented coordinates', () => {
   for (const tender of [{}, { location: 'Chưa xác định' }, { provinceCode: '999' }, { wardCode: '68012' }]) {

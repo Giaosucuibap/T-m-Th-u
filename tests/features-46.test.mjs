@@ -2,13 +2,13 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
-import { normalizeContract, matchContract, bestContractMatch, safeContracts } from '../lib/contracts.js';
-import { checklistItemsFor, checklistProgress, CHECKLIST_ITEMS } from '../lib/capability.js';
-import { hmacSha256Hex, webhookHeaders } from '../lib/hmac.js';
-import { localRivals } from '../lib/rivals.js';
-import { districtHeat } from '../lib/heatmap.js';
-import { priceReference, summarizePricing } from '../lib/pricing.js';
-import { missingSelectors } from '../lib/dom-regression.js';
+import { normalizeContract, matchContract, bestContractMatch, safeContracts } from '../GiaoSuCuiBap/lib/contracts.js';
+import { checklistItemsFor, checklistProgress, CHECKLIST_ITEMS } from '../GiaoSuCuiBap/lib/capability.js';
+import { hmacSha256Hex, webhookHeaders } from '../GiaoSuCuiBap/lib/hmac.js';
+import { localRivals } from '../GiaoSuCuiBap/lib/rivals.js';
+import { districtHeat } from '../GiaoSuCuiBap/lib/heatmap.js';
+import { priceReference, summarizePricing } from '../GiaoSuCuiBap/lib/pricing.js';
+import { missingSelectors } from '../GiaoSuCuiBap/lib/dom-regression.js';
 
 test('hợp đồng tương tự: đạt / lệch loại / thiếu', () => {
   const hd = normalizeContract({ name: 'Thi công kênh mương xã B', workType: 'thuy-loi', price: 8000000000, year: 2024 });

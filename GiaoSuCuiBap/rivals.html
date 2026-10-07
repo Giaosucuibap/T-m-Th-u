@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="vi"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Đối thủ địa bàn — Giáo Sư Cùi Bắp</title>
+<link rel="stylesheet" href="app.css"><link rel="stylesheet" href="workspace.css"><link rel="icon" href="icons/icon32.png">
+</head>
+<body class="workspace">
+<aside id="workspace-nav" class="ws-sidebar"></aside>
+<main id="main">
+  <div class="ws-topbar"><div class="breadcrumb"><span>Không gian</span><b>Đối thủ</b></div></div>
+  <section class="ws-intro"><div><h1>Đối thủ trên<br><em>thị trường của bạn.</em></h1><p>Chỉ thống kê các gói đã lưu khớp các tiêu chí tỉnh và chủ đầu tư đã chọn. Không suy ra toàn quốc, không kết luận thông thầu.</p></div></section>
+  <form class="card search-grid" id="form">
+    <div><label for="province">Tỉnh</label><input id="province" placeholder="Lâm Đồng"></div>
+    <div><label for="investor">Chủ đầu tư</label><input id="investor" placeholder="Ban QLDA…" maxlength="500"></div>
+    <div><label>Lĩnh vực / từ khóa</label><input id="field" placeholder="thủy lợi"></div>
+  </form>
+  <p><button class="btn" id="go" type="button">Lọc đối thủ</button></p>
+  <div id="list"></div>
+</main>
+<script type="module" src="shell.js"></script>
+<script type="module" src="rivals.js"></script>
+</body></html>

@@ -1,6 +1,6 @@
 import test from 'node:test';import assert from 'node:assert/strict';
-import {buildBbmtQuery,bbmtDateRange,bbmtInDateRange,normalizeBbmtPackage,normalizeBidder,normalizeBidderTable,bbmtReadState} from '../lib/bbmt.js';
-import {cacheOpening,restoreOpening,trimOpeningCache,BBMT_CACHE_TTL} from '../lib/bbmt-cache.js';
+import {buildBbmtQuery,bbmtDateRange,bbmtInDateRange,normalizeBbmtPackage,normalizeBidder,normalizeBidderTable,bbmtReadState} from '../GiaoSuCuiBap/lib/bbmt.js';
+import {cacheOpening,restoreOpening,trimOpeningCache,BBMT_CACHE_TTL} from '../GiaoSuCuiBap/lib/bbmt-cache.js';
 const raw={notifyNo:'IB2600000001',notifyVersion:'01',bidName:'Gói kiểm thử',bidPrice:3000000000,bidEstimatePrice:2800000000,bidOpenId:'opening-1',numBidderJoin:1};
 const row={contractorCode:'vn0123456789',contractorName:'Nhà thầu kiểm thử',lotPrice:2600000000,discountPercent:5,lotFinalPrice:2470000000};
 test('Opening search uses the official investField filter for the sector control',()=>{

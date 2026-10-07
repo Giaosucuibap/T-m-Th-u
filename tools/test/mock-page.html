@@ -50,11 +50,27 @@
 const SEARCH = '/o/egp-portal-contractor-selection-v2/services/smart/search';
 let page = 0, size = 10, total = 0, totalPages = 1;
 
+/* CHẾ ĐỘ "e-GP KHÓ TÍNH" — máy chủ gắn window.__CHAOS khi chạy với MOCK_CHAOS.
+ *   early : khung kết quả (thanh phân trang + ô số bản ghi) HIỆN NGAY khi bấm
+ *           Tìm kiếm, TRƯỚC khi dữ liệu về — như khung chờ của giao diện thật.
+ *   busy  : đang có yêu cầu chưa xong thì BỎ QUA thao tác đổi trang / đổi số
+ *           bản ghi — như cờ loading của Element UI.
+ * Hai chế độ này cùng lúc tái hiện đúng cuộc đua "lúc được lúc mất". */
+const CHAOS = window.__CHAOS || {};
+let inFlight = false;
+
 function call(){
+  if (CHAOS.busy && inFlight) return;   // trang đang bận: lặng lẽ bỏ qua
+  inFlight = true;
+  if (CHAOS.early) {
+    document.getElementById('results').style.display = 'block';
+    document.getElementById('pg').classList.add('on');
+  }
   const body = JSON.stringify([{ pageNumber: page, pageSize: String(size), query: [{ index:'es-contractor-selection', filters: [] }] }]);
   const xhr = new XMLHttpRequest();
   xhr.open('POST', SEARCH);
   xhr.setRequestHeader('content-type','application/json');
+  xhr.onloadend = () => { inFlight = false; };
   xhr.onload = () => {
     let d = {}; try { d = JSON.parse(xhr.responseText); } catch {}
     const rows = (d.page && d.page.content) || [];
@@ -73,6 +89,10 @@ function call(){
 }
 
 document.getElementById('btnSearch').onclick = () => { page = 0; call(); };
+/* autoload: e-GP thật TỰ TẢI danh sách mặc định ngay khi mở trang tra cứu.
+   Yêu cầu này đi ra TRƯỚC khi tiện ích kịp giao tiêu chí cho trang, nên nó
+   không mang tiêu chí của tiện ích. */
+if (CHAOS.autoload) call();
 document.getElementById('pageSize').onchange = (e) => { size = Number(e.target.value); page = 0; call(); };
 document.querySelector('.btn-next').onclick = () => { if (page + 1 < totalPages) { page++; call(); } };
 document.querySelector('.btn-prev').onclick = () => { if (page > 0) { page--; call(); } };

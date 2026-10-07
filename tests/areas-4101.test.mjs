@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {provinceCodesByName,wardNamesForProvince} from '../lib/areas.js';
+import {provinceCodesByName,wardNamesForProvince} from '../GiaoSuCuiBap/lib/areas.js';
 const provinces=[
  {name:'Tỉnh Lâm Đồng',code:'68',fold:'tinh lam dong'},
  {name:'Tỉnh Lâm Đồng',code:'703',fold:'tinh lam dong'},

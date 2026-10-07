@@ -3,21 +3,28 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
 
-const content=fs.readFileSync(new URL('../content.js',import.meta.url),'utf8');
+const content=fs.readFileSync(new URL('../GiaoSuCuiBap/content.js',import.meta.url),'utf8');
 const start=content.indexOf('  async function kqRunHarvest(){');
 const end=content.indexOf('  function kqFinish(',start);
 assert.ok(start>0&&end>start);
+// Hàm thuần xác định lỗi THOÁNG QUA — nạp thật từ content.js, không chép lại.
+const tStart=content.indexOf('  function kqTransientFailure(page){'),tEnd=content.indexOf('  async function kqReReadPage(',tStart);
+assert.ok(tStart>0&&tEnd>tStart,'không tìm thấy kqTransientFailure');
+const transientSrc=content.slice(tStart,tEnd);
 const records=(page,n=2)=>Array.from({length:n},(_,i)=>({notifyNo:`IB260000${page}${i}`,bidName:`Gói ${page}-${i}`}));
 const page=(i,{totalPages=3,totalElements=6,rows=records(i)}={})=>({ok:true,data:{page:{content:rows,totalPages,totalElements}}});
-async function harvest(pages,{maxPages=0,failDelivery=false,failFinal=false,cancel=false,queryIndex=0}={}){
- const sent=[],queue=structuredClone(pages);let terminal;
+async function harvest(pages,{maxPages=0,failDelivery=false,failFinal=false,cancel=false,queryIndex=0,recovered=[]}={}){
+ const sent=[],queue=structuredClone(pages),reread=structuredClone(recovered);let terminal,rereads=0;
  const context=vm.createContext({kqPlan:{id:'collector-test',queryIndex,mode:'tbmt',label:'fixture',maxPages},kqCancelled:false,KQ_PAGE_PAUSE:0,
   kqSendPlanToHook:async()=>true,kqReport:()=>{},kqTriggerFirstPage:async()=>queue.shift(),
   kqGoNextPage:async()=>queue.shift(),setTimeout:fn=>{if(cancel)context.kqCancelled=true;fn();},
   kqSend:async(type,payload)=>{sent.push({type,payload:structuredClone(payload)});return {ok:payload.done?!failFinal:!failDelivery};},
+  // Đọc lại trang lỗi thoáng qua: trả trang trong `recovered` nếu có, nếu
+  // không thì lỗi vẫn còn nguyên (mạng hỏng hẳn).
+  kqRecoverTransient:async(p)=>{rereads++;return reread.length?reread.shift():p;},
   kqFinish:(ok,message)=>{terminal={ok,message};}});
- await vm.runInContext(content.slice(start,end)+'\nkqRunHarvest()',context);
- return {terminal,sent,final:sent.findLast(p=>p.payload.done)?.payload,rows:sent.filter(p=>!p.payload.done).flatMap(p=>p.payload.records),remaining:queue.length};
+ await vm.runInContext(transientSrc+content.slice(start,end)+'\nkqRunHarvest()',context);
+ return {terminal,sent,rereads,final:sent.findLast(p=>p.payload.done)?.payload,rows:sent.filter(p=>!p.payload.done).flatMap(p=>p.payload.records),remaining:queue.length};
 }
 
 test('collector verifies all three real pages and six delivered records',async()=>{
@@ -32,6 +39,21 @@ for(const [name,bad] of [
  const r=await harvest([page(0),bad,page(2)]);
  assert.equal(r.terminal.ok,false);assert.equal(r.final.partial,true);assert.equal(r.final.pageIndex,1);
  assert.equal(r.rows.length,2);assert.equal(r.remaining,1);
+});
+for(const [name,bad] of [['network failure',{ok:false,status:0}],['timeout',null],['e-GP 503',{ok:false,status:503}]])
+test(`a ${name} on a middle page is RE-READ, and a successful re-read completes the run`,async()=>{
+ /* Một cú chập mạng không được làm hỏng cả lượt. Chạy trên máy chủ giả lập với
+    25% kết nối bị cắt: trước khi có bước đọc lại, 1/8 lượt dừng ở "chưa đầy đủ"
+    vì đúng một trang giữa bị rớt. */
+ const r=await harvest([page(0),bad,page(2)],{recovered:[page(1)]});
+ assert.equal(r.rereads,1,'không đọc lại trang lỗi');
+ assert.equal(r.terminal.ok,true);assert.equal(r.final.partial,false);assert.equal(r.final.pageIndex,3);assert.equal(r.rows.length,6);
+});
+test('schema problems and 4xx are NOT re-read — re-reading cannot fix them',async()=>{
+ for(const bad of [{ok:false,status:403},{ok:false,status:0,schemaIssue:true},{ok:false,status:0,cancelled:true}]){
+  const r=await harvest([page(0),bad,page(2)],{recovered:[page(1)]});
+  assert.equal(r.rereads,0,JSON.stringify(bad));assert.equal(r.final.partial,true);
+ }
 });
 test('explicit zero results is complete, not a schema failure',async()=>{
  for(const totalPages of [0,1]){
@@ -73,7 +95,7 @@ test('user cancellation preserves the accepted first page',async()=>{
  assert.equal(r.final.cancelled,true);assert.equal(r.final.pageIndex,1);assert.equal(r.rows.length,2);
 });
 
-const hook=fs.readFileSync(new URL('../page-hook.js',import.meta.url),'utf8');
+const hook=fs.readFileSync(new URL('../GiaoSuCuiBap/page-hook.js',import.meta.url),'utf8');
 function hookHarness({rejectFetch=false,invalidJson=false,waitFetch=null}={}){
  const messages=[],listeners=[];
  class XHR{
@@ -164,14 +186,21 @@ test('hook reports the page number actually requested by the native website',asy
 });
 
 test('new query clicks visible native page 1 after a prior query ended on a later page',async()=>{
- const a=content.indexOf('  function kqTriggerFirstPage(){'),b=content.indexOf('  /**',a);
+ /* 4.16.x: kqTriggerFirstPage nay bắt tay có xác nhận (xem
+    tests/khoi-dong-trang-dau-416x.test.mjs). Ý định gốc của bài này giữ nguyên:
+    bấm đúng nút "1" ĐANG HIỆN khi đang ở trang khác, không bao giờ bấm nút ẩn;
+    đang ở trang 1 rồi thì đổi ô số bản ghi. */
+ const a=content.indexOf('  function kqFirstPageMechanisms(){'),b=content.indexOf('\n  /**',content.indexOf('  async function kqTriggerFirstPage(){',a));
+ assert.ok(a>0&&b>a);
  let firstClicks=0,selectChanges=0;const response={ok:true,sourcePageIndex:0};
  const hidden={offsetParent:null,textContent:'1',classList:{contains:()=>false},click:()=>assert.fail('hidden duplicate pager')};
  const first={offsetParent:{},textContent:'1',classList:{contains:()=>false},click:()=>firstClicks++};
  const select={value:'50',options:[{value:'10'},{value:'50'}],dispatchEvent:()=>selectChanges++};
- const context={document:{querySelectorAll:()=>[hidden,first]},clean:s=>s.trim(),kqAwaitPage:()=>Promise.resolve(response),
-  kqPageSizeSelect:()=>select,Event:class{}};
- const trigger=vm.runInNewContext(content.slice(a,b)+'\nkqTriggerFirstPage',context);
+ const context=vm.createContext({document:{querySelectorAll:()=>[hidden,first]},clean:s=>s.trim(),
+  kqAwaitPage:()=>Promise.resolve(response),kqAwaitSent:()=>Promise.resolve(true),kqPageWaiter:null,kqSentWaiter:null,
+  kqPageSizeSelect:()=>select,kqClickSearch:()=>false,Event:class{},kqPlan:{id:'p'},kqCancelled:false,kqRejected:null,
+  egpInFlight:0,kqWaitEgpIdle:async()=>true,kqReport:()=>{},KQ_TRIGGER_ATTEMPTS:4,setTimeout,Date});
+ const trigger=vm.runInContext(content.slice(a,b)+'\nkqTriggerFirstPage',context);
  assert.equal(await trigger(),response);assert.equal(firstClicks,1);assert.equal(selectChanges,0);
  first.classList.contains=()=>true;
  assert.equal(await trigger(),response);assert.equal(firstClicks,1);assert.equal(selectChanges,1);

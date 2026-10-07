@@ -250,3 +250,35 @@ không báo đạt cho phần chưa làm. Phần bất biến mã địa bàn th
 
 Khi danh sách đủ 20 mã, xoá bài `'danh sách mã chưa đủ 20'` trong
 `tests/canary-live.test.js` và nâng ngưỡng ở bài trên nó lên 20.
+
+## 11. Chế độ "e-GP khó tính" — bắt lỗi chập chờn
+
+Trang giả lập mặc định quá "ngoan": đổi ô là gửi yêu cầu ngay, không bao giờ bận.
+e-GP thật thì không. Lỗi "e-GP chưa trả dữ liệu cho lượt tra cứu" của 4.16.0 chỉ
+lộ ra khi bật các chế độ dưới đây:
+
+```bash
+MOCK_PORT=9443 MOCK_CHAOS="autoload,early,busy,nativeslow=3500,slow=300,flaky=0.2,seed=11" \
+  node tools/test/mock-egp.mjs > /tmp/mock.log &
+MOCK_LOG=/tmp/mock.log xvfb-run -a node tools/test/bidopen-scan.mjs GiaoSuCuiBap 12
+MOCK_LOG=/tmp/mock.log xvfb-run -a node tools/test/tbmt-search.mjs  GiaoSuCuiBap 8
+MOCK_LOG=/tmp/mock.log xvfb-run -a node tools/test/plan-lookup.mjs  GiaoSuCuiBap 7
+```
+
+| Chế độ | Mô phỏng |
+|---|---|
+| `autoload` | trang **tự tải danh sách mặc định** khi mở, như e-GP thật |
+| `early` | khung kết quả hiện **trước** khi dữ liệu về |
+| `busy` | đang có yêu cầu chưa xong thì **bỏ qua** thao tác đổi trang / số bản ghi |
+| `nativeslow=N` | danh sách mặc định chậm N ms mỗi lần mở trang |
+| `slow=N`, `firstslow=N` | mọi phản hồi / riêng yêu cầu đầu chậm N ms |
+| `flaky=p`, `seed=k` | cắt ngang kết nối với xác suất p, lặp lại được theo hạt giống |
+
+**Mỗi lượt kịch bản đóng tab e-GP cũ và đổi tỉnh + loại gói**, để lượt nào cũng đi
+qua đúng cuộc đua và không trúng bộ nhớ đệm 2 phút. Có `MOCK_LOG` thì kịch bản tự
+đếm trong nhật ký máy chủ xem bao nhiêu lượt thật sự hỏi e-GP — ít hơn số lượt đạt
+là có lượt trúng đệm, kết quả đạt đó không chứng minh được gì. (Lần chạy đầu tiên
+"đạt 10/10" trong khi 9 lượt trúng đệm; bước tự kiểm này sinh ra từ đó.)
+
+`pkill -f mock-egp.mjs` sẽ giết luôn chính lệnh shell đang chạy nó (dòng lệnh chứa
+chữ đó). Dùng mẫu neo đầu dòng: `pkill -f "^node tools/test/mock-egp"`.

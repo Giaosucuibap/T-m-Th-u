@@ -158,7 +158,21 @@ function datasetFor(env) {
   return values.includes('es-plan-project-p') ? PLANS : ALL;
 }
 
-const PAGE_HTML = fs.readFileSync(path.join(HERE, 'mock-page.html'), 'utf8');
+/* MOCK_CHAOS="early,busy,slow=1500,flaky=0.3,firstslow=3000" — xem mock-page.html.
+ *   slow=N      : mọi phản hồi tìm kiếm chậm N ms.
+ *   firstslow=N : RIÊNG yêu cầu tìm kiếm đầu tiên chậm N ms (trang vừa mở, e-GP
+ *                 còn đang khởi động).
+ *   nativeslow=N: danh sách mặc định (không bộ lọc) chậm N ms MỖI LẦN mở trang.
+ *   autoload    : trang TỰ TẢI danh sách mặc định khi mở, như e-GP thật.
+ *   flaky=p     : cắt ngang kết nối với xác suất p — như mạng chập chờn.
+ *   seed=k      : hạt giống cho flaky, để lần chạy lặp lại được. */
+const CHAOS = Object.fromEntries(String(process.env.MOCK_CHAOS || '').split(',').filter(Boolean)
+  .map((part) => { const [k, v] = part.split('='); return [k.trim(), v === undefined ? true : Number(v)]; }));
+let chaosSeed = Number(CHAOS.seed || 1), searchCount = 0;
+const chaosRandom = () => { chaosSeed = (chaosSeed * 1103515245 + 12345) % 2147483648; return chaosSeed / 2147483648; };
+if (Object.keys(CHAOS).length) console.log('[mock] CHẾ ĐỘ KHÓ TÍNH:', JSON.stringify(CHAOS));
+const PAGE_HTML = fs.readFileSync(path.join(HERE, 'mock-page.html'), 'utf8')
+  .replace('<script>', `<script>window.__CHAOS=${JSON.stringify({ early: Boolean(CHAOS.early), busy: Boolean(CHAOS.busy), autoload: Boolean(CHAOS.autoload) })};</script>\n<script>`);
 
 const server = https.createServer(
   {
@@ -179,8 +193,20 @@ const server = https.createServer(
         const start = page * size;
         const data = datasetFor(env);
         const content = data.slice(start, start + size);
+        searchCount += 1;
+        if (CHAOS.flaky && chaosRandom() < CHAOS.flaky) {
+          console.log(`[mock] SEARCH page=${page} -> CẮT KẾT NỐI (flaky)`);
+          req.socket.destroy();
+          return;
+        }
+        // Yêu cầu KHÔNG mang bộ lọc nào là danh sách mặc định trang tự tải khi mở.
+        const macDinh = !(env.query?.[0]?.filters || []).length;
+        const delay = (searchCount === 1 && CHAOS.firstslow ? CHAOS.firstslow : 0)
+          + (macDinh && CHAOS.nativeslow ? CHAOS.nativeslow : 0) + (CHAOS.slow || 0);
         console.log(`[mock] SEARCH page=${page} size=${size} -> ${content.length}/${data.length} bản ghi` +
+          (delay ? ` (chậm ${delay} ms)` : '') +
           (env.query ? ` | query.filters=${(env.query[0]?.filters || []).map((f) => f.fieldName).join(',')}` : ''));
+        setTimeout(() => {
         res.writeHead(200, { 'content-type': 'application/json;charset=UTF-8' });
         res.end(JSON.stringify({
           page: {
@@ -191,6 +217,7 @@ const server = https.createServer(
             pageSize: size
           }
         }));
+        }, delay);
       });
       return;
     }

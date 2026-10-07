@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
-const source=fs.readFileSync(new URL('../content.js',import.meta.url),'utf8');
+const source=fs.readFileSync(new URL('../GiaoSuCuiBap/content.js',import.meta.url),'utf8');
 function sourceFunction(name){
   const start=source.search(new RegExp(`(?:async )?function ${name}\\(`));
   assert.ok(start>=0,name);const tail=source.slice(start),end=tail.search(/\r?\n  }\r?\n/);

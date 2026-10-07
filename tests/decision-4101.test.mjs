@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {dataConfidence,riskSignals} from '../lib/decision.js';
+import {dataConfidence,riskSignals} from '../GiaoSuCuiBap/lib/decision.js';
 
 test('empty or literal null fields never earn completeness points',()=>{
  assert.equal(dataConfidence({}).value,0);

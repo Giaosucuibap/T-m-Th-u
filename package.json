@@ -1,14 +1,12 @@
 {
-  "name": "giao-su-cui-bap-extension",
-  "version": "4.12.0",
+  "name": "giaosu-cuibap",
+  "version": "4.16.1",
   "private": true,
   "type": "module",
-  "description": "Automated regression tests for the Giáo Sư Cùi Bắp Chrome extension",
   "scripts": {
-    "test": "node --test --test-concurrency=1 tests/*.test.js tests/*.test.mjs test/*.test.mjs",
-    "test:tz": "for tz in UTC Asia/Ho_Chi_Minh America/New_York Pacific/Auckland; do echo \"--- TZ=$tz ---\"; TZ=$tz npm test --silent || exit 1; done"
-  },
-  "engines": {
-    "node": ">=20"
+    "test": "node --test tests/*.test.mjs",
+    "test:tz": "node tests/run-timezones.mjs",
+    "build:check": "python tools/check-live-evidence.py",
+    "build": "npm test && npm run build:check"
   }
 }

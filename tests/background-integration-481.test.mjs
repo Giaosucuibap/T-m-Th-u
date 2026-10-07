@@ -3,9 +3,9 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
 import { webcrypto } from 'node:crypto';
-import { DEFAULT_SETTINGS, normalizeCandidate } from '../lib/core.js';
+import { DEFAULT_SETTINGS, normalizeCandidate } from '../GiaoSuCuiBap/lib/core.js';
 
-const extension = new URL('../', import.meta.url);
+const extension = new URL('../GiaoSuCuiBap/', import.meta.url);
 const source = fs.readFileSync(new URL('background.js', extension), 'utf8');
 const manifest = JSON.parse(fs.readFileSync(new URL('manifest.json', extension), 'utf8'));
 const bindings = {};
@@ -193,7 +193,9 @@ test('4.8.1 plan runtime applies saved local terms and per-package prices throug
   assert.equal(job.criteria.maxPrice,4e8);
   assert.deepEqual(h.calls.queries[0].payload.query.filters.find(f=>f.fieldName==='locations.provCode').fieldValues,['68','66']);
   const record = {planNo:'PL2600000001',locations:[{provName:'Tỉnh Lâm Đồng'}],investField:['XL','TV'],
-    bidName:['Thi công kênh mương','Tư vấn thiết kế kênh mương','Tư vấn giám sát kênh mương','Phần mềm kênh mương'],bidPrice:[8e9,2e8,3e8,2e8]};
+    bidName:['Thi công kênh mương','Tư vấn thiết kế kênh mương','Tư vấn giám sát kênh mương','Phần mềm kênh mương'],bidNamePlanNew:[
+      {name:'Thi công kênh mương',bidPrice:8e9,investField:'XL'},{name:'Tư vấn thiết kế kênh mương',bidPrice:2e8,investField:'TV'},
+      {name:'Tư vấn giám sát kênh mương',bidPrice:3e8,investField:'TV'},{name:'Phần mềm kênh mương',bidPrice:2e8,investField:'HH'}],bidPrice:[8e9,2e8,3e8,2e8]};
   const page = await h.send('KQLCNT_RESULTS',{planId:job.id,mode:'khlcnt',pageIndex:0,totalElements:1,totalPages:1,records:[record]},'',true);
   assert.equal(page.ok,true,page.message);
   const done = await h.send('KQLCNT_RESULTS',{planId:job.id,mode:'khlcnt',pageIndex:1,totalElements:1,totalPages:1,records:[],done:true},'',true);

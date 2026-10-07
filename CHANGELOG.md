@@ -2,6 +2,57 @@
 
 Tài liệu này ghi lại các thay đổi quan trọng của Giáo Sư Cùi Bắp. Cấu trúc tham khảo [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) và phiên bản tuân theo cách đánh số ngữ nghĩa ở mức sản phẩm.
 
+## [4.16.1] — 2026-10-07
+
+Nhận bản **4.16.0 của tác giả** làm nền (các bản 4.13–4.16 do tác giả phát hành
+riêng; xem `BAO-CAO-SUA-LOI-4.16.0.md` và các tệp `HUONG-DAN-*`). Kho mã chuyển
+sang đúng bố cục của tác giả: tiện ích nằm trong `GiaoSuCuiBap/`, kiểm thử và
+công cụ ở ngoài.
+
+### Sửa lỗi chập chờn "e-GP chưa trả dữ liệu cho lượt tra cứu"
+
+Người dùng gặp ở màn hình *Gói đang chờ kết quả*, lúc được lúc mất. Nguyên nhân:
+trang tra cứu e-GP tự tải danh sách mặc định khi mở; tiện ích đổi ô số bản ghi
+đúng lúc trang còn bận, giao diện e-GP bỏ qua, không yêu cầu nào được gửi, tiện ích
+chờ 25 giây rồi đổ lỗi cho e-GP.
+
+Tái hiện trên máy chủ giả lập có chế độ "e-GP khó tính" (`MOCK_CHAOS`): bản gốc
+0/6 (Gói đang chờ kết quả) và 0/4 (Tìm gói thầu), lượt nào cũng đúng câu lỗi.
+Bản sửa 10/10, 8/8, 7/7 (Kế hoạch), và 24/24 khi thêm 20% kết nối bị cắt. Mọi
+lượt đạt đều được tự kiểm là thật sự hỏi e-GP, không trúng bộ nhớ đệm.
+
+- `page-hook.js` báo `EGP_SEARCH_ACTIVITY` (số yêu cầu e-GP đang bay, gồm cả yêu
+  cầu e-GP tự phát), `KQLCNT_REQUEST_SENT` (yêu cầu mang tiêu chí đã rời trình
+  duyệt) và `KQLCNT_REQUEST_REJECTED` (e-GP gửi yêu cầu dạng lạ, không gắn được
+  tiêu chí).
+- `content.js`: khởi động trang đầu và sang trang sau đều **bắt tay có xác nhận**
+  — chờ trang rảnh, thao tác, thấy yêu cầu đi rồi mới tính hạn chờ phản hồi (45
+  giây); bị bỏ qua thì làm lại (tối đa 4 lần, luân phiên ba cách).
+- Rớt kết nối / hết hạn / 5xx ở một trang: tự đọc lại tối đa 3 lần, đi thẳng tới
+  đúng trang đích theo trang e-GP đang mở (cách cũ "lùi rồi tiến" lệch trang khi
+  chính bước lùi cũng rớt).
+- Phản hồi XHR không còn bị khối `catch` rỗng nuốt khi đọc nội dung ném lỗi.
+- Mỗi kiểu thất bại có câu báo riêng; câu lỗi không còn hiện hai lần ở màn hình
+  Gói đang chờ kết quả.
+
+### Khác
+
+- Chốt hoà theo mã gói khi sắp xếp: kết quả lặp lại được bất kể thứ tự dữ liệu về.
+- Bỏ mặc định phiên bản ghim cứng `'4.15.0'` trong `lib/live-canary.js`.
+- Bài kiểm phiên bản đổi từ ghim `'4.16.0'` sang bất biến manifest = version_name
+  = package.json.
+- 10 bài cầu nối Windows bỏ qua kèm lý do trên hệ điều hành khác thay vì báo đỏ giả.
+
+### Kiểm thử
+
+666 bài: 656 đạt, 0 đỏ, 10 bỏ qua (cần Windows). 108 ca múi giờ đạt. Chromium: 23
+trang nạp 0 lỗi; kịch bản mới `tools/test/bidopen-scan.mjs`, `tbmt-search.mjs`,
+`plan-lookup.mjs`.
+
+**Chưa chạy trên e-GP thật.** Cổng `tools/check-live-evidence.py` của tác giả chặn
+bản này ("Unit source mismatch") cho tới khi chạy lại bộ kiểm trực tiếp — đúng như
+thiết kế. Không đóng gói `evidence/` của 4.16.0.
+
 ## [4.12.0] — 2026-09-24
 
 Nhận bản **4.11.0 của tác giả** làm nền (bản này khác hẳn bản 4.11.0 của nhánh:

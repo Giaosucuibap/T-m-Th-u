@@ -1,12 +1,15 @@
-node_modules/
+node_modules
 dist/
-tools/test/certs/
 *.zip
-
-# Do phép thử tự sinh khi chạy (tests/bbmt-public-dom-replay.test.mjs), không
-# phải dữ liệu nguồn — commit vào thì mỗi lần chạy lại đẻ ra một diff giả.
 test-results/
+tools/test/certs/
 
-# Kết quả canary sống: gắn với MỘT máy, MỘT thời điểm. Commit vào thì người
-# khác kéo về sẽ tưởng đã đối chứng với e-GP, trong khi chưa hề chạy.
+# Bằng chứng phát hành (HAR, ảnh chụp, workbook) — sinh lại mỗi bản, nặng ~13 MB,
+# và chứa dữ liệu e-GP thật dù đã che. Giữ trong gói giao, không đưa vào git.
+evidence/
+
+# Tệp thực thi biên dịch sẵn của cầu nối E-HSMT. Mã nguồn NativeHost.cs nằm
+# ngay cạnh; một tệp .exe trong git thì người duyệt không đọc được nó làm gì.
+native-agent/*.exe
+
 canary-result.json

@@ -3,9 +3,10 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
 import { webcrypto } from 'node:crypto';
-import { DEFAULT_SETTINGS, normalizeCandidate } from '../lib/core.js';
+import { DEFAULT_SETTINGS, normalizeCandidate } from '../GiaoSuCuiBap/lib/core.js';
+import { createResultView } from '../GiaoSuCuiBap/lib/result-view.js';
 
-const extension = new URL('../', import.meta.url);
+const extension = new URL('../GiaoSuCuiBap/', import.meta.url);
 const source = fs.readFileSync(new URL('background.js', extension), 'utf8');
 const manifest = JSON.parse(fs.readFileSync(new URL('manifest.json', extension), 'utf8'));
 const bindings = {};
@@ -90,6 +91,79 @@ const catalog={fetchedAt:new Date().toISOString(),provinces:[
  {code:'38',name:'Tỉnh Thanh Hóa',fold:'tinh thanh hoa'},
  {code:'75',name:'Tỉnh Đồng Nai',fold:'tinh dong nai'}],wardsByProvince:{}};
 const permissive=settings({minPrice:0,maxPrice:0,alertMinScore:1,telegramMinScore:1,requiredKeywords:[],requireConstruction:false,provinces:[],minScore:0});
+
+test('411 full background exports exactly all filtered rows across three UI pages and rejects hidden keys or stale revisions',async()=>{
+ const h=await harness({settings:permissive});
+ await h.send('TBMT_SEARCH',{category:'XL'});const id=h.state.activeRun.id;
+ const records=Array.from({length:70},(_,i)=>({notifyNo:`IB269999${String(i).padStart(4,'0')}`,notifyVersion:'00',bidName:`Cầu công khai ${i}`,bidPrice:1000+i,investField:i<65?'XL':'TV',bidCloseDate:'2099-01-01T00:00:00Z'}));
+ await page(h,id,'tbmt',records,0,70,1);await page(h,id,'tbmt',[],1,70,1,true);await done(h,id);
+ const response=await h.send('GET_SEARCH_STATE',{runId:id},'search.html');
+ const view={criteriaState:'MATCH',text:'cầu',sortBy:'deadline'};
+ const visible=createResultView(response.tenders,response.selectedRun,view).rows;
+ assert.equal(visible.length,65);assert.equal(createResultView(response.tenders,response.selectedRun,view).summary.total,65);
+ const exported=await h.send('EXPORT_CSV',{runId:id,view,revision:response.revision,keys:visible.map(t=>t.key)});
+ assert.equal(exported.ok,true,exported.message);
+ const xml=Buffer.from(h.calls.downloads.at(-1).url.split(',')[1],'base64').toString('utf8');
+ const worksheets=[...xml.matchAll(/<worksheet\b[\s\S]*?<\/worksheet>/g)].map(match=>match[0]);
+ assert.equal(worksheets.length,4,'Compact, full detail, reconciliation and export metadata worksheets');
+ assert.match(xml,/name="Xem nhanh"/);assert.match(xml,/name="Gói thầu"/);
+ assert.match(xml,/name="Đối soát"/);assert.match(xml,/name="Thông tin xuất"/);
+ assert.match(worksheets[2],/e-GP công bố/);assert.match(worksheets[3],/Độ đầy đủ/);
+ for(const sheet of worksheets.slice(0,2)){
+  assert.equal((sheet.match(/<row\b/g)||[]).length,66);
+  for(const row of visible)assert.ok(sheet.includes(row.notifyNo),row.notifyNo);
+  for(const row of records.slice(65))assert.equal(sheet.includes(row.notifyNo),false,row.notifyNo);
+ }
+ assert.equal((await h.send('EXPORT_CSV',{runId:id,view,keys:visible.slice(0,30).map(t=>t.key)})).ok,false);
+ const hidden=h.state.tenders.find(t=>t.notifyNo===records[69].notifyNo).key;
+ assert.equal((await h.send('EXPORT_CSV',{runId:id,view,keys:[...visible.slice(1).map(t=>t.key),hidden]})).ok,false);
+ await h.send('SET_WATCH',{key:visible[0].key,value:true});
+ assert.equal((await h.send('EXPORT_CSV',{runId:id,view,revision:response.revision,keys:visible.map(t=>t.key)})).ok,false);
+ assert.equal(h.calls.downloads.length,1);
+});
+
+test('411 full background cached capped query retains partial coverage and never starts another native request',async()=>{
+ const h=await harness({settings:permissive});let nativeStarts=0;
+ h.context.chrome.tabs.sendMessage=async(id,message)=>{if(message.type==='KQLCNT_START')nativeStarts++;return {ok:true};};
+ vm.runInContext('dispatchLookupToTab = async (...args) => queryRuntime.dispatch(...args);',h.context);
+ await h.send('TBMT_SEARCH',{category:'XL'});const first=h.state.activeRun.id;
+ await page(h,first,'tbmt',[notice('91')],0,100,2);
+ await page(h,first,'tbmt',[],1,100,2,true,{capped:true,partial:true});
+ await h.send('KQLCNT_DONE',{planId:first,mode:'tbmt',queryIndex:0,ok:true,partial:true},'',true);
+ assert.equal(h.state.runs[0].status,'PARTIAL');
+ const second=await h.send('TBMT_SEARCH',{category:'XL'});assert.equal(second.ok,true,second.message);
+ const run=h.state.runs.find(r=>r.id===second.runId);assert.equal(run.status,'PARTIAL');assert.equal(run.coverage.complete,false);
+ assert.equal(run.coverage.totalPages,2);assert.equal(run.coverage.pagesRead,1);assert.equal(run.queryCache.hit,true);
+ assert.equal(nativeStarts,1);assert.equal(h.state.activeRun,null);
+});
+
+test('411 full background structural RED stops current work and blocks every regular scan with stored results retained',async()=>{
+ const h=await harness({settings:permissive});await h.send('TBMT_SEARCH',{category:'XL'});const id=h.state.activeRun.id;
+ await page(h,id,'tbmt',[notice('92')],0,100,2);
+ await vm.runInContext("save({liveCanary:{status:'RED',lastStructuralStatus:'RED'}})",h.context);
+ await new Promise(resolve=>setImmediate(resolve));await h.context.__flush();
+ assert.equal(h.state.activeRun,null);assert.equal(h.state.runs.find(r=>r.id===id).status,'CANCELLED');assert.equal(h.state.tenders.length,1);
+ const count=h.calls.queries.length;
+ for(const type of ['TBMT_SEARCH','PLAN_LOOKUP','WINNER_LOOKUP','BID_OPEN_SCAN','AREA_SCAN','INVESTOR_SCAN','START_SCAN'])assert.equal((await h.send(type,{category:'XL',query:'test',ward:'A'})).ok,false,type);
+ assert.equal(h.calls.queries.length,count);
+ const late=await h.send('KQLCNT_RESULTS',{planId:id,mode:'tbmt',queryIndex:0,pageIndex:1,totalElements:100,totalPages:2,records:[notice('93')]},'',true);
+ assert.equal(late.ok,false);assert.equal(h.state.tenders.length,1);
+});
+
+test('411 canary bootstrap ignores passive captures and observed templates before the private probe is bound',async()=>{
+ const retained=tender();const h=await harness({settings:permissive,tenders:[retained],lastObservedTemplate:{label:'Prior verified template'}});
+ let release;h.context.fetch=()=>new Promise((resolve,reject)=>{release=()=>reject(new Error('Fixture ends bootstrap without any live query'));});
+ assert.equal((await h.send('CANARY_RUN')).started,true);
+ while(!release)await new Promise(resolve=>setImmediate(resolve));
+ assert.equal(vm.runInContext('liveCanaryRuntime.isRunning()',h.context),true);
+ assert.equal(vm.runInContext('queryRuntime.isProbeTab(77)',h.context),false);
+ const before=h.state;
+ const captured=await h.send('INGEST_CAPTURE',{records:[notice('99')],meta:{sourcePageUrl:'https://muasamcong.mpi.gov.vn/web/guest/contractor-selection',captureType:'network',status:200}},'',true);
+ const observed=await h.send('OBSERVED_TEMPLATE',{request:{url:'https://muasamcong.mpi.gov.vn/o/egp-portal-contractor-selection-v2/services/smart/search',method:'POST',body:'{"queries":[]}'},sourcePageUrl:'https://muasamcong.mpi.gov.vn/web/guest/contractor-selection',candidateCount:1},'',true);
+ assert.deepEqual(captured,{ok:true,ignored:true});assert.deepEqual(observed,{ok:true,ignored:true});
+ assert.deepEqual(h.state.tenders,before.tenders);assert.deepEqual(h.state.lastObservedTemplate,before.lastObservedTemplate);assert.equal(h.calls.notifications.length,0);assert.equal(h.calls.downloads.length,0);assert.equal(h.calls.queries.length,0);
+ release();while(vm.runInContext('liveCanaryRuntime.isRunning()',h.context))await new Promise(resolve=>setImmediate(resolve));await h.context.__flush();
+});
 const plan=(id,extra={})=>({planNo:`PL26000000${id}`,decisionDate:'2026-09-14T05:00:00Z',locations:[{provName:'Tỉnh Lâm Đồng',provCode:'68'}],investField:['XL'],bidName:['Thi công kênh mương'],bidPrice:[3e9],...extra});
 const notice=(id,extra={})=>({notifyNo:`IB26000000${id}`,notifyVersion:'00',bidName:'Thi công kênh mương',bidPrice:3e9,investField:'XL',locations:[{provName:'Tỉnh Lâm Đồng',provCode:'68'}],bidCloseDate:'2099-01-01T00:00:00Z',...extra});
 async function page(h,id,mode,records,index,total,totalPages,done=false,extra={}){
@@ -114,7 +188,9 @@ test('4101 plan gates enforce exact resolved provinces and per-child terms/price
  const h=await harness({settings:permissive,provinceCatalog:catalog});
  assert.equal((await h.send('PLAN_LOOKUP',{province:'Lâm Đồng, Đắk Lắk',mustKeywords:'"kênh mương"',excludeKeywords:'"phần mềm"',minPrice:1e8,maxPrice:4e8})).ok,true);
  const id=h.state.planLookup.id;
- await page(h,id,'khlcnt',[plan('01',{investField:['XL','TV'],bidName:['Thi công kênh mương','Tư vấn thiết kế kênh mương','Tư vấn giám sát kênh mương','Phần mềm kênh mương'],bidPrice:[8e9,2e8,3e8,2e8]})],0,1,1);
+ await page(h,id,'khlcnt',[plan('01',{investField:['XL','TV'],bidName:['Thi công kênh mương','Tư vấn thiết kế kênh mương','Tư vấn giám sát kênh mương','Phần mềm kênh mương'],bidNamePlanNew:[
+  {name:'Thi công kênh mương',bidPrice:8e9,investField:'XL'},{name:'Tư vấn thiết kế kênh mương',bidPrice:2e8,investField:'TV'},
+  {name:'Tư vấn giám sát kênh mương',bidPrice:3e8,investField:'TV'},{name:'Phần mềm kênh mương',bidPrice:2e8,investField:'HH'}],bidPrice:[8e9,2e8,3e8,2e8]})],0,1,1);
  await page(h,id,'khlcnt',[],1,1,1,true);
  assert.equal(h.state.planLookup.status,'SUCCESS');
  assert.equal(h.state.planLookup.plans[0].packages.length,2);
@@ -150,7 +226,8 @@ test('4101 plan pages are counted uniquely and missing dates are retained withou
 test('4101 mixed child data states have disjoint plan coverage and separate retained missing-price packages',async()=>{
  const h=await harness({settings:permissive,areas:catalog});
  await h.send('PLAN_LOOKUP',{province:'Lâm Đồng',maxPrice:4e9});const id=h.state.planLookup.id;
- await page(h,id,'khlcnt',[plan('01',{bidName:['Thi công kênh A','Thi công kênh B'],bidPrice:[3e9,null]})],0,1,1);
+ await page(h,id,'khlcnt',[plan('01',{bidName:['Thi công kênh A','Thi công kênh B'],bidNamePlanNew:[
+  {name:'Thi công kênh A',bidPrice:3e9,investField:'XL'},{name:'Thi công kênh B',bidPrice:null,investField:'XL'}],bidPrice:[3e9,null]})],0,1,1);
  await page(h,id,'khlcnt',[],1,1,1,true);
  const lookup=h.state.planLookup;
  assert.equal(lookup.coverage.match,1);assert.equal(lookup.coverage.insufficient,0);
@@ -271,7 +348,7 @@ test('4101 package comparison exports respect the visible pending/followed check
  assert.match(contents,/Có theo dõi/);assert.match(contents,/Đối chiếu cùng gói/);assert.doesNotMatch(contents,/Không theo dõi/);
  const ph=await harness({settings:permissive});await ph.send('PLAN_LOOKUP',{category:'XL'});const id=ph.state.planLookup.id;
  await page(ph,id,'khlcnt',[plan('71',{haveBidNotNotify:1}),plan('72',{haveBidNotNotify:0})],0,2,1);await page(ph,id,'khlcnt',[],1,2,1,true);
- assert.equal((await ph.send('EXPORT_PLANS_CSV',{onlyUnannounced:true})).ok,true);
+ const rr=await ph.send('EXPORT_PLANS_CSV',{onlyUnannounced:true});assert.equal(rr.ok,true,JSON.stringify({rr,lookup:ph.state.planLookup}));
  const plansXml=Buffer.from(ph.calls.downloads[0].url.split(',')[1],'base64').toString('utf8');
  assert.match(plansXml,/PL2600000071/);assert.doesNotMatch(plansXml,/PL2600000072/);
 });

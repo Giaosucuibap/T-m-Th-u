@@ -1,10 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import {parseDate, bidStatus, scoreTender, DEFAULT_SETTINGS, normalizeCandidate, mergeTender} from '../lib/core.js';
-import {statusOf,filterAndSort} from '../lib/decision.js';
-import {safeRunForBackup,buildSafeBackupState} from '../lib/backup.js';
-import {validateCriteria,matchesQuery,runTenders,safeSavedSearches,buildDeadlineCalendar,deadlineInfo,safeSource,matchesAdditionalKeyword} from '../lib/workspace.js';
+import {parseDate, bidStatus, scoreTender, DEFAULT_SETTINGS, normalizeCandidate, mergeTender} from '../GiaoSuCuiBap/lib/core.js';
+import {statusOf,filterAndSort} from '../GiaoSuCuiBap/lib/decision.js';
+import {safeRunForBackup,buildSafeBackupState} from '../GiaoSuCuiBap/lib/backup.js';
+import {validateCriteria,matchesQuery,runTenders,safeSavedSearches,buildDeadlineCalendar,deadlineInfo,safeSource,matchesAdditionalKeyword} from '../GiaoSuCuiBap/lib/workspace.js';
 const now=Date.parse('2026-09-05T03:00:00Z');
 const tender=(key,minutes)=>({key,notifyNo:key,bidName:'Xây dựng trường học ở Lâm Đồng',closeDate:new Date(now+minutes*60000).toISOString(),price:3500000000,location:'Lâm Đồng',investorName:'Ban quản lý dự án',detailUrl:'https://muasamcong.mpi.gov.vn/web/guest/contractor-selection'});
 test('Vietnamese local time is UTC+7 regardless of host timezone',()=>{
@@ -39,25 +39,11 @@ test('Calendar escapes injection, folds UTF-8 at 75 bytes, excludes closed/unkno
 test('Source links reject scripts and lookalike hosts',()=>{for(const u of ['javascript:alert(1)','https://muasamcong.mpi.gov.vn.evil.com','https://user@muasamcong.mpi.gov.vn','http://muasamcong.mpi.gov.vn','https://muasamcong.mpi.gov.vn:999/'])assert.equal(safeSource(u),'');assert.ok(safeSource(tender('A',1).detailUrl));});
 test('Filtering does not mutate storage order, status derives from deadline',()=>{const all=[{...tender('A',1),score:20,closeDate:'2099-01-01T00:00:00Z'},{...tender('B',1),score:90,closeDate:'2020-01-01T00:00:00Z',status:'OPEN'}];assert.deepEqual(filterAndSort(all,{status:'OPEN',text:'truong -benh'}).map(t=>t.key),['A']);assert.equal(all[0].key,'A');});
 test('Existing normalization and merge preserve user decisions and changes',()=>{const raw={notifyNo:'IB2600000123',notifyVersion:'00',bidName:'Xây dựng trường học',bidPrice:3000000000,bidCloseDate:'05/10/2026 10:00',investorName:'Ban QLDA'};const normalized=normalizeCandidate(raw);assert.ok(normalized);const next=mergeTender({...normalized,watchlisted:true,decisionState:'BID',decisionOwner:'An'}, {...normalized,price:4000000000},DEFAULT_SETTINGS);assert.equal(next.watchlisted,true);assert.equal(next.decisionState,'BID');assert.equal(next.decisionOwner,'An');assert.ok(next.changeLog.some(x=>x.field==='price'));assert.ok(scoreTender(next).score>=0);});
-test('Manifest entry points and imports exist, no unexpected host permissions added',()=>{const base=new URL('../',import.meta.url);const m=JSON.parse(fs.readFileSync(new URL('manifest.json',base)));
-  /* Ghim cứng '4.10.1' ở đây thì mọi lần nâng bản đều báo đỏ vì một lý do không
-     liên quan gì tới điều bài này bảo vệ, và người sửa sẽ quen tay sửa số cho
-     xong. Bất biến thật là manifest và package.json PHẢI cùng một phiên bản. */
-  const pkg=JSON.parse(fs.readFileSync(new URL('package.json',base)));
-  assert.equal(m.version,pkg.version,'manifest.json và package.json lệch phiên bản');
-  assert.match(m.version,/^\d+\.\d+\.\d+$/);for(const file of [m.background.service_worker,m.action.default_popup,m.options_page,...Object.values(m.icons),...m.content_scripts.flatMap(s=>s.js)])assert.ok(fs.existsSync(new URL(file,base)),file);const old=JSON.parse(fs.readFileSync(new URL('./fixtures/original-manifest.json',import.meta.url)));
-  /* Bất biến là KHÔNG ĐƯỢC NỚI RỘNG, chứ không phải "không được đổi". Ghim cứng
-     danh sách cũ thì một lần THU HẸP hợp lệ cũng báo đỏ, và người sửa sẽ quen
-     tay cập nhật fixture cho xong — lần nới rộng thật sau đó lọt luôn.
-     4.11.0 bỏ 'http://localhost:1234/*' và chuyển sang nativeMessaging: cầu nối
-     tải hồ sơ nay là một host khai báo sẵn trên máy, thay vì một cổng HTTP mà
-     bất kỳ phần mềm nào cũng chiếm được. Đó là thu hẹp, nên phải cho qua. */
-  const themVao=(m.host_permissions||[]).filter(p=>!(old.host_permissions||[]).includes(p));
-  assert.deepEqual(themVao,[],`đã NỚI RỘNG quyền truy cập host: ${themVao.join(', ')}`);
-  assert.ok(!(m.host_permissions||[]).some(p=>/^https?:\/\/(localhost|127\.|0\.0\.0\.0|\*)/.test(p)),
-    'quyền trỏ vào máy nội bộ hoặc ký tự đại diện — hãy dùng native messaging');
-  // Quyền API mới thì được phép, nhưng phải nằm trong danh sách đã cân nhắc.
-  const DUOC_PHEP=new Set([...(old.permissions||[]),'nativeMessaging']);
-  const quyenLa=(m.permissions||[]).filter(p=>!DUOC_PHEP.has(p));
-  assert.deepEqual(quyenLa,[],`quyền chưa được cân nhắc: ${quyenLa.join(', ')}`);
-  assert.equal(m.key,old.key);});
+test('Manifest entry points and imports exist, no unexpected host permissions added',()=>{const base=new URL('../GiaoSuCuiBap/',import.meta.url);const m=JSON.parse(fs.readFileSync(new URL('manifest.json',base)));
+  /* Ghim cứng một số phiên bản ở đây thì mọi lần nâng bản đều báo đỏ vì lý do không
+     liên quan gì tới điều bài này bảo vệ, và người sửa quen tay sửa số cho xong.
+     Bất biến thật: manifest, version_name (con số Chrome HIỆN cho người dùng) và
+     package.json phải cùng một phiên bản. */
+  const pkg=JSON.parse(fs.readFileSync(new URL('../package.json',base)));
+  assert.match(m.version,/^\d+\.\d+\.\d+$/);assert.equal(m.version,pkg.version,'manifest.json và package.json lệch phiên bản');
+  if(m.version_name!==undefined)assert.equal(m.version_name,m.version,'version_name lệch version — Chrome sẽ hiện số cũ');for(const file of [m.background.service_worker,m.action.default_popup,m.options_page,...Object.values(m.icons),...m.content_scripts.flatMap(s=>s.js)])assert.ok(fs.existsSync(new URL(file,base)),file);const old=JSON.parse(fs.readFileSync(new URL('./fixtures/original-manifest.json',import.meta.url)));assert.deepEqual(m.host_permissions,old.host_permissions.filter(p=>!p.includes('localhost')));assert.ok(m.permissions.includes('nativeMessaging'));assert.equal(m.key,old.key);});

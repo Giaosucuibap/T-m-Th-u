@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
-import { openingTimeNotes } from '../lib/bbmt-labels.js';
+import { openingTimeNotes } from '../GiaoSuCuiBap/lib/bbmt-labels.js';
 
 const receipt = '2026-09-05T04:00:00Z', attempt = '2026-09-05T04:30:00Z';
 test('Legacy timeout timestamps are attempts, never successful receipt labels', () => {
@@ -20,7 +20,7 @@ test('A failed refresh preserves the old table date and identifies the latest at
   assert.deepEqual(openingTimeNotes({ readState:'OK', bidders:[{}], scannedAt:receipt, fromCache:true }), [{label:'Bản lưu gần đây',at:receipt}]);
 });
 
-const background = fs.readFileSync(new URL('../background.js', import.meta.url), 'utf8');
+const background = fs.readFileSync(new URL('../GiaoSuCuiBap/background.js', import.meta.url), 'utf8');
 function sourceFunction(name) {
   const start = background.search(new RegExp(`(?:async )?function ${name}\\(`));
   assert.ok(start >= 0, `Function ${name} exists`);
@@ -34,6 +34,7 @@ test('Endpoint map replaces failure with latest success and keeps one entry per 
   const context = vm.createContext({
     KEYS:{endpointMap:'endpointMap'}, Date,
     withLock:fn=>fn(), getState:async()=>state,
+    appStorage:{get:async defaults=>structuredClone(Object.fromEntries(Object.entries(defaults).map(([key,value])=>[key,Object.hasOwn(state,key)?state[key]:value])))},
     save:async patch=>{state={...state,...patch};}
   });
   vm.runInContext(sourceFunction('recordEndpointSeen'), context);
@@ -69,7 +70,7 @@ test('Real page hook reports repeated endpoint responses including changed statu
   }};
   const context=vm.createContext({window,location:{href:'https://muasamcong.mpi.gov.vn/vi/web/guest/contractor-selection',pathname:'/vi/web/guest/contractor-selection'},
     URL,URLSearchParams,Headers,Request,XMLHttpRequest:FakeXHR});
-  vm.runInContext(fs.readFileSync(new URL('../page-hook.js',import.meta.url),'utf8'),context);
+  vm.runInContext(fs.readFileSync(new URL('../GiaoSuCuiBap/page-hook.js',import.meta.url),'utf8'),context);
   await window.fetch(url);
   await new Promise(resolve=>setImmediate(resolve));
   await window.fetch(url);

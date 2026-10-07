@@ -1,13 +1,20 @@
 /* ============================================================================
- *  tools/pack.mjs — đóng gói tiện ích thành tệp .zip cài được
+ *  tools/pack.mjs — đóng gói bản giao
  *
  *      node tools/pack.mjs            -> dist/GiaoSuCuiBap-<version>.zip
  *      node tools/pack.mjs /duong/dan -> ghi vào thư mục khác
  *
- *  Chỉ đưa vào gói những gì Chrome thật sự cần chạy. Danh sách loại trừ dưới
- *  đây PHẢI khớp với NON_SHIPPED_DIRS trong tests/structure.test.js — nếu lệch,
- *  hoặc là gói mang theo mã kiểm thử, hoặc là bài kiểm tra cấu trúc soi nhầm
- *  các tệp không được đóng gói (đúng lỗi từng xảy ra với trang e-GP giả lập).
+ *  Bố cục giữ đúng như gói tác giả gửi từ 4.16.0:
+ *
+ *      GiaoSuCuiBap/   tiện ích — đây là thư mục chọn ở "Tải tiện ích đã giải nén"
+ *      tests/ tools/   bộ kiểm thử và công cụ — để người sau chạy lại được
+ *      native-agent/   cầu nối E-HSMT cho Windows
+ *      *.md            hướng dẫn, báo cáo, nhật ký thay đổi
+ *
+ *  KHÔNG đóng gói `evidence/`: đó là bằng chứng chạy trên e-GP thật, gắn với mã
+ *  băm từng tệp nguồn của MỘT phiên bản. Mang bằng chứng của bản cũ sang bản
+ *  mới là nói một điều không đúng — và cổng phát hành tools/check-live-evidence.py
+ *  sẽ chặn đúng chỗ đó ("Unit source mismatch").
  * ========================================================================== */
 import { execFileSync } from 'node:child_process';
 import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
@@ -17,35 +24,30 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const OUT_DIR = resolve(process.argv[2] || join(ROOT, 'dist'));
+const version = JSON.parse(readFileSync(join(ROOT, 'GiaoSuCuiBap', 'manifest.json'), 'utf8')).version;
 
-/** Thư mục và tệp KHÔNG đóng gói. Đồng bộ với tests/structure.test.js. */
-const EXCLUDE = new Set([
-  'tests', 'test', 'tools', 'scripts', 'node_modules', 'dist',
-  '.git', '.github', '.gitignore',
-  'package.json', 'package-lock.json',
-  'CHANGELOG.md', 'README.md', 'BAO-CAO-DANH-GIA.md', 'KIEM-THU-PHAT-HANH.md'
-]);
-
-const version = JSON.parse(readFileSync(join(ROOT, 'manifest.json'), 'utf8')).version;
-const name = `GiaoSuCuiBap-${version}`;
+/** Mục ở gốc kho được đưa vào gói. */
+const INCLUDE = ['GiaoSuCuiBap', 'tests', 'tools', 'native-agent', 'package.json', 'README.md', 'CHANGELOG.md'];
+/** Trong các mục trên, loại những thứ sinh ra khi chạy hoặc chỉ có trên máy này. */
+const SKIP = [/(^|\/)node_modules(\/|$)/, /^tools\/test\/certs(\/|$)/, /(^|\/)test-results(\/|$)/, /\.profile-/];
 
 const stage = mkdtempSync(join(tmpdir(), 'gscb-pack-'));
-const dest = join(stage, 'GiaoSuCuiBap');
+const docs = execFileSync('ls', [ROOT], { encoding: 'utf8' }).split('\n')
+  .filter((f) => /^(HUONG-DAN|BAO-CAO)-[\w.-]+\.md$/.test(f));
 
-cpSync(ROOT, dest, {
-  recursive: true,
-  filter: (src) => {
-    const rel = src.slice(ROOT.length + 1);
-    if (!rel) return true;
-    return !EXCLUDE.has(rel.split(/[\\/]/)[0]);
-  }
-});
+for (const item of [...INCLUDE, ...docs]) {
+  const src = join(ROOT, item);
+  if (!existsSync(src)) continue;
+  cpSync(src, join(stage, item), {
+    recursive: true,
+    dereference: false,
+    filter: (p) => !SKIP.some((re) => re.test(p.slice(ROOT.length + 1)))
+  });
+}
 
 if (!existsSync(OUT_DIR)) mkdirSync(OUT_DIR, { recursive: true });
-const zipPath = join(OUT_DIR, `${name}.zip`);
+const zipPath = join(OUT_DIR, `GiaoSuCuiBap-${version}.zip`);
 rmSync(zipPath, { force: true });
-
-execFileSync('zip', ['-qr', zipPath, 'GiaoSuCuiBap'], { cwd: stage });
+execFileSync('zip', ['-qr', zipPath, '.'], { cwd: stage });
 rmSync(stage, { recursive: true, force: true });
-
 console.log(`Đã đóng gói: ${zipPath}`);

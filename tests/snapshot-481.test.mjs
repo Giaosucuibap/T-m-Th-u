@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {snapshotRecord,tokenDiff} from '../lib/html-diff.js';
+import {snapshotRecord,tokenDiff} from '../GiaoSuCuiBap/lib/html-diff.js';
 
 test('DOM diagnostics retain selector structure without form values, scripts or URL query',()=>{
   const raw='<div id="bidOpeningMinutes" class="el-pagination"><input value="private-value"><script>const token="private-token";</script>private-name</div>';
