@@ -118,6 +118,17 @@ function record(i) {
 }
 
 const ALL = Array.from({ length: 137 }, (_, i) => record(i));
+/* fresh=N: thêm N gói TBMT vừa đăng (1 giờ trước lúc máy chủ khởi động) — để
+   lượt "quét nhanh phần mới" có gói mới thật mà tìm. */
+const FRESH = Number((String(process.env.MOCK_CHAOS || '').match(/fresh=(\d+)/) || [])[1] || 0);
+const MOCK_START = Date.now();
+for (let k = 0; k < FRESH; k++) {
+  const r = record(1000 + k);
+  r.stepCode = 'notify-contractor-step-1-tbmt';
+  r.publicDate = r.publicDateKqmt = new Date(MOCK_START - 3600_000 + k * 1000).toISOString();
+  r.bidName = `Gói mới đăng số ${k + 1} — kênh mương thủy lợi`;
+  ALL.unshift(r);
+}
 
 /** Một bản ghi KHLCNT (`es-plan-project-p`). Một nửa là kế hoạch năm cũ —
  *  đúng thứ người dùng than phiền là bị lẫn vào kết quả. */
@@ -155,7 +166,16 @@ function datasetFor(env) {
   const filters = env?.query?.[0]?.filters || [];
   const type = filters.find((f) => f.fieldName === 'type');
   const values = [].concat(type?.fieldValues || []).join(',');
-  return values.includes('es-plan-project-p') ? PLANS : ALL;
+  let data = values.includes('es-plan-project-p') ? PLANS : ALL;
+  /* honordate: lọc THẬT theo publicDate (epoch ms) — mô phỏng e-GP lọc đúng.
+     datelie  : lọc nhưng LẶNG LẼ bỏ sót gói mới nhất — mô phỏng e-GP hiểu
+                sai trường ngày; phần mềm phải tự phát hiện khi đối soát. */
+  const range = filters.find((f) => f.fieldName === 'publicDate' && f.searchType === 'range');
+  if (range && CHAOS.honordate) {
+    data = data.filter((r) => { const t = Date.parse(r.publicDate); return t >= range.from && t <= range.to; });
+    if (CHAOS.datelie) data = data.slice(1);
+  }
+  return data;
 }
 
 /* MOCK_CHAOS="early,busy,slow=1500,flaky=0.3,firstslow=3000" — xem mock-page.html.
@@ -166,6 +186,8 @@ function datasetFor(env) {
  *   autoload    : trang TỰ TẢI danh sách mặc định khi mở, như e-GP thật.
  *   flaky=p     : cắt ngang kết nối với xác suất p — như mạng chập chờn.
  *   seed=k      : hạt giống cho flaky, để lần chạy lặp lại được.
+ *   honordate   : lọc THẬT theo khoảng publicDate; datelie: lọc mà bỏ sót 1 gói.
+ *   fresh=N     : thêm N gói TBMT đăng 1 giờ trước lúc máy chủ khởi động.
  *   cutfirst=N  : cắt N yêu cầu tìm kiếm CÓ TIÊU CHÍ đầu tiên của cả phiên máy
  *                 chủ — e-GP chập chờn đúng lúc bắt đầu; dùng để thử tự chạy lại.
  *   pageslow=N  : bản thân TRANG e-GP tải chậm N ms (e-GP thật mất vài giây để

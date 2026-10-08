@@ -8,6 +8,7 @@ import { buildKhlcntQueries } from './lib/khlcnt.js';
 import { buildInvestorDiscoveryQueries } from './lib/investor.js';
 import { createLiveCanaryRuntime, canarySourceDigest } from './lib/live-canary.js';
 import { createNativeAgent } from './lib/native-agent.js';
+import { addPublicDateFloor } from './lib/delta-scan.js';
 import { decideAutoRetry, retryNotice, AUTO_RETRY_DELAY_MS } from './lib/run-retry.js';
 import { traceEntry, appendTrace, summarizeTrace, MODE_LABELS, STAGES } from './lib/run-trace.js';
 import { createQueryRuntime, readQueryControlState, schemaIsRed, activeListJob, SCHEMA_STOP_MESSAGE } from './lib/runtime-query.js';
@@ -619,6 +620,10 @@ function runningMessage(queue,i){return queue.length>1?`Bộ lọc ${i+1}/${queu
  * `query` công khai đã được sanitize khi lưu; request thật luôn do trang e-GP
  * hiện tại tạo, còn page-hook chỉ thay query và giữ pageSize hợp lệ.
  */
+/** Lượt quét nhanh của bộ săn: thêm sàn ngày đăng vào MỌI truy vấn của lượt. */
+function deltaQuery(run,query){
+  return run?.huntPlan?.mode==='delta'?addPublicDateFloor(query,Number(run.huntPlan.since),Date.parse(run.startedAt)||Date.now()):query;
+}
 function nativeTbmtQueryFromTemplate(template){
   const criteria=template?.criteria||template?.searchCriteria;
   if(criteria&&typeof criteria==='object')return buildTbmtQuery(criteria);
@@ -652,7 +657,7 @@ async function dispatchRunQueryToTab(tabId,run,template,settings){
   const label=template?.name||templateName(template||{})||'TBMT công khai';
   return dispatchLookupToTab(tabId,{
     id:run.id,mode:'tbmt',queryIndex:index,label:total>1?`${label} (${index+1}/${total})`:label,
-    query:nativeTbmtQueryFromTemplate(template),pageSize:PAGE_SIZE,
+    query:deltaQuery(run,nativeTbmtQueryFromTemplate(template)),pageSize:PAGE_SIZE,
     maxPages:Math.max(1,Number(settings.maxPagesHint)||DEFAULT_SETTINGS.maxPagesHint)
   });
 }
@@ -3100,8 +3105,13 @@ async function startTbmtSearch(payload={}){
   }
 
   const queue=investorScopes({...criteria,provinces}).map(item=>({name:label,criteria:item}));
-  const run={...newRun('form'),queue,qi:0,criteria:{...criteria,provinces},huntId:payload.huntId||'',
-    message:'Đang hỏi e-GP các gói thầu khớp tiêu chí...'};
+  // Bộ săn quyết định quét nhanh/đầy đủ (lib/delta-scan.js); ở đây chỉ mang theo.
+  const huntPlan=payload.huntId&&payload.huntPlan?.mode==='delta'&&Number.isFinite(Number(payload.huntPlan.since))
+    ?{mode:'delta',since:Number(payload.huntPlan.since)}:payload.huntId?{mode:'full'}:null;
+  const run={...newRun('form'),queue,qi:0,criteria:{...criteria,provinces},huntId:payload.huntId||'',huntPlan,
+    message:huntPlan?.mode==='delta'
+      ?`Quét nhanh: chỉ hỏi e-GP các gói đăng từ ${new Date(huntPlan.since+7*36e5).toISOString().slice(0,16).replace('T',' ')} (giờ VN)...`
+      :'Đang hỏi e-GP các gói thầu khớp tiêu chí...'};
   const claimed=await claimActiveRun(run);
   if(!claimed.ok)return {ok:false,message:'Một lượt quét khác vừa được bắt đầu.',run:claimed.current};
 
@@ -3113,7 +3123,7 @@ async function startTbmtSearch(payload={}){
       /* TỰ DỰNG truy vấn, không chạm biểu mẫu e-GP nữa. Cách cũ không lọc được
          khi người dùng CHỈ chọn tỉnh mà bỏ trống chủ đầu tư và xã/phường.
          Đã đo thật: chỉ lọc tỉnh Lâm Đồng -> 579 gói; thêm giá ≥3 tỷ -> 186. */
-      query:buildTbmtQuery(queue[0].criteria),
+      query:deltaQuery(run,buildTbmtQuery(queue[0].criteria)),
       pageSize:PAGE_SIZE,
       maxPages:Math.max(1,Number(s.settings.maxPagesHint)||DEFAULT_SETTINGS.maxPagesHint)
     });
@@ -3886,6 +3896,12 @@ chrome.runtime.onMessage.addListener((message,sender,sendResponse)=>{
         const rows=await withLock(async()=>{
           const s=await getState();
           const hunt={...parsed.hunt,id:parsed.hunt.id||crypto.randomUUID()};
+          /* Trạng thái quét nhanh chỉ còn giá trị khi TIÊU CHÍ giữ nguyên: đổi tiêu
+             chí là đổi tập gói, mốc và bằng chứng cũ không áp dụng được nữa. */
+          const old=(s.hunts||[]).find(x=>x.id===hunt.id);
+          const sameCriteria=old&&JSON.stringify(old.criteria)===JSON.stringify(hunt.criteria)&&old.kind===hunt.kind;
+          hunt.deltaState=sameCriteria&&!message.payload?.resetDelta?old.deltaState:validateHunt({...hunt,deltaState:null}).hunt.deltaState;
+          if(old){for(const k of ['lastRunAt','lastStatus','lastCompletedJobId','lastMessage'])if(!hunt[k])hunt[k]=old[k];}
           const rest=(s.hunts||[]).filter(x=>x.id!==hunt.id);
           if(rest.length>=MAX_HUNTS_ALLOWED)throw new Error(`Đã đủ ${MAX_HUNTS_ALLOWED} bộ săn. Hãy xóa một bộ trước.`);
           const hunts=[hunt,...rest];
@@ -3905,7 +3921,7 @@ chrome.runtime.onMessage.addListener((message,sender,sendResponse)=>{
         });
         sendResponse({ok:true,hunts:rows});break;
       }
-      case 'RUN_HUNT': sendResponse(await runHuntById(message.payload?.id));break;
+      case 'RUN_HUNT': sendResponse(await runHuntById(message.payload?.id,{forceFull:message.payload?.full===true}));break;
       case 'SAVE_WATCH': {
         const rows=await withLock(async()=>{
           const s=await getState();

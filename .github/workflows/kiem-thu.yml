@@ -112,6 +112,19 @@ jobs:
           for i in $(seq 1 30); do curl -sk --max-time 2 https://127.0.0.1:9443/ -o /dev/null && break; sleep 1; done
           xvfb-run -a node tools/test/tbmt-search.mjs "$PWD/GiaoSuCuiBap" 2
           test "$(grep -c 'CẮT KẾT NỐI (cutfirst' "$MOCK_LOG")" = 6
+      - name: Quét nhanh bộ săn — e-GP lọc đúng / bỏ qua bộ lọc / lọc sai
+        env:
+          MOCK_PORT: '9443'
+          MOCK_LOG: ${{ runner.temp }}/mock.log
+        run: |
+          for ca in "A honordate,fresh=5" "B fresh=5" "C honordate,datelie,fresh=5"; do
+            set -- $ca
+            pkill -f "node tools/test/mock-egp.mjs" || true; sleep 1
+            : > "$MOCK_LOG"
+            MOCK_CHAOS="autoload,$2" node tools/test/mock-egp.mjs >> "$MOCK_LOG" 2>&1 &
+            for i in $(seq 1 30); do curl -sk --max-time 2 https://127.0.0.1:9443/ -o /dev/null && break; sleep 1; done
+            xvfb-run -a node tools/test/hunt-delta.mjs "$PWD/GiaoSuCuiBap" "$1"
+          done
       - name: Tab e-GP mở sẵn phải làm lượt đầu nhanh hơn
         env:
           MOCK_PORT: '9443'

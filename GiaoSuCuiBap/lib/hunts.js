@@ -1,3 +1,4 @@
+import { safeDeltaState } from './delta-scan.js';
 import { validateCriteria, splitProvinceNames } from './workspace.js';
 
 export const HUNT_KINDS = Object.freeze([
@@ -40,7 +41,10 @@ export function validateHunt(raw = {}) {
       lastRunAt: String(raw.lastRunAt || '').slice(0, 40),
       lastStatus: String(raw.lastStatus || '').slice(0, 40),
       lastCompletedJobId: String(raw.lastCompletedJobId || '').slice(0, 100),
-      lastMessage: String(raw.lastMessage || '').slice(0, 300)
+      lastMessage: String(raw.lastMessage || '').slice(0, 300),
+      // Quét nhanh phần mới — chỉ cho TBMT, người dùng chủ động bật (lib/delta-scan.js).
+      delta: kind === 'tbmt' && raw.delta === true,
+      deltaState: safeDeltaState(raw.deltaState)
     }
   };
 }

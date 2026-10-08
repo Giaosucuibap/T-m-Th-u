@@ -1,4 +1,5 @@
 import { safeHunts, huntAlarmName, parseHuntAlarm } from './hunts.js';
+import { planScan, evaluateScan } from './delta-scan.js';
 import { safeChatId } from './channels.js';
 import { activeListJob, schemaIsRed, SCHEMA_STOP_MESSAGE } from './runtime-query.js';
 
@@ -17,7 +18,7 @@ async function ensureHuntAlarms(hunts){
   }
 }
 
-async function runHuntById(huntId){
+async function runHuntById(huntId,{forceFull=false}={}){
   const s=await getState();
   if(s.settings.readOnlyMode)return {ok:false,message:'Đang khóa chỉnh sửa và tự động hóa.'};
   if(schemaIsRed(s))return {ok:false,message:SCHEMA_STOP_MESSAGE};
@@ -31,7 +32,8 @@ async function runHuntById(huntId){
   }
   await chrome.alarms.clear(HUNT_RETRY_PREFIX+huntId);
   await withLock(async()=>{const latest=await getState();await save({[KEYS.hunts]:latest.hunts.map(h=>h.id===huntId?{...h,lastRunAt:new Date().toISOString(),lastStatus:'RUNNING',lastMessage:'Đang tra cứu...'}:h)});});
-  const payload={...hunt.criteria,focusTab:false,huntId:hunt.id};
+  const huntPlan=planScan(hunt,Date.now(),{forceFull});
+  const payload={...hunt.criteria,focusTab:false,huntId:hunt.id,huntPlan};
   const result=hunt.kind==='plan'?await startPlanLookup(payload):await startTbmtSearch(payload);
   if(!result.ok)await withLock(async()=>{const latest=await getState();await save({[KEYS.hunts]:latest.hunts.map(h=>h.id===huntId?{...h,lastStatus:'ERROR',lastMessage:result.message||'Không bắt đầu được.'}:h)});});
   return result;
@@ -43,9 +45,19 @@ async function recordHuntOutcome(job){
     const latest=await getState();const hunt=latest.hunts.find(h=>h.id===job.huntId);
     if(!hunt)return null;
     const duplicate=hunt.lastCompletedJobId===job.id&&hunt.lastStatus===job.status;
-    await save({[KEYS.hunts]:latest.hunts.map(h=>h.id===job.huntId?{...h,lastCompletedJobId:job.id,lastStatus:job.status,lastMessage:String(job.message||'').slice(0,300)}:h)});
-    return {hunt,settings:latest.settings,duplicate};
+    // Quét nhanh: đánh giá lượt vừa xong (chỉ một lần cho mỗi lượt).
+    let delta=null;
+    if(!duplicate&&hunt.kind==='tbmt'&&hunt.delta&&job.huntPlan){
+      const byKey=new Map((latest.tenders||[]).map(t=>[t.key,t.publicDate]));
+      delta=evaluateScan({plan:job.huntPlan,job,pubOf:k=>byKey.get(k),state:hunt.deltaState});
+    }
+    const lastMessage=(delta&&delta.note&&job.huntPlan?.mode==='delta'||delta?.state?.broken&&!hunt.deltaState?.broken?`${delta.note} `:'')+String(job.message||'');
+    await save({[KEYS.hunts]:latest.hunts.map(h=>h.id===job.huntId?{...h,lastCompletedJobId:job.id,lastStatus:job.status,lastMessage:lastMessage.slice(0,300),
+      ...(delta?{deltaState:delta.state}:{})}:h)});
+    return {hunt,settings:latest.settings,duplicate,followUpFull:Boolean(delta?.followUpFull)};
   });
+  // Quét nhanh trả 0 gói khi bộ lọc chưa được kiểm chứng: quét đầy đủ ngay.
+  if(result?.followUpFull)setTimeout(()=>{void runHuntById(job.huntId,{forceFull:true}).catch(()=>{});},3000);
   if(result&&!result.duplicate&&result.hunt.kind==='plan'&&result.hunt.telegram&&result.settings.telegramEnabled&&!result.settings.readOnlyMode){
     await sendTelegram(result.settings,`📋 <b>${escapeHtml(result.hunt.name)}</b>\n${escapeHtml(job.message||job.status)}`,{kind:'plan-hunt',chatId:safeChatId(result.hunt.telegramChatId)});
   }
