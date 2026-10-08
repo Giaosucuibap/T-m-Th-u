@@ -686,6 +686,10 @@ export function normalizeCandidate(obj, meta = {}) {
     parentCode: cleanText(first(obj,['parentCode','parentAreaCode'])),
     guaranteeExpire: parseDate(first(obj,['guaranteeExpire','bidGuaranteeExpire','guaranteeExpDate','bidSecurityExpire'])),
     investorName, procuringEntityName, contractType, planNo,
+    // Hình thức lựa chọn và qua mạng — dùng cho chỉ số minh bạch (4.17.0).
+    // Thiếu thì để trống/null, không đoán.
+    bidForm: cleanText(first(obj,['bidForm'])).toUpperCase().slice(0,10),
+    isInternet: obj.isInternet===true||obj.isInternet===1||obj.isInternet==='1'?true:obj.isInternet===false||obj.isInternet===0||obj.isInternet==='0'?false:null,
     investorCode: cleanText(obj.investorCode), procuringEntityCode: cleanText(obj.procuringEntityCode),
     investorCodes: Array.isArray(obj.investorCodes)?obj.investorCodes.filter(v=>typeof v==='string').map(cleanText):[],
     investorNames: Array.isArray(obj.investorNames)?obj.investorNames.filter(v=>typeof v==='string').map(cleanText):[],

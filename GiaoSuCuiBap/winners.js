@@ -1,3 +1,4 @@
+import { transparencyIndex, transparencyChip } from './lib/transparency.js';
 import { renderInsufficientRecords } from './insufficient-records.js';
 import { initInvestorInput, readInvestorInput } from './investor-input.js';
 /* Giáo Sư Cùi Bắp — winners.js
@@ -278,6 +279,7 @@ function renderPackages(lk) {
         <a class="link" href="${esc(p.detailUrl)}" target="_blank" rel="noopener"
            style="font-weight:700;color:inherit">${esc(p.bidName)}</a>
         <div class="muted small">${esc([p.fieldLabel, p.bidFormLabel, p.location].filter(Boolean).join(' · '))}</div>
+        <div style="margin-top:4px">${transparencyChip(transparencyIndex(p))}</div>
         ${p.isVenture && p.memberNames.length
           ? `<div class="muted small" style="margin-top:3px">Liên danh: ${esc(p.memberNames.join(' · '))}</div>`
           : ''}

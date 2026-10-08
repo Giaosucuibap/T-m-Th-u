@@ -1,3 +1,4 @@
+import { transparencyIndex } from './transparency.js';
 import { hardFilterReason } from './hard-filter.js';
 import { GATE_LABEL } from './match-gate.js';
 import { DEFAULT_SETTINGS, safeFilename, BID_STATUS_LABEL, VN_UTC_OFFSET_HOURS } from './core.js';
@@ -198,6 +199,8 @@ async function exportCsv(saveAs=true,keys=null,runId='',view={},revision='',scop
       {header:'Quyết định',key:'decisionState',width:22},
       {header:'Người phụ trách',key:'decisionOwner',width:22},
       {header:'Ghi chú nội bộ',key:'decisionNote',width:42},
+      {header:'Chỉ số minh bạch (tham khảo)',key:'transparencyScore',type:'number',width:16},
+      {header:'Tín hiệu cần xem (không phải kết luận vi phạm)',key:'transparencySignals',type:'note',width:52},
       {header:'Số thay đổi đã ghi nhận',key:'changeCount',type:'number',width:20},
       {header:'Thay đổi gần nhất',key:'lastChange',width:38},
       {header:'Link e-GP',key:'detailUrl',type:'url',urlLabel:'Mở e-GP',width:16}
@@ -213,6 +216,7 @@ async function exportCsv(saveAs=true,keys=null,runId='',view={},revision='',scop
       investorName:t.investorName,procuringEntityName:t.procuringEntityName,
       decisionState:DECISION_STATE_LABEL[normalizeDecisionState(t.decisionState)],
       decisionOwner:t.decisionOwner||'',decisionNote:t.decisionNote||'',
+      ...(ti=>({transparencyScore:ti.score,transparencySignals:ti.signals.filter(x=>x.state==='warn').map(x=>x.detail).join(' · ')||(ti.score===null?'Chưa đủ dữ liệu':'Không có tín hiệu cần xem')}))(transparencyIndex(t)),
       changeCount:Array.isArray(t.changeLog)?t.changeLog.length:0,
       lastChange:Array.isArray(t.changeLog)&&t.changeLog.length
         ?`${t.changeLog[t.changeLog.length-1].label}: ${t.changeLog[t.changeLog.length-1].before} → ${t.changeLog[t.changeLog.length-1].after}`:'',
