@@ -2,6 +2,77 @@
 
 Tài liệu này ghi lại các thay đổi quan trọng của Giáo Sư Cùi Bắp. Cấu trúc tham khảo [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) và phiên bản tuân theo cách đánh số ngữ nghĩa ở mức sản phẩm.
 
+## [4.17.0] — 2026-10-08
+
+Mười hạng mục nâng cấp theo kế hoạch sau 4.16.1. Mỗi hạng mục có bài kiểm thử
+đỏ trên mã cũ / xanh trên mã mới, và — khi đo được — số đo trước/sau trên
+Chromium thật với máy chủ e-GP giả lập. **Không chạm e-GP thật** khi kiểm thử.
+
+### Nhanh hơn
+1. **Tab e-GP mở sẵn** (`lib/runtime-query.js` · `prewarm`). Mở màn hình tra cứu
+   là mở sẵn trang tra cứu e-GP ở tab nền; không gửi tiêu chí, không bấm gì, không
+   bao giờ điều hướng tab của người dùng; chỉ một tab; chống Chrome cho tab ngủ.
+   Tắt được ở Cấu hình. Đo (trang tải chậm 4 s, chờ nhập 6 s): lượt đầu
+   **11,8 s → 5,9 s**, luôn đúng 1 tab e-GP. Mức lợi trên e-GP thật phụ thuộc thời
+   gian tải trang thật — chưa đo được.
+3. **Quét nhanh phần mới cho Bộ săn TBMT** (`lib/delta-scan.js`). Chỉ hỏi gói đăng
+   từ lần trước (lùi 1 ngày). Người dùng chủ động bật. Vì bộ lọc ngày đăng **chưa
+   được đo trên e-GP thật cho TBMT**: mỗi 24 giờ vẫn quét đầy đủ; e-GP bỏ qua bộ lọc
+   hoặc lọc sai thì **tự tắt** và nói lý do; lượt nhanh trả 0 gói khi chưa kiểm
+   chứng thì quét đầy đủ ngay. Đo: 1 trang thay vì 3; hai tình huống e-GP bỏ qua /
+   lọc sai đều bị phát hiện.
+4. **Hiện ngay kết quả lượt trước, nhãn Mới/Đổi** (`lib/run-baseline.js`). Tìm lại
+   cùng tiêu chí: hiện ngay kết quả lượt trước (ghi rõ "có thể đã cũ") trong lúc
+   chờ e-GP. Xong thì gắn "Mới" (chỉ khi cả hai lượt đã tải đủ) / "Đổi" (kèm trường
+   đổi), so bằng ảnh chụp dữ liệu từng lượt.
+
+### Ổn định và đo được
+2. **Sổ giai đoạn + bảng "Độ ổn định tra cứu e-GP"** ở Chẩn đoán (`lib/run-trace.js`):
+   tỉ lệ lỗi, trung vị/p95, hỏng ở giai đoạn nào, theo chức năng. Chỉ số và nhãn,
+   không lưu tiêu chí hay dữ liệu gói.
+5. **Tự chạy lại khi hỏng trước trang đầu** (`lib/run-retry.js`): rớt kết nối ở
+   trang đầu → gửi lại có giãn cách (0,8 s, 1,6 s); vẫn hỏng trước khi có dữ liệu →
+   tải lại trang e-GP, chạy lại đúng tiêu chí một lần. Không chạy lại khi đã có dữ
+   liệu, sai cấu trúc, HTTP 4xx/429, người dùng dừng. Đo (e-GP cắt 6 yêu cầu đầu):
+   4.16.1 **hỏng sau 0,7 s**; 4.17.0 **thành công 137/137 sau 9,5 s**.
+6. **CI GitHub Actions** (`.github/workflows/kiem-thu.yml`): Linux (bộ kiểm thử, 4
+   múi giờ, bản CRLF), Windows (biên dịch cầu nối E-HSMT từ mã nguồn, chạy cả các
+   bài chỉ chạy được trên Windows — 0 bài bỏ qua), Chromium + e-GP giả lập khó tính
+   (mọi kịch bản ở trên).
+7. **Kiểm tra cấu trúc e-GP hằng đêm** (tùy chọn) và **nhắn Telegram khi chuyển
+   ĐỎ / hồi phục** (`lib/live-canary.js`). Không nhắn lặp; "chưa xác định" không
+   báo động.
+
+### Hiểu thị trường
+8. **Chỉ số minh bạch tham khảo** (`lib/transparency.js`): hình thức lựa chọn, qua
+   mạng, thời gian mời thầu so với mốc tham chiếu, số nhà thầu dự, giảm giá. Trên
+   thẻ gói, danh sách nhà thầu trúng thầu và Excel. Thiếu dữ liệu không bị trừ
+   điểm. Không phải kết luận vi phạm. Mốc 18/9 ngày là mốc tham chiếu — người viết
+   không chắc tuyệt đối điều kiện áp dụng, cần đối chiếu Luật Đấu thầu 2023.
+9. **Soi quan hệ chủ đầu tư – nhà thầu** (`lib/relations.js`): ít cạnh tranh, chỉ
+   1 nhà thầu, nhãn "Cần xem", đối tác liên danh thường xuyên. Tỉ trọng chỉ tính
+   theo đúng phạm vi dữ liệu đã tải.
+10. **Bản tin sáng qua Telegram** (`lib/morning-bulletin.js`): một tin mỗi ngày (mặc
+    định 07:00 giờ VN, tắt sẵn): gói mới 24 giờ, gói theo dõi sắp đóng ≤3 ngày, tình
+    trạng hệ thống. Kiểm đầu cuối với Telegram giả.
+
+### Sửa lỗi phát hiện trong quá trình làm
+- 8 kịch bản thử trình duyệt trong `tools/test` **không chặn tên miền e-GP** — với
+  tab mở sẵn, chúng sẽ gọi e-GP thật. Đã chặn hết, có bài canh gác.
+- Ô "Giờ" của lịch kiểm tra nhận 0–23 nhưng lõi âm thầm đổi giờ ngoài 0–4 thành
+  2 giờ sáng. Nay ô chỉ nhận 0–4 và nói rõ.
+- Bộ lọc tín hiệu từ trang e-GP làm rơi trường mới; "không đo được" bị ghi 0 ms;
+  bản tin bị cắt nhiều tin do đường dẫn dài; lưu Cấu hình gửi bù trùng "Gửi thử";
+  một bài kiểm thử phụ thuộc kiểu xuống dòng (đỏ trên Windows). Tất cả đã sửa kèm
+  bài kiểm thử.
+
+### Chưa làm được / cần biết
+- **Cổng phát hành của tác giả** (`tools/check-live-evidence.py`) vẫn chặn vì bằng
+  chứng kiểm tra trực tiếp trên e-GP thật là của mã nguồn cũ. Tôi không được chạy
+  trên e-GP thật và **không làm giả** bằng chứng đó. Cần chạy `tests/live-*.mjs`
+  trên máy có mạng tới e-GP trước khi coi là phát hành chính thức.
+- Lợi ích tốc độ thật trên e-GP (tab mở sẵn, quét nhanh) chưa đo được trên e-GP thật.
+
 ## [4.16.1] — 2026-10-07
 
 Nhận bản **4.16.0 của tác giả** làm nền (các bản 4.13–4.16 do tác giả phát hành
