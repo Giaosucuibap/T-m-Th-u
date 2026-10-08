@@ -108,3 +108,6 @@ html[data-density="comfortable"] .ws-result{padding:23px}html[data-density="comf
 .investor-directory-message.is-error{color:#8c3e1c}
 .investor-directory-control input[aria-invalid="true"]{border-color:#b65b38}
 @media(max-width:540px){.investor-directory-list{max-height:270px}.investor-directory-option{padding:10px}.investor-directory-option strong{font-size:12px}}
+
+/* Nhãn Mới/Đổi so với lượt trước cùng tiêu chí (4.17.0) */
+.pill.diff-new{background:#dcfce7;border-color:#86efac;color:#14532d}.pill.diff-changed{background:#fef3c7;border-color:#fcd34d;color:#78350f}.pill.diff-unseen{background:#e0f2fe;border-color:#7dd3fc;color:#0c4a6e}

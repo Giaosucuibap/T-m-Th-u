@@ -187,6 +187,7 @@ function datasetFor(env) {
  *   flaky=p     : cắt ngang kết nối với xác suất p — như mạng chập chờn.
  *   seed=k      : hạt giống cho flaky, để lần chạy lặp lại được.
  *   honordate   : lọc THẬT theo khoảng publicDate; datelie: lọc mà bỏ sót 1 gói.
+ *   mutable     : bật /__mock/mutate (thêm gói mới + đổi giá) cho thử nhãn Mới/Đổi.
  *   fresh=N     : thêm N gói TBMT đăng 1 giờ trước lúc máy chủ khởi động.
  *   cutfirst=N  : cắt N yêu cầu tìm kiếm CÓ TIÊU CHÍ đầu tiên của cả phiên máy
  *                 chủ — e-GP chập chờn đúng lúc bắt đầu; dùng để thử tự chạy lại.
@@ -194,7 +195,7 @@ function datasetFor(env) {
  *                 tải trang); dùng để đo lợi ích của tab mở sẵn. */
 const CHAOS = Object.fromEntries(String(process.env.MOCK_CHAOS || '').split(',').filter(Boolean)
   .map((part) => { const [k, v] = part.split('='); return [k.trim(), v === undefined ? true : Number(v)]; }));
-let chaosSeed = Number(CHAOS.seed || 1), searchCount = 0, cutCount = 0;
+let chaosSeed = Number(CHAOS.seed || 1), searchCount = 0, cutCount = 0, mutateCount = 0;
 const chaosRandom = () => { chaosSeed = (chaosSeed * 1103515245 + 12345) % 2147483648; return chaosSeed / 2147483648; };
 if (Object.keys(CHAOS).length) console.log('[mock] CHẾ ĐỘ KHÓ TÍNH:', JSON.stringify(CHAOS));
 const PAGE_HTML = fs.readFileSync(path.join(HERE, 'mock-page.html'), 'utf8')
@@ -208,6 +209,24 @@ const server = https.createServer(
   (req, res) => {
     const url = new URL(req.url, 'https://muasamcong.mpi.gov.vn');
 
+    /* mutable: /__mock/mutate thêm 2 gói TBMT mới đăng và đổi giá 1 gói —
+       để thử nhãn Mới/Đổi giữa hai lượt tìm cùng tiêu chí. */
+    if (url.pathname === '/__mock/mutate' && CHAOS.mutable) {
+      for (let k = 0; k < 2; k++) {
+        const r = record(2000 + mutateCount * 2 + k);
+        r.stepCode = 'notify-contractor-step-1-tbmt';
+        r.publicDate = r.publicDateKqmt = new Date().toISOString();
+        r.bidName = `Gói vừa đăng ${mutateCount * 2 + k + 1} — nạo vét kênh`;
+        ALL.unshift(r);
+      }
+      const doi = ALL.find((r) => r.stepCode === 'notify-contractor-step-1-tbmt' && !/vừa đăng/.test(r.bidName));
+      doi.bidPrice += 123_000_000;
+      mutateCount += 1;
+      console.log(`[mock] MUTATE: +2 gói mới, đổi giá ${doi.notifyNo}`);
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({ ok: true, changed: doi.notifyNo }));
+      return;
+    }
     if (url.pathname === SEARCH) {
       let body = '';
       req.on('data', (c) => (body += c));

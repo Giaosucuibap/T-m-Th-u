@@ -10,6 +10,7 @@ import { validateCriteria, CRITERIA_FIELDS, runTenders, safeSource, deadlineInfo
 import { icon } from './lib/icons.js';
 import { TENDER_CATEGORIES, normalizeCategory, categoryLabel, tenderFieldOf, matchesTenderCategory, summarizeTenderFields } from './lib/tender-categories.js';
 import { createRunComparison } from './run-compare-ui.js';
+import { findBaseline, diffBadges, diffSummaryText } from './lib/run-baseline.js';
 import { lifecycleLabel } from './lib/lifecycle.js';
 import { checklistItemsFor, checklistProgress } from './lib/capability.js';
 import { bestContractMatch, MATCH_LABEL } from './lib/contracts.js';
@@ -52,6 +53,51 @@ function notify(message,error=false){clearTimeout(toastTimer);$('toast').textCon
 function alertMessage(message){$('alert').textContent=message;$('alert').className='notice error'+(message?'':' hidden');}
 function chosenRun(){return STATE.selectedRun?.id===runId?STATE.selectedRun:STATE.activeRun?.id===runId?STATE.activeRun:STATE.runs.find(r=>r.id===runId);}
 const runComparison=createRunComparison({send,getRuns:()=>STATE.runs||[],getRunId:()=>runId});
+/* Lượt trước cùng tiêu chí (4.17.0): hiện ngay khi lượt mới chưa có dữ liệu,
+   và làm mốc gắn nhãn Mới/Đổi khi lượt mới xong. Mọi thứ gắn với ĐÚNG runId —
+   đổi lượt đang xem là bỏ hết, không bao giờ trộn hai lượt. */
+let baseline={runId:'',run:null,state:null,diff:null,diffFor:'',loading:false,onlyDiff:false};
+async function syncBaseline(){
+  const run=chosenRun();
+  if(!run){baseline={...baseline,runId:'',run:null,state:null,diff:null,diffFor:''};return;}
+  if(baseline.runId!==run.id){
+    const base=findBaseline(STATE.runs||[],run);
+    baseline={runId:run.id,run:base,state:null,diff:null,diffFor:'',loading:false,onlyDiff:false};
+  }
+  if(!baseline.run||baseline.loading)return;
+  const forRun=baseline.runId,active=STATE.activeRun?.id===run.id;
+  // Lượt mới chưa có dữ liệu: nạp kết quả lượt trước để hiện ngay.
+  if(active&&!baseline.state){
+    baseline.loading=true;
+    const r=await send('GET_SEARCH_STATE',{runId:baseline.run.id});
+    if(baseline.runId===forRun){baseline.loading=false;if(r?.ok&&r.selectedRun?.id===baseline.run.id)baseline.state=r;render();}
+    return;
+  }
+  // Lượt mới đã xong: đối chiếu với lượt trước một lần.
+  if(!active&&['SUCCESS','PARTIAL'].includes(run.status)&&baseline.diffFor!==run.status){
+    baseline.loading=true;
+    const cmp=await send('COMPARE_SEARCH_RUNS',{leftRunId:baseline.run.id,rightRunId:run.id});
+    if(baseline.runId===forRun){baseline.loading=false;baseline.diff=diffBadges(cmp);baseline.diffFor=run.status;render();}
+  }
+}
+function renderBaselineStrip(showingOld){
+  const strip=$('baseline-strip');
+  const label=baseline.run?formatDate(baseline.run.finishedAt||baseline.run.startedAt):'';
+  if(showingOld){
+    strip.className='run-strip warn';
+    strip.innerHTML=`${icon('clock',18)}<div><b>Đang cập nhật từ e-GP…</b> Trong lúc chờ, đang hiện kết quả <b>lượt trước cùng tiêu chí (${esc(label)})</b> — có thể đã cũ. Danh sách tự thay bằng dữ liệu mới khi e-GP trả về.</div>`;
+    show('baseline-strip',true);return;
+  }
+  const sum=baseline.diff?.summary;
+  if(!sum){show('baseline-strip',false);return;}
+  strip.className=`run-strip${sum.sure?'':' warn'}`;
+  strip.innerHTML=`${icon('compare',18)}<div>${esc(diffSummaryText(sum,label))}${sum.fresh+sum.changed?`<div class="view-toggles" style="margin:6px 0 0"><label><input type="checkbox" id="only-diff" ${baseline.onlyDiff?'checked':''}>Chỉ xem gói ${sum.sure?'Mới':'chưa thấy ở lượt trước'}/Đổi</label></div>`:''}</div>`;
+  show('baseline-strip',true);
+}
+function badgeFor(key){
+  const b=baseline.diff?.badges?.get(key);
+  return b?`<span class="pill diff-${esc(b.kind)}" title="${esc(b.title)}">${esc(b.label)}</span>`:'';
+}
 function currentRows(){return resultIndex.rows;}
 function selectedRows(){return [...selected].map(key=>resultIndex.byKey.get(key)).filter(Boolean);}
 function rebuildIndex(){
@@ -98,6 +144,7 @@ async function refresh(){
     rebuildIndex();
     // An absent remembered run must never silently display another run's records.
     renderPresets();render();schedule();
+    void syncBaseline();
   }finally{refreshing=false;if(pendingRefresh){pendingRefresh=false;queueMicrotask(refresh);}}
 }
 
@@ -146,7 +193,7 @@ function card(t){
   const priceHint=pct.n>=3&&t.investorName&&tenderFieldOf(t)?`Giá dự thầu đã ghi nhận cùng CĐT/lĩnh vực: P25 ${formatMoney(pct.p25)} · P75 ${formatMoney(pct.p75)} (${pct.n} mẫu, chưa hiệu chỉnh quy mô)`:'';
   const gua=guaranteeReminder(t);
   return `<article class="ws-result ${st==='CLOSED'?'closed':''} ${selected.has(t.key)?'selected':''}" data-key="${esc(t.key)}">
-    <div class="ws-result-top"><span class="status-tag ${st==='CLOSED'?'closed':st!=='OPEN'?'warn':''}"><i></i>${esc(BID_STATUS_LABEL[st])}</span><span class="code">${esc(t.displayCode||t.notifyNo||t.bidNo||'')}</span><label class="select-check"><input type="checkbox" data-select="${esc(t.key)}" aria-label="Chọn so sánh ${esc(t.bidName)}" ${selected.has(t.key)?'checked':''}>So sánh</label></div>
+    <div class="ws-result-top">${badgeFor(t.key)}<span class="status-tag ${st==='CLOSED'?'closed':st!=='OPEN'?'warn':''}"><i></i>${esc(BID_STATUS_LABEL[st])}</span><span class="code">${esc(t.displayCode||t.notifyNo||t.bidNo||'')}</span><label class="select-check"><input type="checkbox" data-select="${esc(t.key)}" aria-label="Chọn so sánh ${esc(t.bidName)}" ${selected.has(t.key)?'checked':''}>So sánh</label></div>
     <div class="ws-result-body"><div><h3>${url?`<a href="${esc(url)}" target="_blank" rel="noopener">${esc(t.bidName)}</a>`:esc(t.bidName)}</h3><div class="ws-result-meta"><div>${icon('chart',14)}<strong>${esc(formatMoney(t.price))}</strong></div><div>${icon('clock',14)}<span class="${dl.level}" title="${esc(formatDate(t.closeDate))} · Giờ Việt Nam">${esc(dl.label)}</span></div><div>${icon('building',14)}<span>${esc(t.investorName||t.procuringEntityName||'Chưa rõ chủ đầu tư')}</span></div><div>${icon('pin',14)}<span>${esc(t.location||'Chưa rõ địa điểm')}</span></div></div></div><div class="ws-score" title="Điểm phù hợp theo cấu hình; không phải xác suất trúng thầu"><div class="score-number">${score}</div><small>ĐIỂM PHÙ HỢP</small><div class="score-bar"><i style="width:${score}%"></i></div><small>/ 100</small></div></div>
     <div class="ws-result-bottom"><div class="reason-chips"><span class="reason-chip ${t.filterState==='MATCH'?'':'warn'}" title="${esc(t.filterReason)}">${esc(GATE_LABEL[t.filterState]||'Chưa kiểm tra tiêu chí')}</span><span class="reason-chip">${esc(action.label)}</span><span class="reason-chip">${esc(lifecycleLabel(t))}</span><span class="reason-chip ${match.status!=='dat'?'warn':''}">${esc(matchLabel)}</span>${mx?`<span class="reason-chip">${esc(mx.text)}</span>`:''}${due.length?`<span class="reason-chip warn">Đến hạn tick: ${esc(due[0].label)}</span>`:''}${approve?`<span class="reason-chip">${esc(approve)}</span>`:''}${priceHint?`<span class="reason-chip">${esc(priceHint)}</span>`:''}${gua[0]?`<span class="reason-chip warn">${esc(gua[0].text)}</span>`:''}<span class="reason-chip ${miss.length?'warn':''}">${miss.length?`${miss.length} mục cần kiểm tra`:'Đủ trường chính'}</span>${t.watchlisted?'<span class="reason-chip">Đang theo dõi</span>':''}${t.watchedInvestorId?'<span class="reason-chip">CĐT đang theo dõi</span>':''}</div><div class="result-links"><button type="button" data-watch="${esc(t.key)}" class="${t.watchlisted?'on':''}" aria-pressed="${Boolean(t.watchlisted)}">${icon('bookmark',14)}${t.watchlisted?'Đã lưu':'Theo dõi'}</button>${t.notifyNo&&url?`<button type="button" data-download="${esc(t.key)}">${icon('download',14)}E-HSMT</button>`:''}${url?`<a href="${esc(url)}" target="_blank" rel="noopener">Xem e-GP ${icon('external',14)}</a>`:''}<button type="button" data-outline="${esc(t.key)}">Khung BPTC</button></div></div>
     <details class="explain"><summary data-check-summary="${esc(t.key)}">Hồ sơ dự thầu ${progress.done}/${progress.total}${progress.owner?` · ${esc(progress.owner)}`:''}${checklistSaving.has(t.key)?' · đang lưu…':''}</summary><div>${list.map(item=>`<label><input type="checkbox" data-check="${esc(t.key)}" data-item="${esc(item.id)}" data-cat="${esc(cat)}" ${progress.items[item.id]?'checked':''} ${STATE.settings?.readOnlyMode?'disabled':''}> ${esc(item.label)}</label>`).join('<br>')}</div></details>
@@ -155,7 +202,14 @@ function card(t){
   </article>`;
 }
 function render(){
-  const run=chosenRun(), view=createResultView(STATE.tenders||[],run,viewFilters(),{index:resultIndex}), all=view.all, running=STATE.activeRun?.id===runId;
+  const run=chosenRun(), running=STATE.activeRun?.id===runId;
+  let view=createResultView(STATE.tenders||[],run,viewFilters(),{index:resultIndex});
+  // Lượt mới chưa nhận trang nào: hiện kết quả lượt trước, ghi rõ là cũ.
+  const showingOld=running&&!view.all.length&&Boolean(baseline.state&&baseline.runId===runId);
+  if(showingOld)view=createResultView(baseline.state.tenders||[],baseline.state.selectedRun,viewFilters());
+  if(!showingOld&&baseline.onlyDiff&&baseline.diff?.badges)view={...view,rows:view.rows.filter(t=>baseline.diff.badges.has(t.key))};
+  const all=view.all;
+  renderBaselineStrip(showingOld);
   show('progress',running||starting);$('go').disabled=starting||Boolean(STATE.activeRun);
   if(running)$('progress-text').textContent=STATE.activeRun.message||'Đang tìm trên e-GP…';
   $('stop').disabled=!running;
@@ -267,3 +321,5 @@ document.addEventListener('visibilitychange',()=>{if(!document.hidden)refresh();
 const clockTick=setInterval(()=>{if(!document.hidden&&currentRows().length)render();},60000);
 window.addEventListener('pagehide',()=>{clearTimeout(timer);clearInterval(clockTick);});
 fillCriteria(readLocal(LAST,{}));runId=readLocal(RUN,'');refresh();loadProvinces();
+
+document.addEventListener('change',e=>{if(e.target?.id==='only-diff'){baseline.onlyDiff=e.target.checked;page=1;render();}});

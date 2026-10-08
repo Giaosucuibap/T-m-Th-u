@@ -131,6 +131,17 @@ jobs:
             for i in $(seq 1 30); do curl -sk --max-time 2 https://127.0.0.1:9443/ -o /dev/null && break; sleep 1; done
             xvfb-run -a node tools/test/hunt-delta.mjs "$PWD/GiaoSuCuiBap" "$1"
           done
+      - name: Hiện ngay kết quả lượt trước + nhãn Mới/Đổi (bấm trên giao diện thật)
+        env:
+          MOCK_PORT: '9443'
+          MOCK_CHAOS: autoload,mutable,slow=3000
+          MOCK_LOG: ${{ runner.temp }}/mock.log
+        run: |
+          pkill -f "node tools/test/mock-egp.mjs" || true; sleep 1
+          : > "$MOCK_LOG"
+          node tools/test/mock-egp.mjs >> "$MOCK_LOG" 2>&1 &
+          for i in $(seq 1 30); do curl -sk --max-time 2 https://127.0.0.1:9443/ -o /dev/null && break; sleep 1; done
+          xvfb-run -a node tools/test/new-changed.mjs "$PWD/GiaoSuCuiBap"
       - name: Tab e-GP mở sẵn phải làm lượt đầu nhanh hơn
         env:
           MOCK_PORT: '9443'
