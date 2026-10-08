@@ -166,11 +166,13 @@ function datasetFor(env) {
  *   autoload    : trang TỰ TẢI danh sách mặc định khi mở, như e-GP thật.
  *   flaky=p     : cắt ngang kết nối với xác suất p — như mạng chập chờn.
  *   seed=k      : hạt giống cho flaky, để lần chạy lặp lại được.
+ *   cutfirst=N  : cắt N yêu cầu tìm kiếm CÓ TIÊU CHÍ đầu tiên của cả phiên máy
+ *                 chủ — e-GP chập chờn đúng lúc bắt đầu; dùng để thử tự chạy lại.
  *   pageslow=N  : bản thân TRANG e-GP tải chậm N ms (e-GP thật mất vài giây để
  *                 tải trang); dùng để đo lợi ích của tab mở sẵn. */
 const CHAOS = Object.fromEntries(String(process.env.MOCK_CHAOS || '').split(',').filter(Boolean)
   .map((part) => { const [k, v] = part.split('='); return [k.trim(), v === undefined ? true : Number(v)]; }));
-let chaosSeed = Number(CHAOS.seed || 1), searchCount = 0;
+let chaosSeed = Number(CHAOS.seed || 1), searchCount = 0, cutCount = 0;
 const chaosRandom = () => { chaosSeed = (chaosSeed * 1103515245 + 12345) % 2147483648; return chaosSeed / 2147483648; };
 if (Object.keys(CHAOS).length) console.log('[mock] CHẾ ĐỘ KHÓ TÍNH:', JSON.stringify(CHAOS));
 const PAGE_HTML = fs.readFileSync(path.join(HERE, 'mock-page.html'), 'utf8')
@@ -196,6 +198,12 @@ const server = https.createServer(
         const data = datasetFor(env);
         const content = data.slice(start, start + size);
         searchCount += 1;
+        if (CHAOS.cutfirst && (env.query?.[0]?.filters || []).length && cutCount < CHAOS.cutfirst) {
+          cutCount += 1;
+          console.log(`[mock] SEARCH page=${page} -> CẮT KẾT NỐI (cutfirst ${cutCount}/${CHAOS.cutfirst})`);
+          req.socket.destroy();
+          return;
+        }
         if (CHAOS.flaky && chaosRandom() < CHAOS.flaky) {
           console.log(`[mock] SEARCH page=${page} -> CẮT KẾT NỐI (flaky)`);
           req.socket.destroy();

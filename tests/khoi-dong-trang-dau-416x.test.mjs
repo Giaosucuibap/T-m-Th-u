@@ -24,14 +24,14 @@ const SRC = content.slice(a, b);
  * @param pageSeq   chuỗi phản hồi trang cho các lần đã gửi (null = hết hạn chờ)
  */
 function dung({ sentSeq = [true], pageSeq = [{ ok: true, sourcePageIndex: 0 }], inFlight = 0, rejected = null } = {}) {
-  const log = { thaoTac: 0, choRanh: 0, bao: [] };
+  const log = { thaoTac: 0, choRanh: 0, bao: [], ngu: [] };
   const select = { value: '50', options: [{ value: '10' }, { value: '50' }], dispatchEvent: () => { log.thaoTac++; } };
   const ctx = vm.createContext({ kqTr: null,
     document: { querySelectorAll: () => [] }, clean: (s) => String(s).trim(), Event: class {},
     kqPageSizeSelect: () => select, kqClickSearch: () => { log.thaoTac++; return true; },
     kqPlan: { id: 'p' }, kqCancelled: false, kqRejected: null, kqPageWaiter: null, kqSentWaiter: null,
-    egpInFlight: inFlight, KQ_TRIGGER_ATTEMPTS: 4, Date,
-    setTimeout: (fn) => fn(), // không thật sự ngủ
+    egpInFlight: inFlight, KQ_TRIGGER_ATTEMPTS: 4, KQ_NET_RESENDS: 2, KQ_NET_BACKOFF: 800, Date,
+    setTimeout: (fn, ms) => { log.ngu.push(ms ?? 0); fn(); }, // không thật sự ngủ, chỉ ghi lại
     kqWaitEgpIdle: async () => { log.choRanh++; ctx.egpInFlight = 0; return true; },
     kqReport: (m) => log.bao.push(m),
     kqAwaitSent: () => {
@@ -93,6 +93,27 @@ test('rớt kết nối ở trang đầu → gửi lại một lần', async () 
   const page = await trigger();
   assert.equal(page.ok, true);
   assert.equal(log.thaoTac, 2);
+});
+
+test('rớt kết nối HAI lần liền ở trang đầu → vẫn lấy được, gửi lại có GIÃN CÁCH 0,8 s rồi 1,6 s (4.17.0)', async () => {
+  /* 4.16.1 chỉ gửi lại 1 lần, ngay lập tức. Đo trên e-GP giả lập cắt mọi kết
+     nối: lượt hỏng sau 23 ms. Mạng chập chờn rớt theo cụm, nên phải chờ. */
+  const { trigger, log } = dung({ sentSeq: [true, true, true],
+    pageSeq: [{ ok: false, status: 0 }, { ok: false, status: 0 }, { ok: true, sourcePageIndex: 0 }] });
+  const page = await trigger();
+  assert.equal(page.ok, true);
+  assert.equal(log.thaoTac, 3);
+  assert.ok(log.ngu.includes(800) && log.ngu.includes(1600), JSON.stringify(log.ngu));
+});
+
+test('rớt kết nối mãi → dừng sau 3 lần gửi, trả về lỗi mạng thật (không thành "trang bận")', async () => {
+  const cut = () => ({ ok: false, status: 0 });
+  const { trigger, log } = dung({ sentSeq: [true, true, true, true], pageSeq: [cut(), cut(), cut(), cut()] });
+  const page = await trigger();
+  assert.equal(page.ok, false);
+  assert.equal(page.status, 0);
+  assert.notEqual(page.stage, 'trigger');
+  assert.equal(log.thaoTac, 3);
 });
 
 test('e-GP trả lỗi HTTP (4xx/429) thì KHÔNG tự gửi lại ở đây — để tầng trên xử lý đúng kiểu', async () => {

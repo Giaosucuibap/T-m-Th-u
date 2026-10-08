@@ -13,7 +13,7 @@ const xong=(o={})=>({planId:'run-1',queryIndex:0,mode:'tbmt',ok:true,trace:{stag
 test('một dòng sổ chỉ có con số và nhãn — không lọt tiêu chí, tên gói, thông báo', ()=>{
   const e=traceEntry(xong({label:'Trường học Lâm Đồng — Ban QLDA X',message:'Xong: 37 kết quả của Công ty ABC MST 0101234567',
     query:[{bidName:'bí mật'}],focusTaxCode:'0101234567',trace:{stage:'ok',totalMs:2400,note:'lạ',criteria:{a:1}}}),{at:AT,openMs:3100,warm:true});
-  assert.deepEqual(Object.keys(e).sort(),['at','cached','firstPageMs','hookMs','id','mode','ok','openMs','pages','reReads','stage','status','totalMs','warm'].sort());
+  assert.deepEqual(Object.keys(e).sort(),['at','attempt','cached','firstPageMs','hookMs','id','mode','ok','openMs','pages','reReads','stage','status','totalMs','warm'].sort());
   const json=JSON.stringify(e);
   for(const lo of ['Lâm Đồng','ABC','0101234567','bí mật','lạ','criteria'])assert.equal(json.includes(lo),false,lo);
   assert.equal(e.openMs,3100);assert.equal(e.warm,true);
@@ -41,7 +41,7 @@ test('KQLCNT_DONE gửi lại (tối đa 3 lần) không bị ghi hai dòng; s�
   assert.equal(sổ.length,2,'truy vấn thứ hai của cùng lượt là một dòng riêng');
   for(let i=0;i<TRACE_LIMIT+30;i++)sổ=appendTrace(sổ,traceEntry(xong({planId:`r${i}`}),{at:AT}));
   assert.equal(sổ.length,TRACE_LIMIT);
-  assert.equal(sổ.at(-1).id,`r${TRACE_LIMIT+29}:0`);
+  assert.equal(sổ.at(-1).id,`r${TRACE_LIMIT+29}:0:`);
 });
 
 test('phân vị theo hạng gần nhất — luôn là một giá trị đã đo thật', ()=>{
@@ -87,7 +87,7 @@ const content=fs.readFileSync(new URL('../GiaoSuCuiBap/content.js',import.meta.u
 function hamContent(){
   const a=content.indexOf('  let kqTr=null;'),b=content.indexOf('  function kqFinish(',a);
   assert.ok(a>0&&b>a);
-  const ctx=vm.createContext({Date});
+  const ctx=vm.createContext({Date,kqPlan:null});
   vm.runInContext(content.slice(a,b).replace('let kqTr=null;','var kqTr=null;'),ctx);
   return ctx;
 }
@@ -128,7 +128,7 @@ test('background: bộ lọc tín hiệu từ trang e-GP GIỮ sổ giai đoạn
   const a=bg.indexOf('function shortString('),b=bg.indexOf('function nullableCount(');
   const ctx=vm.createContext({});vm.runInContext(bg.slice(a,b),ctx);
   const t=JSON.parse(JSON.stringify(ctx.safeTrace({stage:'trigger'.repeat(10),totalMs:'1200',hookMs:5,pages:2,reReads:1,status:503,secret:'x',firstPageMs:{}})));
-  assert.deepEqual(t,{stage:'triggertriggertrigger'.slice(0,20),hookMs:5,firstPageMs:null,totalMs:1200,pages:2,reReads:1,status:503});
+  assert.deepEqual(t,{stage:'triggertriggertrigger'.slice(0,20),t0:null,attempt:null,hookMs:5,firstPageMs:null,totalMs:1200,pages:2,reReads:1,status:503});
   for(const bad of [null,'x',[1],7])assert.equal(ctx.safeTrace(bad),null);
 });
 
@@ -139,4 +139,15 @@ test('thời gian không đo được là "không có", không bao giờ thành 
   assert.equal(e.firstPageMs,null);
   assert.equal(traceEntry(xong({trace:{stage:'ok',totalMs:''}})).totalMs,null);
   assert.equal(traceEntry(xong({trace:{stage:'ok',totalMs:0}})).totalMs,0,'0 đo thật vẫn là 0');
+});
+
+test('lần TỰ CHẠY LẠI là một dòng riêng (khác t0), và được đếm "đã tự cứu được"', ()=>{
+  let so=[];
+  so=appendTrace(so,traceEntry(xong({ok:false,trace:{stage:'response',t0:1000,attempt:1}}),{at:AT}));
+  so=appendTrace(so,traceEntry(xong({ok:false,trace:{stage:'response',t0:1000,attempt:1}}),{at:AT}));  // DONE gửi lại
+  so=appendTrace(so,traceEntry(xong({trace:{stage:'ok',t0:9000,attempt:2,totalMs:3000}}),{at:AT}));
+  assert.equal(so.length,2);
+  const s=summarizeTrace(so,{now:AT});
+  assert.equal(s.autoRetries,1);assert.equal(s.recovered,1);
+  assert.equal(s.errorRate,0.5,'lần hỏng đầu vẫn được tính — e-GP đã hỏng thật một lần');
 });

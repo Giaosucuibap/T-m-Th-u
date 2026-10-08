@@ -42,7 +42,9 @@ export function traceEntry(done={},{at=Date.now(),openMs=null,warm=null}={}){
   if(!(stage in STAGES))stage=done.cancelled?'cancelled':done.ok===false?'response':'ok';
   if(done.ok!==false&&!done.cancelled)stage='ok';
   return {
-    id:`${String(done.planId||'').slice(0,80)}:${Number(done.queryIndex)||0}`,
+    // t0 = lúc trang bắt đầu lượt: lần TỰ CHẠY LẠI cùng planId vẫn là một dòng riêng.
+    id:`${String(done.planId||'').slice(0,80)}:${Number(done.queryIndex)||0}:${Number(t.t0)>0&&Number.isFinite(Number(t.t0))?Math.round(Number(t.t0)):''}`,
+    attempt:Number(t.attempt)===2?2:1,
     at:new Date(at).toISOString(),
     mode:MODES.has(done.mode)?done.mode:'khac',
     ok:stage==='ok',
@@ -63,7 +65,7 @@ export function traceEntry(done={},{at=Date.now(),openMs=null,warm=null}={}){
  *  một lượt có thể tới hai lần — chỉ ghi lần đầu. */
 export function appendTrace(list,entry,limit=TRACE_LIMIT){
   const rows=Array.isArray(list)?list:[];
-  if(entry.id&&entry.id!==':0'&&rows.slice(-50).some(r=>r.id===entry.id))return rows;
+  if(entry.id&&!/^:0:/.test(entry.id)&&rows.slice(-50).some(r=>r.id===entry.id))return rows;
   return [...rows,entry].slice(-limit);
 }
 
@@ -99,6 +101,9 @@ export function summarizeTrace(list,{sinceMs=null,now=Date.now()}={}){
     cached:rows.filter(r=>r.cached).length,
     cancelled:rows.filter(r=>r.stage==='cancelled').length,
     reReads:real.reduce((s,r)=>s+r.reReads,0),
+    // Lượt tự chạy lại sau khi hỏng trước trang đầu, và số lượt chạy lại đó thành công.
+    autoRetries:real.filter(r=>r.attempt===2).length,
+    recovered:real.filter(r=>r.attempt===2&&r.ok).length,
     failures,byMode,...timing(ok)
   };
 }

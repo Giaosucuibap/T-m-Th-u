@@ -124,6 +124,26 @@ export function createQueryRuntime({getState,tabs,sendToTab,waitForTab,routeResu
     catch(error){return {ok:true,warmed:false,reason:'error',message:String(error?.message||error)};}
     finally{warming=null;}
   }
+  /** Tự chạy lại MỘT truy vấn vừa hỏng trước trang đầu: tải lại trang tra cứu
+   * trong đúng tab đó, chờ e-GP sẵn sàng, rồi gửi lại ĐÚNG tiêu chí cũ. */
+  const dispatched=new Map();
+  async function redispatch(planId,queryIndex=0){
+    const entry=dispatched.get(tuple(planId,queryIndex));
+    if(!entry)throw Error('Không còn tiêu chí của lượt vừa rồi để tự chạy lại.');
+    await assertAllowed();
+    if(probePending||probes.size)throw Error('Đang kiểm tra cấu trúc e-GP. Hãy chờ kiểm tra hoàn tất.');
+    await tabs.update(entry.tabId,{url:EGP_SEARCH_PAGE});
+    await waitForTab(entry.tabId,40000);
+    let probe=null;
+    for(const until=now()+WARM_READY_WAIT_MS;now()<until;){
+      probe=await sendToTab(entry.tabId,{type:'KQLCNT_PROBE'}).catch(()=>null);
+      if(probe?.ready||probe?.busy||probe?.pageError)break;
+      await sleep(400);
+    }
+    if(probe?.pageError)throw Error('Trang e-GP báo lỗi khi tải lại; chưa có dữ liệu để kết luận.');
+    if(probe?.busy)throw Error('Tab e-GP đang bận một lượt khác.');
+    return dispatch(entry.tabId,{...entry.payload,autoRetry:1});
+  }
   async function dispatch(tabId,payload){
     await assertAllowed();
     if(probePending||probes.size)throw Error('Đang kiểm tra cấu trúc e-GP. Hãy chờ kiểm tra hoàn tất.');
@@ -139,6 +159,8 @@ export function createQueryRuntime({getState,tabs,sendToTab,waitForTab,routeResu
       await routeDone({...hit.done,planId:payload.id,mode:payload.mode,queryIndex:payload.queryIndex||0,fromCache:true},sender);
       return {ok:true,cached:true};
     }
+    dispatched.set(id,{tabId,payload:structuredClone(payload)});
+    while(dispatched.size>8)dispatched.delete(dispatched.keys().next().value);
     captures.set(id,{key,tabId,mode:payload.mode,pages:[],bytes:0,fetchedAt:Date.now()});
     while(captures.size>8)captures.delete(captures.keys().next().value);
     try{
@@ -190,5 +212,5 @@ export function createQueryRuntime({getState,tabs,sendToTab,waitForTab,routeResu
     }
     return {ok:true,probe:true};
   }
-  return {acquire,takeOpenTime,prewarm,warmTabId:()=>warm?.tabId??null,dispatch,assertAllowed,runProbe,routeProbe,captureResult,captureDone,stop,cache,isBusy:()=>probePending||privateTabs.size>0,isProbeTab:id=>privateTabs.has(id)};
+  return {acquire,takeOpenTime,prewarm,redispatch,warmTabId:()=>warm?.tabId??null,dispatch,assertAllowed,runProbe,routeProbe,captureResult,captureDone,stop,cache,isBusy:()=>probePending||privateTabs.size>0,isProbeTab:id=>privateTabs.has(id)};
 }

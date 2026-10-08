@@ -64,9 +64,11 @@ const so = await send('RUN_TRACE_SUMMARY');
 const dong = (so?.recent || []).filter((r) => r.mode === 'tbmt' && !r.cached);
 const sum = so?.summary || {};
 if (process.env.DEBUG_TRACE) console.log(JSON.stringify(dong.slice(0, 2)));
-console.log(`Sổ giai đoạn: ${sum.ok}/${sum.runs} thành công · trung vị ${(sum.p50 / 1000).toFixed(1)}s · p95 ${(sum.p95 / 1000).toFixed(1)}s · trang đầu trung vị ${(sum.firstPageP50 / 1000).toFixed(1)}s · đọc lại ${sum.reReads} lần · lỗi theo giai đoạn ${JSON.stringify(sum.failures)}`);
+const g = (v) => (v === null || v === undefined ? '—' : `${(v / 1000).toFixed(1)}s`);
+console.log(`Sổ giai đoạn: ${sum.ok}/${sum.runs} lần chạy thành công · trung vị ${g(sum.p50)} · p95 ${g(sum.p95)} · trang đầu trung vị ${g(sum.firstPageP50)} · đọc lại ${sum.reReads} lần · tự chạy lại ${sum.autoRetries} (cứu được ${sum.recovered}) · lỗi theo giai đoạn ${JSON.stringify(sum.failures)}`);
 const daDat = ketQua.filter((k) => k.status === 'SUCCESS').length;
-const soSai = dong.length !== ketQua.filter((k) => k.status !== 'KHÔNG KHỞI ĐỘNG').length || sum.ok !== daDat
+// Mỗi lượt đúng MỘT dòng "lần 1"; lượt tự chạy lại có thêm một dòng "lần 2".
+const soSai = dong.filter((r) => r.attempt === 1).length !== ketQua.filter((k) => k.status !== 'KHÔNG KHỞI ĐỘNG').length || sum.ok !== daDat
   || dong.some((r) => r.ok && !(r.totalMs > 0 && r.firstPageMs > 0 && r.pages > 0));
 if (soSai) console.log(`  ✗ Sổ giai đoạn không khớp: ${dong.length} dòng, ${sum.ok} ok — kỳ vọng ${ketQua.length} dòng, ${daDat} ok`);
 await ctx.close();

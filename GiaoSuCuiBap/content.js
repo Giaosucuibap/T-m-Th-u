@@ -138,6 +138,8 @@
   /* Chờ trang e-GP xong yêu cầu nó tự phát (danh sách mặc định khi mở trang). */
   const KQ_IDLE_TIMEOUT=40000;
   const KQ_TRIGGER_ATTEMPTS=4;
+  // Rớt kết nối ở trang đầu: gửi lại tối đa 2 lần, chờ 0,8 s rồi 1,6 s.
+  const KQ_NET_RESENDS=2, KQ_NET_BACKOFF=800;
   const KQ_ACK_TIMEOUT=15000;      // hạn chờ worker xác nhận một lần giao dữ liệu
 
   let kqPlan=null;
@@ -504,7 +506,7 @@
   async function kqTriggerFirstPage(){
     const plan=kqPlan;
     const mechanisms=kqFirstPageMechanisms();
-    let fired=0,ignored=0,timeouts=0,lastPage=null;
+    let fired=0,ignored=0,timeouts=0,netCuts=0,lastPage=null;
     const startedAt=Date.now();
     for(let attempt=0;attempt<KQ_TRIGGER_ATTEMPTS;attempt++){
       if(kqCancelled||kqPlan!==plan)return {ok:false,cancelled:true,status:0};
@@ -548,10 +550,13 @@
       }
       const page=await pageWait;
       if(page&&!page.superseded){
-        if(!page.ok&&!page.cancelled&&page.status===0&&!page.schemaIssue&&timeouts===0&&attempt<KQ_TRIGGER_ATTEMPTS-1){
-          // Rớt kết nối giữa chừng: gửi lại đúng một lần.
-          timeouts++;lastPage=page;if(kqTr)kqTr.reReads++;
-          kqReport('Kết nối tới e-GP bị gián đoạn; đang gửi lại yêu cầu trang đầu…');
+        if(!page.ok&&!page.cancelled&&page.status===0&&!page.schemaIssue&&netCuts<KQ_NET_RESENDS&&attempt<KQ_TRIGGER_ATTEMPTS-1){
+          // Rớt kết nối: gửi lại, có giãn cách. Mạng chập chờn hay rớt THEO CỤM —
+          // gửi lại ngay lập tức (như 4.16.1) thường rớt luôn lần nữa.
+          netCuts++;timeouts++;lastPage=page;if(kqTr)kqTr.reReads++;
+          kqReport(`Kết nối tới e-GP bị gián đoạn; gửi lại yêu cầu trang đầu sau ${(KQ_NET_BACKOFF*netCuts/1000).toFixed(1)} giây (lần ${netCuts}/${KQ_NET_RESENDS})…`);
+          await new Promise(r=>setTimeout(r,KQ_NET_BACKOFF*netCuts));
+          if(kqCancelled||kqPlan!==plan)return {ok:false,cancelled:true,status:0};
           continue;
         }
         return page;
@@ -875,7 +880,7 @@
   }
   function kqTraceSummary(ok,cancelled,stage){
     const tr=kqTr||{t0:Date.now(),reReads:0,pages:0};
-    return {stage:cancelled?'cancelled':ok?'ok':(stage||tr.stage||'response'),hookMs:tr.hookMs??null,
+    return {stage:cancelled?'cancelled':ok?'ok':(stage||tr.stage||'response'),t0:tr.t0,attempt:kqPlan?.autoRetry?2:1,hookMs:tr.hookMs??null,
       firstPageMs:tr.firstPageMs??null,totalMs:Date.now()-tr.t0,pages:tr.pages||0,reReads:tr.reReads||0,status:tr.status??null};
   }
   function kqFinish(ok,message,stage){

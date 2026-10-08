@@ -8,6 +8,7 @@ import { buildKhlcntQueries } from './lib/khlcnt.js';
 import { buildInvestorDiscoveryQueries } from './lib/investor.js';
 import { createLiveCanaryRuntime, canarySourceDigest } from './lib/live-canary.js';
 import { createNativeAgent } from './lib/native-agent.js';
+import { decideAutoRetry, retryNotice, AUTO_RETRY_DELAY_MS } from './lib/run-retry.js';
 import { traceEntry, appendTrace, summarizeTrace, MODE_LABELS, STAGES } from './lib/run-trace.js';
 import { createQueryRuntime, readQueryControlState, schemaIsRed, activeListJob, SCHEMA_STOP_MESSAGE } from './lib/runtime-query.js';
 import { resolveWardSelection } from './lib/area-match.js';
@@ -3373,7 +3374,7 @@ function shortString(value,max=500){return String(value??'').slice(0,max);}
 function safeTrace(t){
   if(!t||typeof t!=='object'||Array.isArray(t))return null;
   const num=v=>v===null||v===undefined?null:Number.isFinite(Number(v))?Number(v):null;
-  return {stage:shortString(t.stage,20),hookMs:num(t.hookMs),firstPageMs:num(t.firstPageMs),totalMs:num(t.totalMs),
+  return {stage:shortString(t.stage,20),t0:num(t.t0),attempt:num(t.attempt),hookMs:num(t.hookMs),firstPageMs:num(t.firstPageMs),totalMs:num(t.totalMs),
     pages:num(t.pages),reReads:num(t.reReads),status:num(t.status)};
 }
 function nullableCount(value,max=1_000_000){
@@ -3616,6 +3617,43 @@ function recordRunTrace(payload,sender){
   }).catch(()=>{});
   return runTraceChain;
 }
+/* TỰ CHẠY LẠI (4.17.0): hỏng TRƯỚC trang đầu vì trang/mạng → tải lại trang e-GP
+   và chạy lại đúng tiêu chí đó một lần. Điều kiện chi tiết ở lib/run-retry.js.
+   Ghi dấu vào lượt TRƯỚC khi chạy lại, nên tín hiệu lặp hay worker khởi động
+   lại cũng không thể chạy lại lần thứ hai. */
+async function scheduleAutoRetry(key,job,payload){
+  const decision=decideAutoRetry({payload,job});
+  if(!decision.retry)return false;
+  const marked=await withLock(async()=>{
+    const s=await readJobState(key);
+    const cur=key==='activeRun'?s.activeRun:s[key];
+    if(!cur||cur.id!==job.id||!decideAutoRetry({payload,job:cur}).retry)return false;
+    const next={...cur,autoRetries:[...(cur.autoRetries||[]),decision.qi],message:retryNotice(decision.stage)};
+    if(key==='activeRun'){
+      const runs=(await getState()).runs.map(r=>r.id===cur.id?{...r,autoRetries:next.autoRetries,message:next.message}:r);
+      await save({[KEYS.activeRun]:next,[KEYS.runs]:runs.slice(0,100)});
+    }else await save({[KEYS[key]]:next});
+    return true;
+  });
+  if(!marked)return false;
+  // Lượt chạy lại cần trọn một hạn chờ mới, không phải phần thừa của lần hỏng.
+  const s=await readQueryControlState(chrome.storage.local);
+  await chrome.alarms.create(TIMEOUT_PREFIX+job.id,{when:Date.now()+AUTO_RETRY_DELAY_MS+(key==='activeRun'?scanTimeoutMs(s)+40_000:RUN_STALE_MS)});
+  void (async()=>{
+    await new Promise(r=>setTimeout(r,AUTO_RETRY_DELAY_MS));
+    const now=await readJobState(key);
+    const cur=key==='activeRun'?now.activeRun:now[key];
+    // Người dùng bấm Dừng trong lúc chờ: tôn trọng, không chạy lại.
+    if(!cur||cur.id!==job.id||cur.cancelled||!['STARTING','OPENING','RUNNING','LISTING'].includes(cur.status))return;
+    try{await queryRuntime.redispatch(payload.planId,decision.qi);}
+    catch(error){
+      const why=`${payload.message||'Lượt tra cứu e-GP bị gián đoạn.'} Đã tự chạy lại một lần nhưng không được: ${String(error?.message||error)}`;
+      if(key==='activeRun')await finishRun(job.id,Number(cur.captured||0)>0?'PARTIAL':'ERROR',why);
+      else await markLookupDoneFailure(key,job.id,why,payload.partial);
+    }
+  })();
+  return true;
+}
 async function routeKqlcntDone(payload,sender){
   const privateReply=queryRuntime.routeProbe('KQLCNT_DONE',payload,sender);if(privateReply)return privateReply;
   queryRuntime.captureDone(payload,sender);
@@ -3673,6 +3711,7 @@ async function routeKqlcntDone(payload,sender){
   // khi đó là bản sao vô hại và không được phép rơi sang job khác.
   if(!target)return {ok:true,ignored:true};
   const {key,job}=target;
+  if(payload.ok===false&&await scheduleAutoRetry(key,job,payload))return {ok:true,retrying:true};
   if(payload.ok===false){
     if(key==='activeRun')await finishRun(job.id,
       Number(job.captured||0)>0?'PARTIAL':'ERROR',
