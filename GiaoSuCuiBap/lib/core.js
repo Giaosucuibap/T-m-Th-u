@@ -41,6 +41,9 @@ export const DEFAULT_SETTINGS = Object.freeze({
   telegramMinScore: 70,
   // Nhắn cả khi không có gói mới, để biết hệ thống vẫn đang chạy.
   telegramDailySummary: false,
+  // Bản tin sáng gom một tin mỗi ngày (4.17.0). Mặc định TẮT.
+  telegramMorningBulletin: false,
+  morningBulletinTime: '07:00',
   notifyEmail: '',
   notifyWebhook: '',
   webhookSecret: '',

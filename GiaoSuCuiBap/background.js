@@ -9,6 +9,7 @@ import { buildInvestorDiscoveryQueries } from './lib/investor.js';
 import { createLiveCanaryRuntime, canarySourceDigest } from './lib/live-canary.js';
 import { createNativeAgent } from './lib/native-agent.js';
 import { addPublicDateFloor } from './lib/delta-scan.js';
+import { BULLETIN_ALARM, nextBulletinTime, shouldSendBulletin, buildBulletin, vnDate } from './lib/morning-bulletin.js';
 import { decideAutoRetry, retryNotice, AUTO_RETRY_DELAY_MS } from './lib/run-retry.js';
 import { traceEntry, appendTrace, summarizeTrace, MODE_LABELS, STAGES } from './lib/run-trace.js';
 import { createQueryRuntime, readQueryControlState, schemaIsRed, activeListJob, SCHEMA_STOP_MESSAGE } from './lib/runtime-query.js';
@@ -713,6 +714,29 @@ async function advanceOrFinish(runId,ok,message){
 }
 
 function nextDailyTime(hhmm){const [h,m]=String(hhmm||'06:05').split(':').map(Number);const now=new Date();const next=new Date(now);next.setHours(h||0,m||0,0,0);if(next<=now)next.setDate(next.getDate()+1);return next.getTime();}
+/* BẢN TIN SÁNG (4.17.0) — một tin mỗi ngày theo giờ Việt Nam; lỡ giờ thì gửi
+   bù trước 12:00. Chỉ dùng dữ liệu trên máy, không tự hỏi e-GP. */
+async function ensureBulletinAlarm(s){
+  const on=s.settings.telegramEnabled&&s.settings.telegramMorningBulletin&&!s.settings.readOnlyMode;
+  if(!on){await chrome.alarms.clear(BULLETIN_ALARM);return;}
+  await chrome.alarms.create(BULLETIN_ALARM,{when:nextBulletinTime(Date.now(),s.settings.morningBulletinTime)});
+}
+async function maybeSendBulletin({force=false}={}){
+  const s=await getState(),now=Date.now();
+  const {morningBulletin={},runTrace=[]}=await chrome.storage.local.get({morningBulletin:{},runTrace:[]});
+  const decision=shouldSendBulletin({enabled:s.settings.telegramEnabled&&s.settings.telegramMorningBulletin&&!s.settings.readOnlyMode,
+    lastSentOn:morningBulletin.lastSentOn,now,hhmm:s.settings.morningBulletinTime,force});
+  if(!decision.send)return {ok:false,skipped:decision.reason};
+  const bulletin=buildBulletin({tenders:s.tenders,minScore:Number(s.settings.telegramMinScore)||70,now,
+    lastRun:(s.runs||[]).find(r=>r.mode==='form'||r.mode==='scheduled'||r.mode==='manual')||s.runs?.[0]||null,
+    liveCanary:s.liveCanary,trace:summarizeTrace(runTrace,{sinceMs:7*864e5,now})});
+  const sent=await sendTelegram(s.settings,bulletin.text,{kind:'bulletin',force});
+  // Gửi thử không chiếm suất của ngày; gửi hỏng thì lần sau thử lại.
+  const next={...morningBulletin,lastAttemptAt:new Date(now).toISOString(),lastResult:sent?.ok?'ok':String(sent?.message||'Không gửi được.').slice(0,300),
+    ...(sent?.ok&&!force?{lastSentOn:vnDate(now)}:{}),lastCounts:bulletin.counts};
+  await chrome.storage.local.set({morningBulletin:next});
+  return {ok:Boolean(sent?.ok),message:sent?.ok?'Đã gửi bản tin.':next.lastResult,counts:bulletin.counts,preview:bulletin.text};
+}
 async function ensureDailyAlarm(){
   await liveCanaryRuntime.hydrate();
   const s=await getState();
@@ -721,6 +745,7 @@ async function ensureDailyAlarm(){
   if(s.settings.autoScan)await chrome.alarms.create(DAILY_ALARM,{when:nextDailyTime(s.settings.dailyTime),periodInMinutes:1440});
   await chrome.alarms.create(DEADLINE_ALARM,{periodInMinutes:30});
   await ensureHuntAlarms(s.hunts);
+  await ensureBulletinAlarm(s);
 }
 
 async function ensureHuntAlarms(...args){return huntRuntime.ensureHuntAlarms(...args);}
@@ -3814,6 +3839,9 @@ chrome.runtime.onInstalled.addListener(async details=>{
 });
 chrome.runtime.onStartup.addListener(async()=>{
   await ensureDailyAlarm();
+  // Máy tắt/ngủ lúc 7 giờ: gửi bù bản tin hôm nay khi Chrome mở lại (trước 12:00 VN).
+  // KHÔNG gửi bù khi người dùng vừa lưu Cấu hình — dễ thành hai tin trùng với nút "Gửi thử".
+  void maybeSendBulletin().catch(()=>{});
   const s=await getState();
   if(!s.settings.scanOnStartup||!s.template)return;
   const now=Date.now();
@@ -3830,6 +3858,7 @@ chrome.alarms.onAlarm.addListener(async alarm=>{
   if((await getState()).settings.readOnlyMode&&!alarm.name.startsWith(TIMEOUT_PREFIX))return;
   if(alarm.name===DAILY_ALARM)await startScan('scheduled');
   else if(alarm.name===DEADLINE_ALARM)await reviewDeadlines();
+  else if(alarm.name===BULLETIN_ALARM){await maybeSendBulletin();await ensureBulletinAlarm(await getState());}
   else if(alarm.name.startsWith(HUNT_RETRY_PREFIX))await runHuntById(alarm.name.slice(HUNT_RETRY_PREFIX.length));
   else if(alarm.name.startsWith(TIMEOUT_PREFIX)){
     await handleJobTimeout(alarm.name.slice(TIMEOUT_PREFIX.length));
@@ -4299,6 +4328,7 @@ chrome.runtime.onMessage.addListener((message,sender,sendResponse)=>{
       case 'RUN_TRACE_SUMMARY': {const {runTrace=[]}=await chrome.storage.local.get({runTrace:[]});
         sendResponse({ok:true,summary:summarizeTrace(runTrace),last7d:summarizeTrace(runTrace,{sinceMs:7*864e5}),recent:runTrace.slice(-30).reverse(),modes:MODE_LABELS,stages:STAGES});break;}
       case 'CLEAR_RUN_TRACE': await chrome.storage.local.set({runTrace:[]});sendResponse({ok:true});break;
+      case 'MORNING_BULLETIN_SEND': sendResponse(await maybeSendBulletin({force:true}));break;
       case 'EGP_PREWARM': sendResponse(await queryRuntime.prewarm());break;
       case 'OPEN_EGP': {const s=await getState();await chrome.tabs.create({url:s.template?.sourcePageUrl||EGP_DEFAULT_URL});sendResponse({ok:true});break;}
       case 'SCAN_CURRENT_TAB': {const [tab]=await chrome.tabs.query({active:true,currentWindow:true});if(!tab?.url?.startsWith('https://muasamcong.mpi.gov.vn/'))throw new Error('Tab hiện tại không phải e-GP.');sendResponse(await sendToTab(tab.id,{type:'SCAN_CURRENT_PAGE'}));break;}

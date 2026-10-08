@@ -211,6 +211,20 @@ const server = https.createServer(
 
     /* mutable: /__mock/mutate thêm 2 gói TBMT mới đăng và đổi giá 1 gói —
        để thử nhãn Mới/Đổi giữa hai lượt tìm cùng tiêu chí. */
+    /* Telegram giả: kịch bản trỏ api.telegram.org về đây để đọc ĐÚNG tin phần
+       mềm gửi đi, không bao giờ nhắn ra ngoài. */
+    if (/^\/bot[^/]+\/sendMessage$/.test(url.pathname)) {
+      let body = '';
+      req.on('data', (c) => (body += c));
+      req.on('end', () => {
+        let text = '';
+        try { text = JSON.parse(body).text || ''; } catch { text = new URLSearchParams(body).get('text') || ''; }
+        console.log(`[mock] TELEGRAM ${JSON.stringify(text)}`);
+        res.writeHead(200, { 'content-type': 'application/json' });
+        res.end(JSON.stringify({ ok: true, result: { message_id: 1 } }));
+      });
+      return;
+    }
     if (url.pathname === '/__mock/mutate' && CHAOS.mutable) {
       for (let k = 0; k < 2; k++) {
         const r = record(2000 + mutateCount * 2 + k);

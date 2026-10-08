@@ -4,9 +4,9 @@ import {validateCriteria} from './lib/workspace.js';
 const ids = ['minPrice', 'maxPrice', 'minDaysToClose', 'reportMinScore', 'maxPagesHint', 'dailyTime',
   'maxStoredTenders', 'scanTimeoutSeconds', 'alertMinScore', 'telegramMinScore'];
 const checks = ['requireConstruction', 'autoScan', 'scanOnStartup', 'openScheduledTabActive', 'keepEgpTabWarm',
-  'autoExportMobileReport', 'telegramEnabled', 'telegramDailySummary', 'readOnlyMode'];
+  'autoExportMobileReport', 'telegramEnabled', 'telegramDailySummary', 'telegramMorningBulletin', 'readOnlyMode'];
 const lines = ['provinces', 'positiveKeywords', 'requiredKeywords', 'negativeKeywords'];
-const texts = ['requirementText', 'telegramBotToken', 'telegramChatId', 'notifyEmail', 'notifyWebhook', 'webhookSecret', 'operatorName'];
+const texts = ['morningBulletinTime', 'requirementText', 'telegramBotToken', 'telegramChatId', 'notifyEmail', 'notifyWebhook', 'webhookSecret', 'operatorName'];
 const selects = ['approvalSteps'];
 
 const $ = (id) => document.getElementById(id);
@@ -264,3 +264,10 @@ $('logoRemove').onclick = async () => {
   logoShow(cur.dataUrl, 'Logo đang dùng.');
   logoSay('Đang dùng logo này. Chọn tệp khác để thay, hoặc kéo hai thanh trượt rồi bấm <b>Dùng logo này</b>.');
 })();
+
+$('bulletin-test')?.addEventListener('click',async()=>{
+  $('bulletin-test').disabled=true;$('bulletin-msg').textContent='Đang soạn và gửi bản tin thử…';
+  try{const r=await msg('MORNING_BULLETIN_SEND');
+    $('bulletin-msg').textContent=r?.ok?`Đã gửi bản tin thử: ${r.counts.fresh} gói mới, ${r.counts.soon} gói sắp đóng thầu.`:(r?.message||'Chưa gửi được. Kiểm tra Bot Token và Chat ID ở trên.');}
+  catch(e){$('bulletin-msg').textContent=String(e.message||e);}finally{$('bulletin-test').disabled=false;}
+});
