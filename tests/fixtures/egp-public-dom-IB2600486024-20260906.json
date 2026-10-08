@@ -1,0 +1,39 @@
+{
+  "evidenceType": "recorded-public-visible-dom",
+  "observedAtApprox": "2026-09-06T05:10:00+07:00",
+  "observedBy": "Root agent using the Codex in-app browser, opening the native Biên bản mở thầu tab",
+  "verificationScope": "These values were read from the public e-GP UI. Automated tests replay this recorded DOM snapshot through the parser and price normalization; they are not a live end-to-end extension scan.",
+  "snapshot": {
+    "url": "https://muasamcong.mpi.gov.vn/vi/web/guest/contractor-selection?p_p_id=egpportalcontractorselectionv2_WAR_egpportalcontractorselectionv2&p_p_lifecycle=0&p_p_state=normal&p_p_mode=view&_egpportalcontractorselectionv2_WAR_egpportalcontractorselectionv2_render=detail-v2&type=es-notify-contractor&stepCode=notify-contractor-step-2-kqmt&id=593d55c5-27d5-44bf-b3d1-47665fca4e7a&notifyId=593d55c5-27d5-44bf-b3d1-47665fca4e7a&inputResultId=undefined&bidOpenId=fb602a25-603a-4b6a-85ca-a2db4e3da4d0&techReqId=undefined&bidPreNotifyResultId=undefined&bidPreOpenId=undefined&processApply=LDT&bidMode=1_MTHS&notifyNo=IB2600486024&planNo=PL2600271824&pno=undefined&step=tbmt&isInternet=1&caseKHKQ=undefined&bidForm=DTRR",
+    "cardId": "ttnt-card-bbmt-ldt",
+    "fields": {
+      "Mã TBMT": "IB2600486024",
+      "Giá gói thầu": "2.646.341.557 VND"
+    },
+    "headers": [
+      "Mã định danh",
+      "Tên nhà thầu",
+      "Giá dự thầu (VND)",
+      "Tỷ lệ giảm giá (%)",
+      "Giá dự thầu sau giảm giá (nếu có) (VND)",
+      "Hiệu lực E-HSDT (ngày)",
+      "Giá trị bảo đảm dự thầu (VND)",
+      "Hiệu lực bảo đảm dự thầu (ngày)",
+      "Thời gian thực hiện gói thầu"
+    ],
+    "groups": [[{
+      "cells": [
+        {"text":"vn5801400520","colSpan":1,"rowSpan":1},
+        {"text":"CÔNG TY TRÁCH NHIỆM HỮU HẠN TƯ VẤN XÂY DỰNG VÀ THƯƠNG MẠI PHÚ HOÀNG NAM","colSpan":1,"rowSpan":1},
+        {"text":"2.609.041.591,923","colSpan":1,"rowSpan":1},
+        {"text":"0","colSpan":1,"rowSpan":1},
+        {"text":"2.609.041.591,923","colSpan":1,"rowSpan":1},
+        {"text":"120","colSpan":1,"rowSpan":1},
+        {"text":"35.000.000 (Cam kết trong đơn dự thầu)","colSpan":1,"rowSpan":1},
+        {"text":"150","colSpan":1,"rowSpan":1},
+        {"text":"100 ngày","colSpan":1,"rowSpan":1}
+      ]
+    }]],
+    "hasLotViewSelector": false
+  }
+}

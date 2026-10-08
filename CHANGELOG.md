@@ -1,0 +1,1008 @@
+# Nhật ký thay đổi
+
+Tài liệu này ghi lại các thay đổi quan trọng của Giáo Sư Cùi Bắp. Cấu trúc tham khảo [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) và phiên bản tuân theo cách đánh số ngữ nghĩa ở mức sản phẩm.
+
+## [4.17.0] — 2026-10-08
+
+Mười hạng mục nâng cấp theo kế hoạch sau 4.16.1. Mỗi hạng mục có bài kiểm thử
+đỏ trên mã cũ / xanh trên mã mới, và — khi đo được — số đo trước/sau trên
+Chromium thật với máy chủ e-GP giả lập. **Không chạm e-GP thật** khi kiểm thử.
+
+### Nhanh hơn
+1. **Tab e-GP mở sẵn** (`lib/runtime-query.js` · `prewarm`). Mở màn hình tra cứu
+   là mở sẵn trang tra cứu e-GP ở tab nền; không gửi tiêu chí, không bấm gì, không
+   bao giờ điều hướng tab của người dùng; chỉ một tab; chống Chrome cho tab ngủ.
+   Tắt được ở Cấu hình. Đo (trang tải chậm 4 s, chờ nhập 6 s): lượt đầu
+   **11,8 s → 5,9 s**, luôn đúng 1 tab e-GP. Mức lợi trên e-GP thật phụ thuộc thời
+   gian tải trang thật — chưa đo được.
+3. **Quét nhanh phần mới cho Bộ săn TBMT** (`lib/delta-scan.js`). Chỉ hỏi gói đăng
+   từ lần trước (lùi 1 ngày). Người dùng chủ động bật. Vì bộ lọc ngày đăng **chưa
+   được đo trên e-GP thật cho TBMT**: mỗi 24 giờ vẫn quét đầy đủ; e-GP bỏ qua bộ lọc
+   hoặc lọc sai thì **tự tắt** và nói lý do; lượt nhanh trả 0 gói khi chưa kiểm
+   chứng thì quét đầy đủ ngay. Đo: 1 trang thay vì 3; hai tình huống e-GP bỏ qua /
+   lọc sai đều bị phát hiện.
+4. **Hiện ngay kết quả lượt trước, nhãn Mới/Đổi** (`lib/run-baseline.js`). Tìm lại
+   cùng tiêu chí: hiện ngay kết quả lượt trước (ghi rõ "có thể đã cũ") trong lúc
+   chờ e-GP. Xong thì gắn "Mới" (chỉ khi cả hai lượt đã tải đủ) / "Đổi" (kèm trường
+   đổi), so bằng ảnh chụp dữ liệu từng lượt.
+
+### Ổn định và đo được
+2. **Sổ giai đoạn + bảng "Độ ổn định tra cứu e-GP"** ở Chẩn đoán (`lib/run-trace.js`):
+   tỉ lệ lỗi, trung vị/p95, hỏng ở giai đoạn nào, theo chức năng. Chỉ số và nhãn,
+   không lưu tiêu chí hay dữ liệu gói.
+5. **Tự chạy lại khi hỏng trước trang đầu** (`lib/run-retry.js`): rớt kết nối ở
+   trang đầu → gửi lại có giãn cách (0,8 s, 1,6 s); vẫn hỏng trước khi có dữ liệu →
+   tải lại trang e-GP, chạy lại đúng tiêu chí một lần. Không chạy lại khi đã có dữ
+   liệu, sai cấu trúc, HTTP 4xx/429, người dùng dừng. Đo (e-GP cắt 6 yêu cầu đầu):
+   4.16.1 **hỏng sau 0,7 s**; 4.17.0 **thành công 137/137 sau 9,5 s**.
+6. **CI GitHub Actions** (`.github/workflows/kiem-thu.yml`): Linux (bộ kiểm thử, 4
+   múi giờ, bản CRLF), Windows (biên dịch cầu nối E-HSMT từ mã nguồn, chạy cả các
+   bài chỉ chạy được trên Windows — 0 bài bỏ qua), Chromium + e-GP giả lập khó tính
+   (mọi kịch bản ở trên).
+7. **Kiểm tra cấu trúc e-GP hằng đêm** (tùy chọn) và **nhắn Telegram khi chuyển
+   ĐỎ / hồi phục** (`lib/live-canary.js`). Không nhắn lặp; "chưa xác định" không
+   báo động.
+
+### Hiểu thị trường
+8. **Chỉ số minh bạch tham khảo** (`lib/transparency.js`): hình thức lựa chọn, qua
+   mạng, thời gian mời thầu so với mốc tham chiếu, số nhà thầu dự, giảm giá. Trên
+   thẻ gói, danh sách nhà thầu trúng thầu và Excel. Thiếu dữ liệu không bị trừ
+   điểm. Không phải kết luận vi phạm. Mốc 18/9 ngày là mốc tham chiếu — người viết
+   không chắc tuyệt đối điều kiện áp dụng, cần đối chiếu Luật Đấu thầu 2023.
+9. **Soi quan hệ chủ đầu tư – nhà thầu** (`lib/relations.js`): ít cạnh tranh, chỉ
+   1 nhà thầu, nhãn "Cần xem", đối tác liên danh thường xuyên. Tỉ trọng chỉ tính
+   theo đúng phạm vi dữ liệu đã tải.
+10. **Bản tin sáng qua Telegram** (`lib/morning-bulletin.js`): một tin mỗi ngày (mặc
+    định 07:00 giờ VN, tắt sẵn): gói mới 24 giờ, gói theo dõi sắp đóng ≤3 ngày, tình
+    trạng hệ thống. Kiểm đầu cuối với Telegram giả.
+
+### Sửa lỗi phát hiện trong quá trình làm
+- 8 kịch bản thử trình duyệt trong `tools/test` **không chặn tên miền e-GP** — với
+  tab mở sẵn, chúng sẽ gọi e-GP thật. Đã chặn hết, có bài canh gác.
+- Ô "Giờ" của lịch kiểm tra nhận 0–23 nhưng lõi âm thầm đổi giờ ngoài 0–4 thành
+  2 giờ sáng. Nay ô chỉ nhận 0–4 và nói rõ.
+- Bộ lọc tín hiệu từ trang e-GP làm rơi trường mới; "không đo được" bị ghi 0 ms;
+  bản tin bị cắt nhiều tin do đường dẫn dài; lưu Cấu hình gửi bù trùng "Gửi thử";
+  một bài kiểm thử phụ thuộc kiểu xuống dòng (đỏ trên Windows). Tất cả đã sửa kèm
+  bài kiểm thử.
+
+### Chưa làm được / cần biết
+- **Cổng phát hành của tác giả** (`tools/check-live-evidence.py`) vẫn chặn vì bằng
+  chứng kiểm tra trực tiếp trên e-GP thật là của mã nguồn cũ. Tôi không được chạy
+  trên e-GP thật và **không làm giả** bằng chứng đó. Cần chạy `tests/live-*.mjs`
+  trên máy có mạng tới e-GP trước khi coi là phát hành chính thức.
+- Lợi ích tốc độ thật trên e-GP (tab mở sẵn, quét nhanh) chưa đo được trên e-GP thật.
+
+## [4.16.1] — 2026-10-07
+
+Nhận bản **4.16.0 của tác giả** làm nền (các bản 4.13–4.16 do tác giả phát hành
+riêng; xem `BAO-CAO-SUA-LOI-4.16.0.md` và các tệp `HUONG-DAN-*`). Kho mã chuyển
+sang đúng bố cục của tác giả: tiện ích nằm trong `GiaoSuCuiBap/`, kiểm thử và
+công cụ ở ngoài.
+
+### Sửa lỗi chập chờn "e-GP chưa trả dữ liệu cho lượt tra cứu"
+
+Người dùng gặp ở màn hình *Gói đang chờ kết quả*, lúc được lúc mất. Nguyên nhân:
+trang tra cứu e-GP tự tải danh sách mặc định khi mở; tiện ích đổi ô số bản ghi
+đúng lúc trang còn bận, giao diện e-GP bỏ qua, không yêu cầu nào được gửi, tiện ích
+chờ 25 giây rồi đổ lỗi cho e-GP.
+
+Tái hiện trên máy chủ giả lập có chế độ "e-GP khó tính" (`MOCK_CHAOS`): bản gốc
+0/6 (Gói đang chờ kết quả) và 0/4 (Tìm gói thầu), lượt nào cũng đúng câu lỗi.
+Bản sửa 10/10, 8/8, 7/7 (Kế hoạch), và 24/24 khi thêm 20% kết nối bị cắt. Mọi
+lượt đạt đều được tự kiểm là thật sự hỏi e-GP, không trúng bộ nhớ đệm.
+
+- `page-hook.js` báo `EGP_SEARCH_ACTIVITY` (số yêu cầu e-GP đang bay, gồm cả yêu
+  cầu e-GP tự phát), `KQLCNT_REQUEST_SENT` (yêu cầu mang tiêu chí đã rời trình
+  duyệt) và `KQLCNT_REQUEST_REJECTED` (e-GP gửi yêu cầu dạng lạ, không gắn được
+  tiêu chí).
+- `content.js`: khởi động trang đầu và sang trang sau đều **bắt tay có xác nhận**
+  — chờ trang rảnh, thao tác, thấy yêu cầu đi rồi mới tính hạn chờ phản hồi (45
+  giây); bị bỏ qua thì làm lại (tối đa 4 lần, luân phiên ba cách).
+- Rớt kết nối / hết hạn / 5xx ở một trang: tự đọc lại tối đa 3 lần, đi thẳng tới
+  đúng trang đích theo trang e-GP đang mở (cách cũ "lùi rồi tiến" lệch trang khi
+  chính bước lùi cũng rớt).
+- Phản hồi XHR không còn bị khối `catch` rỗng nuốt khi đọc nội dung ném lỗi.
+- Mỗi kiểu thất bại có câu báo riêng; câu lỗi không còn hiện hai lần ở màn hình
+  Gói đang chờ kết quả.
+
+### Khác
+
+- Chốt hoà theo mã gói khi sắp xếp: kết quả lặp lại được bất kể thứ tự dữ liệu về.
+- Bỏ mặc định phiên bản ghim cứng `'4.15.0'` trong `lib/live-canary.js`.
+- Bài kiểm phiên bản đổi từ ghim `'4.16.0'` sang bất biến manifest = version_name
+  = package.json.
+- 10 bài cầu nối Windows bỏ qua kèm lý do trên hệ điều hành khác thay vì báo đỏ giả.
+
+### Kiểm thử
+
+666 bài: 656 đạt, 0 đỏ, 10 bỏ qua (cần Windows). 108 ca múi giờ đạt. Chromium: 23
+trang nạp 0 lỗi; kịch bản mới `tools/test/bidopen-scan.mjs`, `tbmt-search.mjs`,
+`plan-lookup.mjs`.
+
+**Chưa chạy trên e-GP thật.** Cổng `tools/check-live-evidence.py` của tác giả chặn
+bản này ("Unit source mismatch") cho tới khi chạy lại bộ kiểm trực tiếp — đúng như
+thiết kế. Không đóng gói `evidence/` của 4.16.0.
+
+## [4.12.0] — 2026-09-24
+
+Nhận bản **4.11.0 của tác giả** làm nền (bản này khác hẳn bản 4.11.0 của nhánh:
+tác giả đã tự làm cả nhóm B2 — tách service worker, chỉ mục, cache truy vấn,
+một tab e-GP dùng lại — và cả B3 — cầu nối E-HSMT qua native messaging). Bản
+4.12.0 giữ nguyên những phần đó và bổ sung bốn việc.
+
+Bộ kiểm thử: **474 bài, xanh trên cả 4 múi giờ.** Mỗi thay đổi dưới đây đều đã
+kiểm bằng cách hoàn tác mã nguồn và xác nhận bài thử báo đỏ.
+
+### Nhanh hơn 4,2–4,7 lần ở mọi cỡ kho
+
+Đo có mốc đối chiếu (trung vị 7 lượt, bỏ lượt khởi động), trên chính bản của
+tác giả và bản này:
+
+| Thao tác | Kho | Bản tác giả | Bản này | Nhanh gấp |
+|---|---|---|---|---|
+| Gõ một phím vào ô tìm | 3.000 | 322 ms | **77 ms** | 4,2× |
+| Đổi bộ lọc điểm | 3.000 | 85 ms | **19 ms** | 4,5× |
+| Gõ một phím vào ô tìm | 20.000 | 2.374 ms | **506 ms** | 4,7× |
+| Đổi bộ lọc điểm | 20.000 | 649 ms | **137 ms** | 4,7× |
+
+Nút thắt **không** nằm ở chỗ ai cũng đoán. Tách từng phần trên kho 20.000 gói:
+lọc theo chữ chỉ tốn **1 ms**, chọn qua chỉ mục **0–2 ms**, chấm cổng lọc
+186 ms — còn **phép sắp xếp tốn 2.198 ms**.
+
+Nguyên nhân: `compareTenders` gọi `decisionRank`, mà hàm này gọi `statusOf` và
+`daysToClose` — cả hai phân tích chuỗi ngày. Sắp n phần tử cần ~n·log₂n phép so
+sánh, mỗi phép chạy chúng hai lần: ~570.000 lần phân tích ngày cho **một** lần
+sắp, và nó chạy lại mỗi lần gõ phím.
+
+Sửa: tính khoá sắp xếp một lần cho mỗi dòng rồi so sánh trên số đã tính. Kèm
+theo, chuỗi tìm kiếm đã chuẩn hoá được nhớ lại trên bản ghi bằng thuộc tính
+**không liệt kê được** — nên nó vô hình với `JSON.stringify`, với bản sao lưu,
+với tệp Excel và với mốc phiên bản kết quả.
+
+`tests/toc-do-sap-xep.test.js` khoá lại điều quan trọng nhất: **thứ tự phải
+trùng khớp hoàn toàn** thứ tự cũ, trên cả 4 kiểu sắp. Tối ưu kiểu này chỉ đúng
+khi mọi khoá chỉ phụ thuộc vào chính dòng đó; sai một chỗ là thứ tự đổi âm thầm.
+
+### Kết quả tra cứu nay LẶP LẠI ĐƯỢC
+
+Hai gói bằng điểm, bằng hạng, bằng giá thì trước đây đứng theo thứ tự chúng
+tình cờ nằm trong kho — hai lần tra cùng tiêu chí có thể cho hai bảng khác thứ
+tự. In ra hai lần, so hai tờ, thấy lệch, và không có cách nào biết bên nào
+đúng. Nay chốt hoà bằng khoá gói, thứ tự cố định.
+
+### Bảng Excel: kẻ ô, đậm, nghiêng, màu theo kết luận
+
+`lib/xlsx.js` trước đây khai `<borders count="1">` với một khung **rỗng**,
+không có font nghiêng, không có màu nền. Nay:
+
+- **Kẻ khung từng ô** bằng nét xám nhạt — bảng 24 cột không kẻ thì in ra không
+  dò được hàng. Ô thiếu giá vẫn có khung và vẫn **trống**, không thành "0 đ".
+- **Màu nền mang đúng ba kết luận** của cổng lọc: xanh nhạt *Khớp*, vàng nhạt
+  *Chưa đủ dữ liệu*, đỏ nhạt *Ngoài tiêu chí*. Không có kết luận thì chỉ kẻ dải
+  chẵn/lẻ — tô màu khi không có căn cứ là nói một kết luận không tồn tại.
+- **Đậm** tên gói, giá gói, cột đối chiếu; **nghiêng xám** lý do đối chiếu.
+- **Dải đầu bảng** hai dòng gộp ô: tên báo cáo, phạm vi lọc, mạch đối soát
+  e-GP, thời điểm xuất. Người nhận file không ngồi cạnh người xuất file.
+
+Quan trọng hơn cách hiển thị: **bảng kiểu nay sinh ra bằng mã từ một danh sách
+duy nhất**. Trước đây chỉ số kiểu và các `<xf>` được gõ tay ở hai chỗ cách nhau
+150 dòng; lệch một ô là cả bảng sai kiểu — tiền thành ngày, chữ thành phần trăm
+— mà tệp vẫn mở được nên không ai thấy ngay.
+
+### Bộ icon: một dáng duy nhất ở mọi cỡ
+
+Bộ cũ là **ba cái dấu khác nhau**: 16/32px vòng tròn + dấu tích; 48px thêm vạch
+ngắm và khung tài liệu chen chúc; 128px một cảnh radar khác hẳn. Người dùng
+nhận ra phần mềm bằng cái dấu trên thanh công cụ.
+
+`tools/make-icons.mjs` sinh cả bộ từ một nguồn, giản lược dần mà **không đổi
+dáng**: vòng radar + dấu tích giữ nguyên ở mọi cỡ; vạch ngắm thêm từ 48px; khung
+tài liệu, vòng ngoài và chấm quét chỉ ở 128px. Nét khai riêng theo từng cỡ, vì ở
+16px một nét 4/128 chỉ còn nửa điểm ảnh và biến thành vệt xám.
+
+### Sửa lỗi
+
+- **`Failed to fetch` hiện thẳng ra màn hình.** Chụp màn hình bản 4.11.0 thì
+  dưới ô *Xã / Phường* hiện đúng hai chữ đó: tiếng Anh, không nói cái gì hỏng,
+  không nói phải làm sao. Tệ hơn: ô chọn xã im lặng ngừng hoạt động, nên người
+  dùng vẫn bấm tìm và vẫn nhận kết quả — chỉ là kết quả **không hề lọc theo
+  xã**, mà trông vẫn bình thường. Nay mỗi câu lỗi nói đủ ba điều: hỏng ở đâu,
+  tiêu chí xã đang **chưa được áp dụng**, và phải làm gì tiếp.
+- **Mã loại gói không tồn tại bị hiểu là "không lọc gì".** Một mã gõ sai
+  (`TV_DESING`), một bộ săn lưu từ bản cũ, hay một hằng số đổi tên đều rơi về
+  chuỗi rỗng, và người dùng thấy bộ lọc đang bật mà nhận về toàn bộ gói thầu.
+  Nay `isUnknownCategory()` phân biệt "không chọn" với "mã không hiểu".
+- **Màn hình kế hoạch không được truyền danh mục địa bàn**, nên mọi tiêu chí xã
+  đều rơi vào "Chưa đủ dữ liệu" — bộ lọc xã ở đó chưa bao giờ dùng được.
+- **Gói con của kế hoạch mượn được tên xã của kế hoạch mẹ.** `wards` bị bỏ sót
+  trong danh sách xoá khi gói con đã khai địa bàn riêng.
+- **Câu "chính xác tuyệt đối" quay lại `winners.js`.** Xem mục 4.11.0 của nhánh
+  về lý do đây là chuyện có hại thật, không phải chuyện câu chữ.
+- **Giá lẻ và giá chẵn khác độ đậm** trong cùng một cột Excel.
+- **Phiên bản ghim cứng `'4.11.0'`** làm mặc định trong `lib/live-canary.js`.
+  Bằng chứng canary chỉ có nghĩa khi gắn đúng phiên bản đã chạy nó; một số ghim
+  cứng sẽ lặng lẽ cũ đi sau mỗi lần nâng bản.
+
+### Khớp xã: nhận lại chứng cứ bằng chữ, nhưng có điều kiện
+
+Bản 4.11.0 bỏ hẳn chuỗi địa điểm, chỉ tính mã. Đúng về nguyên tắc, nhưng rất
+nhiều hồ sơ e-GP ghi địa bàn bằng chữ mà không kèm mã — chọn xã xong là gần như
+toàn bộ rơi vào "Chưa đủ dữ liệu", và bộ lọc xã hoá ra vô dụng.
+
+Nay chứng cứ chữ được nhận lại, với điều kiện chặt: chuỗi phải nêu tên xã, **và**
+hồ sơ phải có thêm chứng cứ tỉnh thuộc phạm vi đã chọn — mã tỉnh (chắc chắn) hoặc
+tên tỉnh trong chuỗi. Nêu mỗi tên xã trần thì không đủ, vì "Đức Trọng" có ở nhiều
+tỉnh. Kết luận này mang lý do riêng `ward-text` để phân biệt với `ward-code`.
+
+Chữ chỉ đủ để **công nhận**, không đủ để **loại bỏ**: chuỗi nêu một xã khác
+trong cùng tỉnh vẫn là "Chưa đủ dữ liệu", vì địa chỉ chủ đầu tư không phải địa
+điểm thi công.
+
+### Phép thử của nhánh phải cập nhật theo
+
+21 bài đỏ khi hợp nhất. Không bài nào là lỗi sản phẩm — tác giả đã đổi hợp đồng
+theo hướng chặt hơn, và bài thử đang khoá hành vi cũ:
+
+- **Tên gói không còn quyết định lĩnh vực gói thầu.** Chỉ trường e-GP khai mới
+  tính; viết tắt trong tên (TVGS, TVTK) vẫn phân nhánh tư vấn nhưng không tự
+  nâng một gói chưa khai lên thành "Tư vấn". Đã kiểm: gói đó **không biến mất**,
+  nó vào nhóm "Chưa đủ dữ liệu".
+- **Xã nhận dạng bằng CẶP (mã xã, mã tỉnh cha)**, không phải mã trần.
+- **`host_permissions` thu hẹp**: bỏ `http://localhost:1234/*`, chuyển sang
+  `nativeMessaging`. Bài thử ghim cứng danh sách cũ nay đổi thành "không được
+  **nới rộng**" — ghim cứng thì một lần thu hẹp hợp lệ cũng báo đỏ, và người sửa
+  sẽ quen tay cập nhật fixture cho xong, để lần nới rộng thật sau đó lọt luôn.
+- Bài kiểm Excel ghim `s="2"` đổi thành đọc ngược `styles.xml` và kiểm **ý
+  nghĩa** kiểu ô.
+
+## [4.11.0] — 2026-09-14
+
+Nhận bản **4.10.1** của tác giả làm nền, rồi làm tiếp nhóm **B1 — Chính xác hơn nữa**.
+
+Bộ kiểm thử: **453 bài, xanh trên cả 4 múi giờ** (UTC, Asia/Ho_Chi_Minh,
+America/New_York, Pacific/Auckland). Mỗi mục dưới đây đều đã được kiểm bằng cách
+hoàn tác mã nguồn và xác nhận bài thử báo đỏ — một bài thử chưa từng đỏ thì chưa
+chứng minh được điều gì.
+
+### Khớp xã theo MÃ, không chỉ theo chữ *(B1.3)*
+
+`lib/area-match.js` thêm lớp đối chiếu theo `parentCode`. Trước đây tiêu chí
+"Đức Trọng" khớp bằng cụm chữ, nên một xã trùng tên ở tỉnh khác cũng lọt vào —
+và người dùng không có cách nào biết. Nay:
+
+1. Hai bên đều có mã → kết luận dứt khoát theo mã.
+2. Chỉ một bên có mã → đối chiếu tên, có giới hạn theo mã tỉnh.
+3. Không đủ căn cứ → **`Chưa đủ dữ liệu`**, giữ lại cho người dùng tự xét, chứ
+   không âm thầm vứt đi.
+
+`tests/ward-code.test.js` — 14 bài. Hoàn tác về khớp chữ làm đỏ 2 bài.
+
+### Canary sống — đối chứng với e-GP thật *(B1.1)*
+
+Toàn bộ 453 bài hiện chạy trên dữ liệu tự dựng. Chúng chứng minh phần mềm không
+tự hỏng, và **chỉ vậy**. Chúng không biết e-GP vừa đổi tên một trường hay vừa bỏ
+một mã tỉnh — đúng những thứ làm phần mềm trả kết quả thiếu mà vẫn xanh hết.
+
+`lib/canary-live.js` lấp chỗ đó, canh ba thứ: **trường biến mất**, **mã biến
+mất**, và **mã địa bàn trôi** (Lâm Đồng phải giữ cả `68` lẫn `703` — mất `703`
+là bỏ sót lặng lẽ toàn bộ hồ sơ trước 1/7/2025).
+
+Node không có token của trang e-GP nên không gọi được endpoint tìm kiếm. Vì vậy
+chia đôi: chạy thật trong tiện ích (**Chẩn đoán → "Chạy canary sống"**, sau 22h),
+ghi ra `canary-result.json`; `npm test` đọc tệp đó và **chặn bản dựng** nếu đỏ
+hoặc quá 10 ngày. Chưa chạy lần nào thì chỉ cảnh báo to — chặn ở đó thì không ai
+cài được lần đầu và người ta sẽ học cách bỏ qua bài thử.
+
+`tests/canary-live.test.js` (17 bài) + `tests/canary-gate.test.js` (2 bài).
+
+**Còn dở, nói rõ:** danh sách mới có 9 mã, trong đó 4 mã đã đọc được trên e-GP
+thật (`source:'observed'`), 5 mã mới lấy từ kết quả tìm kiếm chưa mở chi tiết
+(`source:'candidate'`). Yêu cầu là 20–30 mã. Phần tra từng mã **chưa tự động**;
+màn hình Chẩn đoán ghi thẳng `0/9 — chưa tự động` chứ không báo đạt.
+
+### Một cửa duy nhất cho lọc, thống kê và xuất *(B1.4)*
+
+Bản 4.10.1 đã gom về một cửa: `passesHardFilter()` chấm từng bản ghi trước khi
+lưu. `tests/mot-cua-duy-nhat.test.js` (11 bài) khoá lại điều đó, và bài quan
+trọng nhất **cắt đúng hàm `exportCsv` trong `background.js` ra chạy thật** với
+danh sách khoá y hệt cái màn hình gửi sang, trên 7 tổ hợp bộ lọc. Chèn thử một
+bộ lọc điểm riêng vào đường xuất → bài này đỏ ngay.
+
+Kèm theo: mọi lý do loại trừ phát ra đều phải có nhãn tiếng Việt; cổng phải
+thuần (đảo thứ tự chấm vẫn ra cùng kết quả, không sửa dữ liệu gốc); gói thiếu
+giá vẫn phải có trong tệp với ô giá **trống**, không phải "0 đ".
+
+### Bỏ chữ "tuyệt đối" khỏi giao diện *(B1.5)*
+
+Dữ liệu nằm ở một hệ thống bên ngoài mà phần mềm này không kiểm soát. Hứa "chính
+xác tuyệt đối" với người đi đấu thầu là có hại thật: họ sẽ thôi đối chiếu lại
+với e-GP, và một lần bỏ sót sẽ không ai phát hiện. Đã bỏ lời hứa còn sót trong
+`winners.js`. `tests/khong-hua-tuyet-doi.test.js` quét chuỗi người-dùng-đọc và
+chặn 5 mẫu hứa hẹn, kèm phép tự kiểm để bộ mẫu không xanh một cách vô nghĩa.
+
+### Loại gói theo `investField` *(B1.2)* — đã đúng sẵn
+
+Kiểm lại `matchesTenderCategory`: nó đã đọc `tenderFieldOf(record)` trước, tên
+gói chỉ dùng phụ để phân nhánh tư vấn. Không sửa gì.
+
+## [4.10.1] — 2026-09-14 · của tác giả
+
+Hợp nhất nguyên trạng. Những thay đổi đáng kể nhất, đã kiểm chứng lại:
+
+- **Cổng ba trạng thái** `Khớp / Chưa đủ dữ liệu / Ngoài tiêu chí` cùng 26 lý do
+  loại trừ đặt tên rõ ràng (`lib/hard-filter.js`, `lib/match-gate.js`).
+- **Đối soát số lượng trên thông báo kết thúc**: *"e-GP báo 137 · đã tải 137 ·
+  khớp 123 · ngoài tiêu chí 14 · trang 3/3"*.
+- **Bỏ hẳn bộ lọc ngày gửi lên máy chủ ở màn hình kế hoạch.** Máy chủ chỉ lọc
+  được ngày ĐĂNG TẢI còn người dùng chọn ngày PHÊ DUYỆT; nới biên 30 ngày chỉ
+  che được phần lớn độ lệch, kế hoạch phê duyệt tháng 6 mà tháng 8 mới đăng vẫn
+  bị mất. Bỏ hẳn thì chậm hơn, đổi lại không bỏ sót.
+- **Thiếu ngày phê duyệt thì GIỮ LẠI**, không lấy ngày đăng tải thay thế — lấy
+  mốc khác thay vào là trả lời một câu hỏi khác rồi dán nhãn câu hỏi đã hỏi.
+- **Từ chối chạy khi chưa tra được danh mục địa bàn**, thay vì âm thầm bỏ tiêu
+  chí tỉnh rồi tìm toàn quốc.
+- Bộ kiểm thử `node:vm` nạp thẳng `background.js` với `chrome` API giả lập.
+
+### Phép thử của nhánh này phải cập nhật theo
+
+Bốn bài về bộ lọc ngày KHLCNT đang khoá lại hành vi CŨ (nới biên máy chủ, lùi về
+ngày đăng tải). Hành vi mới đúng hơn, nên sửa bài chứ không sửa mã.
+
+Hai bài an toàn neo vào chuỗi mã nguồn cũng vỡ, **không phải vì mất điều kiện an
+toàn nào** mà vì mốc cắt đoạn và danh sách khoá đã đổi hợp lệ. Đã viết lại theo
+hướng kiểm *tính chất*: `PLAN_KEYS` nay được kiểm là danh sách trắng đóng không
+chứa `url`/`method`/`headers`/`token`, thay cho việc ghim cứng đúng ba phần tử —
+cách cũ khiến một bổ sung hợp lệ cũng báo đỏ, và người sửa sẽ học cách nới nó ra
+cho xong, mất luôn tác dụng bảo vệ.
+
+## [4.9.2] — 2026-09-11
+
+Sửa cửa sổ popup bị bóp hẹp và nội dung nhảy loạn.
+
+### Sửa lỗi
+
+- **Bấm vào biểu tượng tiện ích thì popup hiện ra hẹp như sợi chỉ**, chữ vỡ
+  dòng từng từ, nội dung nhảy loạn *"như tự động chạy"*.
+
+  Thủ phạm là một khai báo CSS duy nhất: `body{max-width:100vw}`.
+
+  Cửa sổ popup của Chrome **tự co theo nội dung**, nên `100vw` tạo ra một vòng
+  lặp tự bóp:
+
+  > thân co lại → cửa sổ co theo → `100vw` nhỏ đi → thân co tiếp
+
+  Đo được trước khi sửa: cửa sổ 320px → thân 320px; 240px → 240px; 200px →
+  200px. Sau khi sửa, thân giữ nguyên **420px** ở mọi bề rộng cửa sổ.
+
+  Thêm một cái bẫy nữa của `100vw`: nó **tính cả thanh cuộn dọc**. Ở cửa sổ
+  420px, thân là 420px trong khi vùng nhìn thấy chỉ 405px — dư đúng 15px, đủ
+  để đẻ ra một thanh cuộn **ngang** mà không ai cần. Đúng thanh cuộn thấy trong
+  ảnh người dùng gửi.
+
+  Popup của Chrome cho phép tới 800px nên 420px luôn vừa; nay chốt cứng bằng số
+  và chặn tràn ngang, không dùng đơn vị nào phụ thuộc khung nhìn.
+
+- **"Nhảy loạn như tự động chạy" không phải lỗi riêng.** Đã đo: nạp sẵn 3000
+  gói — đúng lượng dữ liệu trên máy người dùng — rồi theo dõi kích thước mỗi
+  180ms trong 2,5 giây. Kết quả `420x821`, **không đổi lần nào**. Cảm giác
+  "đang tự chạy" chính là trình duyệt đo đi đo lại trong lúc vòng lặp co bóp
+  chạy; hết vòng lặp thì hết nhảy.
+
+### Kiểm thử
+
+- `tools/test/popup-size.mjs` — khoá hai mặt: thân **không được co** theo cửa
+  sổ dù hẹp đến đâu, và ở bề rộng Chrome thật sự cấp cho popup thì **không
+  sinh thanh cuộn ngang**. Đã thử khôi phục `max-width:100vw`: ba dòng đầu báo
+  `✗ BỊ BÓP` ngay.
+- `tools/test/popup-jump.mjs` — nạp 3000 gói rồi đo kích thước liên tục.
+
+### Ghi chú
+
+Các chỗ `calc(100vw - N)` còn lại trong `workspace.css` nằm trên hộp thoại và
+khay nổi của **trang lớn**, không phải trên `body` của một cửa sổ tự co, nên
+không dính vòng lặp này. Đã rà và giữ nguyên.
+
+## [4.9.1] — 2026-09-11
+
+Sửa lỗi gói **chỉ định thầu** bấm vào ra trang trắng, và mở đường về kế hoạch.
+
+### Sửa lỗi
+
+- **Mã gói hiển thị sai: `IB2600501375-null` thay vì `IB2600501375-00`.**
+
+  e-GP trả về nguyên văn **chuỗi ký tự `'null'`** cho `notifyVersion` của gói
+  chỉ định thầu — loại không đi qua bước mở thầu nên thiếu hẳn nhiều trường.
+  `cleanText('null')` trả lại `'null'`, một chuỗi *có nội dung*, nên phép chống
+  đỡ `|| '00'` không bao giờ chạy.
+
+  Từ một chỗ nhận nhầm "không có dữ liệu" thành "dữ liệu", hỏng theo dây chuyền:
+  mã hiển thị sai → khoá chống trùng sai → **tham số link tra cứu mang chữ
+  `null`** → bấm vào thì e-GP mở ra trang trắng trơn, mọi ô đều rỗng.
+
+  Nay `cleanText()` coi `'null'` / `'undefined'` / `'NaN'` là **rỗng**. Không
+  trường nào của e-GP có giá trị thật đúng bằng mấy chữ đó.
+
+- **Nút "Tải hồ sơ" cũng hỏng theo, cùng một gốc.** Nó mở chính link đó rồi chờ
+  trang tự gọi endpoint tệp đính kèm; trang trắng thì không có gì để chờ.
+
+- **Tham số thiếu trong link để rỗng thay vì ghi `undefined`.** Link do chính
+  e-GP sinh ra ghi `bidOpenId=undefined`, không phải `bidOpenId=`. Gói chỉ định
+  thầu thiếu cả loạt trường như vậy, nên đây đúng là ca hay gặp. Đã thống nhất
+  theo quy ước của e-GP.
+
+- **Một bản ghi mang hai giá trị phiên bản khác nhau** — trường `version` ghi
+  `'1'` trong khi mã đầy đủ ghi `-01`, nên khoá chống trùng có thể lệch giữa
+  hai lần đọc cùng một gói. Ba màn hình nay dùng chung `normalizeVersion()`.
+
+### Tính năng mới
+
+- **Nút "📋 Xem KHLCNT" trên mỗi gói đã trúng thầu.** Mở thẳng Kế hoạch lựa
+  chọn nhà thầu sinh ra gói đó, điền sẵn mã kế hoạch và **bỏ giới hạn thời
+  gian** (kế hoạch có thể duyệt từ lâu, mốc mặc định 3 tháng sẽ cắt mất).
+
+  Đây là đường vòng **có chủ ý**. Bản ghi KQLCNT chỉ có `planNo`, không có id
+  nội bộ của kế hoạch, mà thiếu id thì trang chi tiết e-GP lại trắng — đúng thứ
+  đang phải chữa. Nên đi qua luồng tìm kiếm KHLCNT đã chạy được, chắc ăn hơn.
+
+- **Báo lỗi tải hồ sơ nói rõ ba khả năng** thay vì một câu chung chung, và với
+  gói không qua mạng thì chỉ thẳng sang nút "Xem KHLCNT".
+
+### Kiểm thử
+
+- `tests/chi-dinh-thau.test.js` — 7 bài dựng lại đúng bản ghi trong ảnh người
+  dùng gửi (`IB2600501375`, `notifyVersion: 'null'`), chốt rằng mã ra đúng
+  `IB2600501375-00`, link không còn chữ `null`, và **gói qua mạng bình thường
+  không bị đụng tới**. Đã thử khôi phục `cleanText` cũ: 5/7 bài báo đỏ.
+- `tools/test/plan-link.mjs` — chạy toàn trình trong Chromium: từ thẻ gói trúng
+  thầu bấm "Xem KHLCNT" → mở đúng `plans.html?planNo=…`, ô từ khoá điền sẵn mã
+  kế hoạch, mốc thời gian về "không giới hạn". `LỖI (0)`.
+- Tổng: **144 → 151 bài**, đạt hết ở bốn múi giờ.
+
+### Còn chưa xác nhận được
+
+- Đã sửa **nguyên nhân làm hỏng link** (kiểm chứng được: mã khớp đúng e-GP,
+  link sạch chữ `null`). Nhưng **chưa xác nhận được** trang chi tiết KQLCNT của
+  e-GP có dựng ra nội dung cho gói chỉ định thầu hay không — việc đó cần máy
+  chủ thật. Nếu e-GP vẫn trả trang trắng thì đó là phía e-GP, và nút
+  "Xem KHLCNT" là đường đi vòng đã chuẩn bị sẵn cho tình huống đó.
+
+## [4.9.0] — 2026-09-11
+
+Hợp nhất bản 4.8.0 của tác giả vào nhánh này, và sửa hai lỗi lọc ngày mà bản
+4.8.0 mang theo — cả hai đều **vô hình trên máy đặt giờ Việt Nam**.
+
+### Nhận từ 4.8.0
+
+Bản 4.8.0 được xây trên chính mã 4.2.0 của nhánh này và là một bản mở rộng
+thật, không phải nhánh song song. Đã chạy lại toàn bộ kịch bản hồi quy của
+nhánh này trên nó: **đạt hết**. Những chỗ 4.8.0 làm tốt hơn, giữ nguyên:
+
+- **Đọc biên bản mở thầu** viết lại tốt hơn bản 4.2.0 ở bốn điểm:
+  ba đồng hồ độc lập (tải trang 45 giây / chờ dữ liệu 25 giây, tự gia hạn mỗi
+  lần e-GP trả lời / trần tuyệt đối 90 giây không gia hạn được); đọc hai gói
+  song song thay vì tuần tự; **chứng thực bảng trước khi nhận** — phải biết
+  loại biên bản, đã xác minh mốc giá, và số nhà thầu đọc được khớp số e-GP công
+  bố, nếu không thì ghi rõ là chưa đủ; và quan trọng nhất, dùng `chrome.alarms`
+  làm chốt canh. Bản 4.2.0 chỉ dùng `setTimeout`, thứ **chết theo service
+  worker** khi Chrome cho worker ngủ — một lỗi MV3 thật của bản 4.2.0.
+- **Bỏ bộ lọc ngày gửi lên máy chủ ở màn hình mở thầu.** Bản 4.2.0 gửi range
+  trên `publicDateKqmt`. Nhưng đó là ngày ĐĂNG biên bản: gói IB2600486024 đăng
+  26/8/2026 mà mở thật 5/9/2026. Lọc máy chủ bằng ngày đăng là cắt mất gói vừa
+  mở — bỏ sót, thứ tệ nhất. 4.8.0 bỏ hẳn lớp đó và đối chiếu
+  `bidRealityOpenDate` tại chỗ. Một lớp đúng hơn hai lớp có một lớp nói sai.
+- **`statusOf()` tính lại vòng đời mỗi lần đọc** thay vì tin trường `status` đã
+  lưu. Trường đó không bao giờ là tín hiệu riêng từ e-GP — chính phần mềm gán
+  nó lúc quét — nên "ưu tiên giá trị đã lưu" chỉ có tác dụng đóng băng một kết
+  quả cũ: gói quét tuần trước vẫn hiện ĐANG MỞ dù đã hết hạn từ lâu.
+- **Nhãn độ đầy đủ dữ liệu nói đúng việc hơn**: "Đủ trường chính" thay cho "Dữ
+  liệu tốt". Phần mềm đếm được trường nào có nguồn, nó không phán xét được dữ
+  liệu tốt hay xấu.
+- Mười vòng tính năng 4.3–4.8: chọn loại gói thầu, bộ săn tự động theo giờ,
+  theo dõi chủ đầu tư, năng lực công ty, checklist HSDT, hợp đồng tương tự,
+  ma trận HĐ×HSMT, đối thủ địa bàn, bản đồ Leaflet, nhật ký điều chỉnh, duyệt
+  Go nhiều bước, đồng bộ JSON qua USB có HMAC, và chế độ chỉ xem.
+
+### Sửa lỗi
+
+- **Bộ lọc ngày loại oan bản ghi, không báo gì.** `parseDate()` neo mốc e-GP
+  vào giờ Việt Nam (đúng), nhưng `parseDayMs()` lại dựng biên khoảng bằng **giờ
+  máy**. Hai cách neo khác nhau cho cùng khái niệm "ngày", lệch nhau đúng 7
+  tiếng:
+
+  > Kế hoạch phê duyệt 01/06/2026 lúc 05:00 giờ Việt Nam → `2026-05-31T22:00Z`.
+  > Biên dưới của "từ ngày 01/06" trên máy UTC → `2026-06-01T00:00Z`.
+  > 22:00 ngày 31/05 < 00:00 ngày 01/06 → **kế hoạch biến mất khỏi kết quả.**
+
+- **`firstStampMs()` ném đi toàn bộ việc neo giờ** — nó dùng thẳng
+  `new Date(raw)` thay vì `parseDate()`, đúng tại chỗ mọi bộ lọc khoảng ngày so
+  sánh. e-GP thường trả chuỗi không kèm múi giờ (`'2026-03-31T23:59:00'`), mà
+  `new Date()` hiểu chuỗi đó theo giờ máy. Gói mở thầu tối muộn ngày cuối khoảng
+  rơi ra ngoài.
+
+  Cả hai nay dùng chung hằng số `VN_UTC_OFFSET_HOURS` khai báo một chỗ duy nhất.
+
+- **Cảnh báo "Đã quá hạn" không đời nào chạy được.** Điều kiện sinh ra nó đòi
+  gói đang MỞ và số ngày còn lại < 0 — nhưng ngày còn lại < 0 thì vòng đời đã
+  là ĐÃ ĐÓNG. Bỏ hẳn nhánh chết thay vì để đó.
+- **Bản ghi rỗng được cộng 16 điểm tin cậy.** `bidStatus()` trả `PLAN` cho mọi
+  bản ghi thiếu mã TBMT, kể cả bản ghi trống trơn, rồi `dataConfidence()` miễn
+  cho "kế hoạch" khoản thiếu hạn nộp. Nay phải **có mã kế hoạch** mới được miễn.
+- Bỏ ba tham chiếu ảnh trong `vendor/leaflet.css` trỏ tới tệp không có trong
+  gói. Bản đồ chỉ dùng `circleMarker`, không dùng `L.marker` hay
+  `control.layers`, nên ba ảnh đó vĩnh viễn không hiển thị — giữ lại chỉ là
+  ship sẵn ba yêu cầu tải hỏng.
+
+### Kiểm thử
+
+Bản 4.8.0 gửi kèm 3 tệp kiểm thử và **không có** bộ chạy trong trình duyệt.
+Nhánh này khôi phục lại toàn bộ: **144 bài**, gồm cả 21 bài của 4.8.0 và bộ
+kịch bản Chromium + máy chủ e-GP giả lập ở `tools/`.
+
+- `tests/timezone.test.js` — chạy lại đúng kịch bản đã làm lộ hai lỗi trên.
+- `npm run test:tz` chạy toàn bộ ở **bốn múi giờ**. Đây không phải cẩn thận
+  thừa: bản lỗi **đạt hết 5/5** khi chạy ở giờ Việt Nam. Chạy một múi giờ là tự
+  bịt mắt trước cả một lớp lỗi im lặng.
+- Bài kiểm thử múi giờ đầu tiên tôi viết **cũng bỏ sót** lỗi `firstStampMs`, vì
+  nó dựng dữ liệu mẫu bằng `parseDate()` nên chuỗi nào cũng có hậu tố `Z` — mà
+  `Z` thì `new Date()` cũng hiểu đúng. Đã viết lại bằng nguyên dạng chuỗi e-GP
+  trả về.
+- Mọi bài sửa đều đã thử phá lại mã nguồn để chắc chắn nó báo đỏ thật.
+
+### Còn chưa xác nhận được
+
+- Mọi phép đo vẫn trên **e-GP giả lập**. Chưa có lượt canary trên máy chủ thật.
+- Không kiểm chứng được con số "161/161 đạt" trong báo cáo 4.8.0: gói không kèm
+  bộ kiểm thử tương ứng.
+- `market.html` tải ảnh bản đồ từ `tile.openstreetmap.org`. Mỗi lần mở **Soi
+  địa bàn**, trình duyệt để lộ cho bên thứ ba biết đang xem vùng bản đồ nào.
+  Không nghiêm trọng, nhưng ngược với tinh thần "dữ liệu nằm tại máy" của phần
+  còn lại, và người dùng nên biết.
+
+## [4.2.0] — 2026-09-03
+
+Lọc theo ngày cho màn hình **Kế hoạch lựa chọn nhà thầu**.
+
+### Tính năng mới
+
+- **Chọn khoảng thời gian khi tra KHLCNT.** Trước đây màn hình này tra không
+  giới hạn thời gian, nên kế hoạch phê duyệt từ **2025** nằm lẫn với kế hoạch
+  2026 — người dùng phải tự nhặt bằng mắt. Nay có ô *"Kế hoạch phê duyệt
+  trong"*: 30 ngày / **3 tháng (mặc định)** / 6 tháng / 12 tháng / không giới
+  hạn / **tự chọn Từ ngày – Đến ngày**.
+
+  Mốc đối chiếu là **ngày phê duyệt** (`decisionDate`), đúng ngày in trên mỗi
+  thẻ kết quả, chứ không phải ngày đăng tải. Kế hoạch không có ngày phê duyệt
+  thì lùi về ngày đăng tải; kế hoạch **không có mốc nào thì được giữ lại** —
+  loại bỏ là bịa ra kết luận từ chỗ không có dữ liệu.
+
+  Lọc theo ngày còn thu hẹp phạm vi rất nhiều: cùng một lần tra Lâm Đồng, mốc
+  3 tháng cắt bớt một nửa số kế hoạch phải xét, nên ít chạm trần 40 trang hơn.
+
+### Chi tiết kỹ thuật
+
+- Lọc **hai lớp**, đúng cách đã dùng ở màn hình mở thầu:
+  1. **Máy chủ** — filter `range` trên `publicDate`, **đã nới biên 30 ngày**.
+     Nới biên là bắt buộc: máy chủ soi ngày *đăng tải*, lớp tại chỗ soi ngày
+     *phê duyệt*, hai mốc lệch nhau vài ngày. Không nới thì máy chủ cắt mất
+     kế hoạch mà lớp tại chỗ lẽ ra giữ — tức là **bỏ sót**.
+  2. **Tại chỗ** — `khlcntInDateRange()`. Đây mới là thứ quyết định. Chưa có
+     phép đo nào chứng minh e-GP lọc được `range` trên bản ghi
+     `es-plan-project-p`; nếu nó bỏ qua lặng lẽ như vẫn thường thế, kết quả
+     vẫn đúng.
+- Gom `parseDayMs` / `dateRangeFrom` / `firstStampMs` / `padRange` về
+  `lib/core.js` để hai màn hình dùng chung một chỗ, không lệch nhau được nữa.
+
+### Sửa lỗi
+
+- **`fromDate is not defined` — bộ lọc ngày làm chết cả lượt tra.**
+  `startPlanLookup()` đọc `fromDate`/`toDate` mà quên khai báo. Bắt được nhờ
+  chạy thật trên Chromium; phép thử đơn vị không đụng tới `background.js` nên
+  không thấy.
+- **Mốc sẵn (30/90/180/365 ngày) không lọc gì cả.** Giao diện gửi `days` lên
+  nhưng tầng nền không nhận, không một lời báo lỗi — chọn "3 tháng gần đây"
+  mà vẫn ra kế hoạch 2025.
+
+### Kiểm thử
+
+- `tests/khlcnt-date-range.test.js` — 15 bài, dùng đúng hai kế hoạch trong ảnh
+  người dùng gửi (`PL2500319720` phải bị loại, `PL2600286616` phải được giữ),
+  cùng các bài cho nới biên máy chủ và cho `parseDayMs` từ chối ngày không tồn
+  tại thay vì để JavaScript cuộn sang ngày khác.
+- `tests/ui-payload-contract.test.js` — 5 bài đối chiếu **trang giao diện gửi
+  gì** với **tầng nền đọc gì**. Chặn đúng hai lỗi ở trên mà không cần Chromium.
+  Đã thử bỏ `days` đi để chắc chắn phép thử báo đỏ thật.
+- `tools/test/plans-e2e.mjs` — chạy toàn trình trên e-GP giả lập. Máy chủ giả
+  lập **cố tình bỏ qua** bộ lọc thời gian, đúng như e-GP thật bỏ qua lặng lẽ
+  filter nó không hiểu; nhờ vậy phép thử chứng minh được công đầu thuộc về lớp
+  lọc tại chỗ. Kết quả: không lọc → 5 kế hoạch 2025 lẫn vào; lọc → **0**.
+- `tools/test/plans-ui.mjs` — kiểm khối ngày trên `plans.html` bằng Chromium.
+- Tổng: **93 → 113 bài, đạt hết**.
+
+### Còn chưa làm được
+
+- Chưa xác nhận được trên e-GP **thật** rằng máy chủ có lọc `range` trên
+  `es-plan-project-p` hay không. Chỉ ảnh hưởng tốc độ, không ảnh hưởng kết quả.
+
+## [4.1.1] — 2026-09-02
+
+Tăng tốc đọc biên bản mở thầu và sửa nhãn trạng thái nói sai.
+
+### Sửa lỗi
+
+- **Đọc biên bản rất chậm.** Vòng lặp chờ MỘT hạn duy nhất 20 giây cho mỗi gói.
+  Gói có dữ liệu trả lời sau 2–3 giây nên không sao; nhưng gói mà e-GP **không
+  phát request nhà thầu** thì vòng lặp nằm chết đủ 20 giây rồi mới sang gói kế.
+  Với 150 gói mà 30 gói không có dữ liệu, riêng phần nằm chờ vô ích đã là 10 phút.
+
+  Nay tách làm hai mốc: `BBMT_SETTLE_MS` bắt đầu đếm **sau khi trang đã tải
+  xong** (request nhà thầu luôn phát trong hoặc ngay sau lúc tải), còn hạn 20
+  giây chỉ còn là trần tuyệt đối phòng trang không bao giờ tải xong. Nghỉ giữa
+  hai gói giảm 700 → 450 ms.
+
+  Đo trên e-GP giả lập, 8 gói với 4 gói không trả dữ liệu:
+
+  | | Trước | Sau |
+  |---|---|---|
+  | Tổng thời gian | 86,1 giây | **19,7 giây** |
+  | Trung bình | 10,8 giây/gói | **2,5 giây/gói** |
+
+  Nhanh gấp **4,4 lần**. Ước tính 150 gói: khoảng 27 phút → khoảng 6 phút.
+
+- **Gói đã đọc xong vẫn hiện "Chưa đọc".** Một lần đọc có **ba** kết cục nhưng
+  giao diện chỉ có hai nhãn, và cả hai đều nói sai:
+  - e-GP trả bảng **rỗng** → hiện *"Chưa đọc biên bản gói này"*, y hệt gói còn
+    chưa tới lượt. Đây là lý do người dùng thấy gói số 1 ghi "chưa đọc" trong
+    khi gói số 3 đã có bảng, và tưởng phần mềm trả kết quả lộn xộn — thực ra
+    thứ tự đọc vẫn đúng, chỉ là nhãn nói sai.
+  - **hết hạn chờ** → hiện *"e-GP không trả dữ liệu"*, một kết luận về e-GP mà
+    ta không có cơ sở đưa ra. Hết hạn chờ chỉ có nghĩa là chưa biết.
+
+  Nay tách rõ bốn trạng thái `PENDING` / `OK` / `EMPTY` / `TIMEOUT`, mỗi trạng
+  thái một câu nói đúng việc đã xảy ra. Thông báo kết thúc cũng đếm riêng gói
+  chưa có nhà thầu dự và gói hết hạn chờ, kèm gợi ý quét lại.
+
+### Kiểm thử
+
+- Bổ sung 5 bài cho bốn trạng thái đọc, gồm bài chốt rằng **bảng rỗng không bao
+  giờ bị coi là chưa đọc**, và bài đọc được dữ liệu lưu từ bản cũ chưa có
+  `readState`.
+- `tools/test/speed.mjs` đo thời gian đọc trên e-GP giả lập; máy chủ giả lập
+  nay dựng cả trang chi tiết biên bản, trong đó **một phần gói cố tình không
+  phát request nhà thầu** — đúng tình huống làm bản cũ nằm chết.
+
+### Kết quả
+
+`npm test`: 89/89 → **93/93 đạt**.
+
+### Ghi chú
+
+Không tăng tốc bằng cách mở nhiều tab song song. Toàn bộ thiết kế là chạy bằng
+chính giao diện e-GP ở nhịp một người dùng bấm chuột; bắn song song đổi lấy vài
+phút bằng rủi ro bị khoá truy cập, một cái giá không đáng.
+
+### Hạn chế còn lại
+
+- Lượt quét sau vẫn đọc lại các gói mà lần trước e-GP trả bảng rỗng. Kho quan
+  sát chỉ ghi gói đọc được nhà thầu, nên chưa phân biệt được "đã hỏi rồi, không
+  có ai dự" với "chưa hỏi". Sửa đúng cần thêm một khoá lưu trữ riêng.
+
+## [4.1.0] — 2026-09-02
+
+Sửa lỗi bộ lọc thời gian ở màn hình **Gói đang chờ kết quả**, và bổ sung chọn
+khoảng ngày theo yêu cầu người dùng.
+
+### Sửa lỗi
+
+- **Bộ lọc thời gian không có tác dụng.** Người dùng chọn "Mở thầu trong vòng
+  15 ngày" (tháng 9/2026) nhưng nhận về gói mở thầu tháng 4–5 năm **2023**.
+
+  Nguyên nhân: truy vấn lọc bằng `searchType:'greater_equal'` với chuỗi ISO
+  trong `fieldValues`. e-GP **không hiểu dạng này và bỏ qua lặng lẽ** — không
+  báo lỗi, chỉ trả về mọi gói từ trước tới nay. Dạng đã được đo là chạy đúng
+  (ghi trong `lib/kqlcnt.js`) là `searchType:'range'` với `from`/`to` là **số
+  epoch mili-giây**.
+
+  Ngoài ra `days` và `fromYear/toYear` cùng đẩy filter lên một trường, nên máy
+  chủ nhận hai điều kiện chồng nhau.
+
+  Sửa ở hai lớp, vì máy chủ nuốt lỗi thay vì báo nên lớp máy chủ không đủ tin:
+  1. truy vấn gửi lên đúng định dạng, gộp về **một** filter `range`;
+  2. dữ liệu tải về được **lọc lại tại chỗ** — đây mới là thứ bảo đảm kết quả
+     nằm đúng khoảng, bất kể máy chủ làm gì. Cùng cách `lib/khlcnt.js` đã dùng
+     cho xã/phường. Số gói bị loại được báo ngay trên thanh tiến trình.
+- **Khoảng giá gói thầu cũng dính đúng lỗi đó** trên cùng màn hình: hai filter
+  `greater_equal`/`less_equal` chồng lên `bidPrice`. Gộp về một filter `range`
+  với `from`/`to` là số, đúng dạng bắt được từ request do chính e-GP dựng.
+- **Ngày không tồn tại bị JavaScript cuộn sang ngày khác.** `2026-13-45` thành
+  14/02/2027, `31/02` thành 03/03 — người dùng sẽ nhận kết quả của một khoảng
+  họ không hề chọn. Nay đối chiếu lại cả ba thành phần sau khi dựng `Date`.
+
+### Thêm mới
+
+- Ô **Từ ngày / Đến ngày** ở màn hình Gói đang chờ kết quả. Chọn
+  "Tự chọn khoảng ngày…" trong ô *Mở thầu trong khoảng* để hiện, và hai ô được
+  gợi ý sẵn 30 ngày gần đây. Bỏ trống một đầu thì đầu đó không giới hạn; chọn
+  ngược từ/đến thì tự hoán đổi.
+- Thêm hai mốc nhanh **6 tháng** và **1 năm gần đây**.
+- Thứ tự ưu tiên khi có nhiều cách chọn: khoảng ngày → khoảng năm → N ngày gần
+  đây.
+
+### Kiểm thử
+
+- Thêm `tests/bbmt-date-range.test.js` (19 bài): định dạng filter gửi lên, quy
+  đổi lựa chọn thành khoảng, biên của khoảng, ngày không hợp lệ, khoảng giá, và
+  lớp lọc tại chỗ — trong đó có bài dùng **đúng bốn gói năm 2023 từ ảnh chụp
+  màn hình người dùng gửi** làm dữ liệu kiểm tra.
+- Gói thiếu mốc thời gian được **giữ lại** kèm ghi chú, không loại — loại bỏ sẽ
+  là bịa ra kết luận từ chỗ không có dữ liệu.
+
+### Kết quả
+
+`npm test`: 70/70 → **89/89 đạt**. Khối chọn ngày đã chạy thử trong Chromium: 0 lỗi.
+
+### Hạn chế còn lại
+
+- Trường đã đo được là lọc `range` chắc chắn đúng là `publicDate`. Chưa có phép
+  đo nào chứng minh `publicDateKqmt` cũng vậy. Vì thế lớp lọc tại chỗ là bắt
+  buộc, không phải phòng xa. Cần canary trên e-GP thật để biết máy chủ có lọc
+  sẵn hay không — nếu không, lượt quét sẽ chậm hơn nhưng **kết quả vẫn đúng**.
+
+## [4.0.3] — 2026-09-02
+
+Dọn tài liệu và chặn một lớp sai sót lặp lại. Không thay đổi hành vi phần mềm.
+
+### Sửa lỗi
+
+- README công bố số phiên bản lệch với `manifest.json`. Đã xảy ra **hai lần**
+  liên tiếp khi bump phiên bản, và lần trước còn kéo theo hai câu sai sự thật
+  nằm cạnh số hiệu cũ. Nay README nói đúng phiên bản đang cài.
+- Các bước cài đặt trong README không còn gắn cứng số phiên bản, nên lần bump
+  sau không phải sửa lại.
+
+### Kiểm thử
+
+- Thêm `tests/version-consistency.test.js` (6 bài): `manifest.json`,
+  `package.json` và tiêu đề README phải cùng một số hiệu; CHANGELOG phải có mục
+  cho phiên bản hiện tại và đặt nó lên đầu; các bước cài đặt không được nhắc số
+  phiên bản cụ thể.
+
+### Kết quả
+
+`npm test`: 64/64 → **70/70 đạt**.
+
+## [4.0.2] — 2026-09-02
+
+Bản vá sau khi chạy 4.0.1 **thật trong Chromium**. 4.0.1 đạt 57/57 kiểm thử tự
+động nhưng vẫn còn một lỗi cùng gốc với lỗi nó vừa sửa, vì lỗi này chỉ lộ ra
+khi nạp tiện ích vào trình duyệt.
+
+### Sửa lỗi
+
+- **Đang mở sẵn một trang e-GP khác thì không quét được gói nào.** 4.0.1 đã
+  sửa route mặc định (`EGP_DEFAULT_URL`), nhưng `prepareScanTabFor()` vẫn tái
+  dùng tab e-GP đang mở **nguyên trạng** khi chưa có bộ lọc. Người dùng đang
+  xem trang chủ e-GP rồi bấm "Quét e-GP ngay" sẽ nhận nguyên văn
+  `Could not establish connection. Receiving end does not exist.` và 0 gói.
+  Đo trong Chromium: 4.0.1 = `ERROR`, 0 gói; sau khi sửa = `SUCCESS`, 137 gói.
+  - `lib/core.js` thêm `EGP_SCAN_PAGE`, `hasContentScript()`, `scanTargetUrl()`
+    làm nguồn sự thật duy nhất về phạm vi content script.
+  - `prepareScanTabFor()` điều hướng tab về trang tìm kiếm khi tab hiện tại
+    nằm ngoài phạm vi đó, thay vì dùng lại.
+
+### Kiểm thử
+
+- Thêm `tests/content-script-scope.test.js` (7 bài): dịch chính
+  `content_scripts.matches` trong `manifest.json` sang RegExp rồi đối chiếu với
+  `hasContentScript()`, nên manifest và phần nền không thể lệch nhau lần nữa.
+  Có bài chốt riêng rằng `background.js` không được viết tay URL trang chủ e-GP.
+- `tests/background-security.test.js` kiểm thêm cả đường thứ hai, không chỉ
+  route mặc định.
+- `tests/structure.test.js` bỏ qua `tools/`, `scripts/`, `test/`, `dist/` khi
+  soi tài nguyên và script inline — các thư mục này không được đóng gói.
+- Thêm `tools/test/`: máy chủ e-GP giả lập trả đúng hình dạng dữ liệu thật,
+  cùng bốn kịch bản chạy trong Chromium — nạp tiện ích, người dùng mới, đang mở
+  sẵn trang e-GP khác, và toàn trình. Chạy được **mà không đụng vào máy chủ
+  e-GP thật**.
+- Thêm `tools/pack.mjs` đóng gói `.zip` cài được, dùng chung danh sách loại trừ
+  với `tests/structure.test.js`.
+
+### Kết quả đo được
+
+| | 4.0.1 | 4.0.2 |
+|---|---|---|
+| `npm test` | 57/57 đạt | **64/64 đạt** |
+| Nạp 16 trang trong Chromium | 0 lỗi | 0 lỗi |
+| Người dùng mới bấm Quét | `SUCCESS`, 137 gói | `SUCCESS`, 137 gói |
+| Đang mở trang chủ e-GP rồi bấm Quét | `ERROR`, **0 gói** | **`SUCCESS`, 137 gói** |
+
+### Hạn chế còn lại
+
+- Bản giả lập dựng lại đúng hình dạng dữ liệu e-GP nhưng **không** dựng lại
+  reCAPTCHA v3, trạng thái phiên hay thay đổi giao diện tương lai. Vẫn cần
+  canary trên e-GP thật trước khi triển khai rộng.
+
+## [4.0.1] — 2026-09-02
+
+4.0.1 là bản hợp nhất chọn lọc sau khi đối chiếu 4.0.0 với 3.9.2. Mục tiêu là giữ lớp quyết định, bảo mật và độ tin cậy của 4.0, đồng thời phục hồi các thao tác nghiệp vụ mà 3.9.2 làm tốt hơn. Bản này **không** đưa trở lại cơ chế phát lại nguyên request/header/body cũ có thể chứa token, CAPTCHA, CSRF hoặc dữ liệu phiên.
+
+### Khôi phục và hoàn thiện nghiệp vụ
+
+- Khôi phục liên kết bấm được thật trong báo cáo XLSX bằng phần tử hyperlink và tệp quan hệ OOXML; chỉ tạo liên kết cho URL HTTP(S) hợp lệ.
+- Khôi phục mặc định **20 trang mỗi lượt quét**, cho phép chọn 1–40 trang và giải thích rõ rằng hạ giới hạn có thể bỏ sót cơ hội.
+- Khi nâng từ cấu hình mặc định 5 trang của nhánh 4.0.0, tự chuyển về 20 trang; các giá trị tuỳ chỉnh khác của người dùng được giữ nguyên.
+- Khôi phục bộ lọc **Chỉ gói đạt ngưỡng** trên Dashboard đầy đủ.
+- Khôi phục nút xoá từng gói khỏi dữ liệu cục bộ, kèm xác nhận trước khi xoá.
+
+### Dữ liệu một phần và thông báo
+
+- Lượt quét `PARTIAL` được chốt là **Hoàn tất một phần**, không bị nâng sai thành `SUCCESS`.
+- Lượt `PARTIAL` vẫn chạy thông báo Desktop, cảnh báo gói điểm cao, Telegram và xuất báo cáo di động nếu người dùng đã bật các đầu ra tương ứng.
+- Thông báo Desktop/Telegram của lượt `PARTIAL` ghi rõ dữ liệu chưa đầy đủ và yêu cầu kiểm tra phạm vi còn thiếu.
+- Sau một lượt `PARTIAL`, quét khi khởi động có thời gian chờ hai giờ để tránh lặp request mỗi lần mở Chrome; lượt `SUCCESS` vẫn dùng cửa sổ 18 giờ.
+
+### An toàn và độ tin cậy
+
+- Sao lưu an toàn chuyển sang danh sách trắng dữ liệu được phép xuất, loại queue/request lồng, cache và log tích hợp không cần thiết.
+- Loại bỏ đường xuất full backup chứa bí mật tích hợp; người dùng phải cấu hình lại Telegram thủ công sau khi nhập.
+- Backup an toàn giữ năm mốc Radar gần nhất mỗi gói và bỏ các trường dẫn xuất có thể tính lại để tệp kho tối đa nằm trong giới hạn nhập 30 MB; dữ liệu đang dùng vẫn giữ tối đa 20 mốc.
+- Template/request e-GP được scrub cả khi nâng cấp, xuất và nhập; token, CAPTCHA, cookie, header xác thực và dữ liệu phiên không được dùng lại.
+- Nhập backup giữ đúng các trạng thái kết thúc như `PARTIAL` và `TIMEOUT`; trạng thái không hợp lệ được xử lý fail-closed thay vì giả thành công.
+- Giữ các lớp bảo vệ của 4.0.0: URL/endpoint allowlist, request sanitization, cô lập job/tab, timeout/reconcile, CSP, import không tự bật Telegram hoặc lịch tự động, chuẩn hoá tiền/ngày/từ khoá và sửa tổng hợp liên danh/HHI.
+- Nhận active run/lookup bằng claim nguyên tử trong storage để hai thao tác khởi chạy gần nhau không cùng chiếm một job.
+- Phân trang chỉ chuyển tiếp sau ACK; trang chưa được xác nhận sẽ retry, còn trang lặp theo `jobId + pageIndex` được xử lý idempotent.
+- Timeout chuyển thành lease theo `lastProgressAt` và chỉ gia hạn sau khi trang đã được ghi nhận bền vững.
+- Đối soát khi service worker khởi động lạnh; coordinator BBMT chi tiết mất khỏi RAM được chốt an toàn thay vì treo giả.
+- Sửa route e-GP mặc định để luôn mở đúng trang tìm kiếm lựa chọn nhà thầu có content bridge.
+
+### Kiểm thử phát hành
+
+- Kiểm tra workbook có quan hệ hyperlink ngoài đúng chuẩn, không chỉ tô xanh/gạch chân chuỗi URL.
+- Kiểm tra mặc định/migration 20 trang, lọc đạt ngưỡng, xoá từng gói và hành vi `PARTIAL` trong các đường thông báo/startup.
+- Kiểm tra claim nguyên tử, ACK/retry, chống ghi trùng trang, gia hạn lease, cold-start reconcile và route e-GP mặc định.
+- Kết quả QA cuối: **57/57 kiểm thử tự động đạt, 0 lỗi, 0 bỏ qua**.
+
+### Hạn chế đã biết
+
+- Chưa chạy E2E bằng Chrome/Chromium thật hoặc đối chiếu trực tiếp phiên e-GP đang vận hành trong môi trường đóng gói; cần pilot/canary trước khi triển khai rộng.
+- Luồng quét chi tiết BBMT kết thúc an toàn nếu service worker bị dọn, nhưng chưa tự tiếp tục từ đúng cursor; người dùng cần chạy lại.
+- Không có OpenAI/AI tạo sinh trong phiên bản này. Nếu bổ sung, API key phải nằm ở backend có kiểm soát quyền, redaction, quota/chi phí và audit; không đặt key trong extension trình duyệt.
+
+## [4.0.0] — 2026-09-02
+
+Phiên bản 4.0.0 là đợt nâng cấp về quy trình ra quyết định, độ tin cậy dữ liệu, an toàn tích hợp và khả năng kiểm thử. Phần mềm vẫn cần canary trực tiếp trên e-GP trước khi triển khai rộng.
+
+### Thêm mới
+
+- Dashboard điều hành gồm:
+  - số cơ hội đang mở;
+  - số cơ hội phù hợp;
+  - số cơ hội khẩn cấp còn tối đa 3 ngày và đạt ngưỡng điểm;
+  - số cơ hội đang ở pipeline hoạt động;
+  - thẻ cơ hội ưu tiên số 1;
+  - bộ lọc, sắp xếp và phân trang 80 kết quả/lần.
+- Pipeline Go/No-Go với sáu trạng thái:
+  - `NEW` — Mới phát hiện;
+  - `REVIEW` — Đang sàng lọc;
+  - `GO` — Quyết định dự thầu;
+  - `BID` — Đang lập HSDT;
+  - `SUBMITTED` — Đã nộp;
+  - `NO_GO` — Không tham gia.
+- Lưu người phụ trách, ghi chú nội bộ, thời điểm cập nhật và giữ lại dữ liệu quyết định qua các lần quét.
+- Radar thay đổi cho giá gói thầu, hạn đóng thầu, tên gói, địa điểm và chủ đầu tư; giữ tối đa 20 thay đổi gần nhất cho mỗi cơ hội.
+- Chỉ số độ đầy đủ dữ liệu dựa trên các trường có thể kiểm tra: mã, tên, giá, hạn/trạng thái kế hoạch, địa điểm, đơn vị và liên kết chính thức.
+- Nhãn dữ liệu: **Dữ liệu tốt**, **Dữ liệu khá**, **Cần xác minh**.
+- Cảnh báo có thể kiểm chứng: gần hạn, thiếu trường, trúng từ khoá loại trừ và thiếu liên kết chính thức.
+- Khuyến nghị hành động tiếp theo theo loại dữ liệu, thời hạn và điểm sàng lọc.
+- Các cột quyết định, người phụ trách, ghi chú và lịch sử thay đổi trong báo cáo Excel.
+- Bộ nhận diện mới gồm logo SVG/PNG và icon Chrome ở các kích thước tiêu chuẩn.
+- Màn hình onboarding giải thích giới hạn của điểm số, độ đầy đủ dữ liệu và yêu cầu kiểm tra nguồn trước quyết định GO.
+- Bộ kiểm thử tự động bằng Node.js cho logic nghiệp vụ, manifest/CSP, import/cú pháp, tài nguyên, Excel và liên danh.
+
+### Thay đổi
+
+- Thu hẹp phạm vi content script từ mọi trang e-GP xuống đúng các trang lựa chọn nhà thầu.
+- Thay cơ chế phát lại nguyên request cũ bằng quy trình:
+  1. trích xuất truy vấn công khai;
+  2. loại bỏ token/CAPTCHA/CSRF/phiên và header nhạy cảm;
+  3. mở trang e-GP;
+  4. để chính trang tạo phiên bảo mật hiện hành;
+  5. chỉ chấp nhận endpoint nằm trong allowlist chính xác.
+- Chỉ chấp nhận URL nguồn HTTPS thuộc chính xác miền `muasamcong.mpi.gov.vn`.
+- Xếp mọi TBMT đang mở (`OPEN`) trước KHLCNT (`PLAN`) trong thứ tự ưu tiên.
+- Watchlist tự động theo các trạng thái pipeline đang hoạt động.
+- Radar chỉ tạo thay đổi khi cả giá trị cũ và mới đều tồn tại, giảm báo nhầm khi một lần lấy DOM bị thiếu trường.
+- Mỗi tác vụ được gắn mã công việc và tab riêng; đóng/huỷ một tab không dừng tác vụ ở tab khác.
+- Đánh dấu rõ kết quả phân trang chưa đầy đủ do giới hạn, timeout hoặc huỷ.
+- Tệp nhập được giới hạn 15 MB, chuẩn hoá dữ liệu, giới hạn độ dài/số lượng mảng và vô hiệu tích hợp ngoài sau khôi phục.
+- Thêm Content Security Policy chặt hơn: chỉ chạy script nội bộ, chặn object, base URI và nhúng frame.
+- Khi Chrome hỗ trợ, `chrome.storage.local` chỉ cho trusted contexts truy cập.
+- Cập nhật giao diện desktop/mobile, khả năng đọc, trạng thái nút và hiển thị tiến trình.
+
+### Sửa lỗi
+
+- Sửa đếm trùng từ khoá lồng nhau, ví dụ cụm “kênh mương” không còn đồng thời cộng thêm “kênh” nếu cùng một vị trí khớp.
+- Sửa phân tách tiền Việt/Anh và số thập phân, gồm các dạng như `3,5 tỷ` và `1.234,56 tỷ`.
+- Từ chối ngày không tồn tại như `31/02/2026` thay vì âm thầm chuẩn hoá sang ngày khác.
+- Tránh nhận URL HTTP, miền giả mạo gần giống hoặc `javascript:` làm liên kết nguồn.
+- Cải thiện nhận diện kết quả trúng thầu theo trạng thái ba giá trị `true/false/null`; không còn coi các từ chung như “đạt” hoặc chỉ có con số là bằng chứng thắng thầu.
+- Sửa phân tích liên danh:
+  - đếm mỗi gói thầu một lần;
+  - không ánh xạ mảng mã số thuế và mảng tên theo vị trí;
+  - chỉ dùng tên đã xác minh từ gói độc lập có đúng một mã số thuế;
+  - tách giá trị độc lập và liên danh;
+  - chỉ tính HHI trên giá trị độc lập, không nhân toàn bộ giá gói cho từng thành viên liên danh.
+- Áp dụng cùng cách xử lý liên danh cho hồ sơ chủ đầu tư.
+- Giữ cấu trúc dòng tốt hơn khi đọc DOM và kiểm tra đúng trạng thái hiển thị/disabled của nút.
+- Tự đối soát và dọn tác vụ mồ côi sau timeout hoặc khi tab đã đóng.
+
+### An toàn và quyền riêng tư
+
+- Allowlist endpoint chỉ cho phép đúng đường dẫn tìm kiếm lựa chọn nhà thầu và đúng phương thức/body dự kiến.
+- Loại sâu các trường có tên liên quan đến token, CAPTCHA, CSRF/XSRF, JWT, session, authorization, signature, secret, cookie và password.
+- Chỉ chuyển tiếp các header an toàn cần thiết.
+- **Sao lưu an toàn** loại Bot Token và Chat ID Telegram.
+- **Sao lưu đầy đủ** hiển thị cảnh báo vì có thể chứa bí mật.
+- Tệp chẩn đoán che thông tin nhạy cảm và chỉ lưu hình dạng endpoint, không lưu giá trị nghiệp vụ chi tiết.
+- Nhập bản sao lưu luôn xoá bí mật Telegram và tắt Telegram, quét tự động, quét lúc khởi động, xuất tự động.
+- Khôi phục cài đặt gốc yêu cầu xác nhận hai lần và xoá storage/lịch.
+
+### Kiểm thử
+
+- Bổ sung `npm test` với Node.js 20+.
+- Kiểm tra chuẩn hoá văn bản, tiền, ngày, URL, ID và request template.
+- Kiểm tra redaction, pipeline, xếp hạng, độ đầy đủ, cảnh báo, Radar, hành động tiếp theo và lọc dữ liệu.
+- Kiểm tra manifest, CSP, public key, kích thước icon, cú pháp/import JavaScript, tài nguyên, ID HTML trùng và inline script.
+- Kiểm tra xuất XLSX.
+- Kiểm tra riêng logic liên danh, chống ánh xạ tên theo vị trí và chống nhân trùng giá trị/HHI.
+- Kết quả tại thời điểm bàn giao: **44/44 kiểm thử tự động đạt**, gồm kiểm tra hồi quy đường xuất/nhập/migration backup.
+
+### Hạn chế đã biết
+
+- Bộ kiểm thử tự động không chứng minh tương thích trực tiếp với mọi trạng thái phiên, CAPTCHA hoặc thay đổi tương lai của e-GP.
+- Chưa có kiểm thử end-to-end được duy trì trên môi trường e-GP thật.
+- Môi trường bàn giao không có Chromium/Chrome nhị phân; chưa chạy được E2E giao diện thật trong lần đóng gói này.
+- Quét chi tiết BBMT có timeout bền để không treo, nhưng chưa resume cursor sau khi service worker bị dọn; cần chạy lại tác vụ.
+- Chưa có đồng bộ đội nhóm, phân quyền hay mã hoá đầu-cuối cho dữ liệu cục bộ.
+- Chưa có parser E-HSMT sinh ma trận tuân thủ kèm trích dẫn tệp/trang.
+- Không có OpenAI/AI tạo sinh trong phiên bản này; điểm số là logic xác định cục bộ.
+- Phân tích thị trường phụ thuộc vào phạm vi và độ đầy đủ của dữ liệu đã thu thập.
+- Telegram và Agent localhost là tích hợp ngoài tuỳ chọn, cần người dùng tự đánh giá rủi ro.
+
+## [3.9.2] — Mốc đối chiếu cho 4.0.1
+
+### Điểm được giữ lại trong 4.0.1
+
+- Báo cáo XLSX có liên kết nguồn bấm được.
+- Giới hạn quét mặc định 20 trang, phù hợp hơn cho lượt rà soát rộng.
+- Dashboard có bộ lọc chỉ hiển thị gói đạt ngưỡng và thao tác xoá từng gói.
+- Bộ nghiệp vụ rộng gồm TBMT, KHLCNT, kết quả, mở thầu, địa bàn, nhà thầu, chủ đầu tư, lịch quét, Telegram và xuất báo cáo.
+
+### Điểm không được hợp nhất nguyên trạng
+
+- Không giữ cơ chế phát lại nguyên request đã bắt vì có thể mang token/CAPTCHA/CSRF/header phiên hết hạn và mở rộng bề mặt rò rỉ.
+- Không đánh đổi pipeline Go/No-Go, Radar, độ đầy đủ dữ liệu, trạng thái `PARTIAL`, cô lập job/tab, sửa liên danh/HHI hoặc quy trình backup/import an toàn của nhánh 4.0.
+
+## [3.9.1] — Mốc nền trước 4.0
+
+### Điểm mạnh
+
+- Có bộ tính năng rộng cho nghiệp vụ Việt Nam: TBMT, KHLCNT, kết quả theo mã số thuế, mở thầu/giảm giá và quét địa bàn.
+- Có hồ sơ nhà thầu 360, chủ đầu tư, phân tích, bộ lọc lưu, lịch chạy, thông báo Desktop/Telegram và xuất Excel.
+- Lấy dữ liệu từ e-GP chính thức và lưu cục bộ, không phụ thuộc máy chủ của nhà phát triển.
+- Hữu ích cho doanh nghiệp xây dựng cần gom nhiều công đoạn tra cứu vào một công cụ.
+
+### Vấn đề được xác định
+
+- Dashboard thiên về danh sách hơn là buồng lái ra quyết định.
+- Chưa có pipeline Go/No-Go, người phụ trách, ghi chú nội bộ và lịch sử thay đổi có cấu trúc.
+- Chưa phân biệt rõ độ đầy đủ dữ liệu với điểm phù hợp; chưa có cảnh báo nguồn/thiếu trường minh bạch.
+- Chuẩn hoá tiền/ngày/từ khoá còn trường hợp biên dễ sai.
+- Cơ chế phát lại URL/body/header đã bắt có thể hỏng khi token/CAPTCHA/CSRF hết hạn và làm tăng bề mặt tin cậy.
+- Content script chạy trên phạm vi e-GP rộng hơn nhu cầu.
+- Tác vụ song song và huỷ/đóng tab chưa được cô lập chắc chắn.
+- Sao lưu/nhập có thể mang theo bí mật và tự động hoá ngoài ý muốn.
+- Phân tích liên danh có nguy cơ nhân trùng giá trị và ghép tên/mã theo vị trí.
+- Chưa có bộ kiểm thử hồi quy tự động đủ để chặn lỗi trước phát hành.
+
+Các điểm trên là cơ sở của thiết kế 4.0.0; không phải tuyên bố rằng toàn bộ rủi ro đã được loại bỏ.

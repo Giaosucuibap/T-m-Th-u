@@ -1,0 +1,15 @@
+node_modules
+dist/
+*.zip
+test-results/
+tools/test/certs/
+
+# Bằng chứng phát hành (HAR, ảnh chụp, workbook) — sinh lại mỗi bản, nặng ~13 MB,
+# và chứa dữ liệu e-GP thật dù đã che. Giữ trong gói giao, không đưa vào git.
+evidence/
+
+# Tệp thực thi biên dịch sẵn của cầu nối E-HSMT. Mã nguồn NativeHost.cs nằm
+# ngay cạnh; một tệp .exe trong git thì người duyệt không đọc được nó làm gì.
+native-agent/*.exe
+
+canary-result.json

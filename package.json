@@ -1,0 +1,12 @@
+{
+  "name": "giaosu-cuibap",
+  "version": "4.17.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test tests/*.test.mjs",
+    "test:tz": "node tests/run-timezones.mjs",
+    "build:check": "python tools/check-live-evidence.py",
+    "build": "npm test && npm run build:check"
+  }
+}
