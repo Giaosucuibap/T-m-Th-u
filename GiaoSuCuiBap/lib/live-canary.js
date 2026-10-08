@@ -2,19 +2,34 @@ import { normalizeBbmtPackage, normalizeBidderTable } from './bbmt.js';
 import { parseDate } from './core.js';
 
 export const CANARY_ALARM = 'gscb-live-canary';
-export const CANARY_DEFAULT = Object.freeze({ enabled: true, weekday: 1, hour: 2, timezone: 'Asia/Ho_Chi_Minh' });
+export const CANARY_DEFAULT = Object.freeze({ enabled: true, frequency: 'weekly', weekday: 1, hour: 2, timezone: 'Asia/Ho_Chi_Minh' });
 const OFFSET = 7 * 3600000, DAY = 86400000;
 export function canaryConfig(value = {}) {
-  return { enabled: value.enabled !== false, weekday: Number.isInteger(value.weekday) && value.weekday >= 0 && value.weekday <= 6 ? value.weekday : 1,
+  return { enabled: value.enabled !== false, frequency: value.frequency === 'daily' ? 'daily' : 'weekly', weekday: Number.isInteger(value.weekday) && value.weekday >= 0 && value.weekday <= 6 ? value.weekday : 1,
     hour: Number.isInteger(value.hour) && value.hour >= 0 && value.hour <= 4 ? value.hour : 2, timezone: CANARY_DEFAULT.timezone };
 }
 export function offPeak(now) { const h = new Date(now + OFFSET).getUTCHours(); return h < 5; }
 export function nextCanaryTime(now, config = CANARY_DEFAULT, catchUp = false) {
   const c = canaryConfig(config), local = new Date(now + OFFSET);
   let date = Date.UTC(local.getUTCFullYear(), local.getUTCMonth(), local.getUTCDate(), c.hour);
-  if (!catchUp) date += ((c.weekday - local.getUTCDay() + 7) % 7) * DAY;
-  if (date - OFFSET <= now) date += catchUp ? DAY : 7 * DAY;
+  // Hằng đêm (4.17.0): mỗi ngày đúng giờ đã chọn, bỏ qua ngày trong tuần.
+  const daily = c.frequency === 'daily';
+  if (!catchUp && !daily) date += ((c.weekday - local.getUTCDay() + 7) % 7) * DAY;
+  if (date - OFFSET <= now) date += catchUp || daily ? DAY : 7 * DAY;
   return date - OFFSET;
+}
+/** Quyết định có nhắn Telegram không. Chỉ nhắn khi trạng thái ĐÃ BÁO đổi:
+ *  lần đầu thấy ĐỎ, và khi hồi phục XANH sau một lần đã báo ĐỎ. "Chưa xác
+ *  định" (máy ngủ, e-GP không trả lời) không phải ĐỎ — không báo động giả. */
+export function canaryAlert(before, after) {
+  const told = before?.alertedStatus || null;
+  if (after?.status === 'RED' && told !== 'RED') {
+    const bad = (after.cases || []).filter(c => c.status === 'RED').slice(0, 5).map(c => `${c.id}: ${c.reason || ''}`.trim());
+    if (after.provinceCheck?.status === 'RED') bad.unshift('Danh mục tỉnh: mã 703 không còn là Lâm Đồng');
+    return { send: true, status: 'RED', text: `🔴 <b>Giáo Sư Cùi Bắp — e-GP đổi cấu trúc dữ liệu</b>\n${after.reason || ''}\n${bad.map(b => `• ${b}`).join('\n')}\n\nĐã TỰ DỪNG mọi lượt quét tự động để không lưu dữ liệu sai. Mở Chẩn đoán → Kiểm tra mẫu trên e-GP để xem chi tiết.` };
+  }
+  if (after?.status === 'GREEN' && told === 'RED') return { send: true, status: 'GREEN', text: `🟢 <b>Giáo Sư Cùi Bắp — e-GP đã khớp trở lại</b>\n${after.reason || ''}\nCó thể chạy lại các lượt quét.` };
+  return { send: false, status: told };
 }
 const first = value => Array.isArray(value) ? value[0] : value;
 const present = value => Array.isArray(value) ? value.length > 0 && value.every(present) : value !== undefined && value !== null && typeof value !== 'boolean' && (typeof value !== 'string' || !/^(?:null|undefined)?$/i.test(value.trim()));
@@ -63,7 +78,7 @@ export function createLiveCanaryRuntime({ getState, save, runProbe, readOpening,
      cũ đi sau mỗi lần nâng bản (bản 4.16.0 vẫn ghi '4.15.0'), và nếu một chỗ
      gọi quên truyền thì bằng chứng của bản cũ sẽ được coi là còn hiệu lực cho
      bản mới. Người gọi phải truyền chrome.runtime.getManifest().version. */
-  loadCases, sourceDigest, now = Date.now, version }) {
+  loadCases, sourceDigest, now = Date.now, version, notify = async () => {} }) {
   if (!version) throw new Error('createLiveCanaryRuntime cần phiên bản thật của tiện ích.');
   let running = null, digestPromise = null;
   const currentDigest = () => digestPromise || (digestPromise = Promise.resolve().then(sourceDigest).catch(error => { digestPromise = null; throw error; }));
@@ -169,7 +184,20 @@ export function createLiveCanaryRuntime({ getState, save, runProbe, readOpening,
     if (state.settings?.readOnlyMode) return { ok: false, message: 'Đang khóa chỉnh sửa.' };
     const jobs = [state.activeRun, state.winnerLookup, state.planLookup, state.areaScan, state.investorScan, state.bidOpenScan];
     if (jobs.some(job => job && ['STARTING', 'OPENING', 'RUNNING', 'LISTING', 'SCANNING'].includes(job.status))) return { ok: false, message: 'Hãy chờ lượt tra cứu đang chạy hoàn tất trước khi kiểm tra canary.' };
-    running = execute(trigger).catch(async error => {
+    const before = state.liveCanary || null;
+    running = execute(trigger).then(async result => {
+      // Báo khi CHUYỂN trạng thái (xanh→ĐỎ, ĐỎ→hồi phục) — không nhắn lại mỗi đêm.
+      try {
+        const after = (await getState()).liveCanary;
+        const alert = canaryAlert(before, after);
+        if (alert.send) {
+          const sent = await notify(alert.text, after).catch(error => ({ ok: false, message: String(error?.message || error) }));
+          await save({ liveCanary: { ...after, alertedStatus: sent?.ok ? alert.status : before?.alertedStatus || null,
+            alertNote: sent?.ok ? `Đã nhắn Telegram lúc ${new Date(now()).toISOString()}` : `Chưa nhắn được Telegram: ${sent?.message || 'không rõ lý do'}` } });
+        } else if (after && before?.alertedStatus && after.alertedStatus !== before.alertedStatus) await save({ liveCanary: { ...after, alertedStatus: before.alertedStatus } });
+      } catch { }
+      return result;
+    }).catch(async error => {
       const previous = (await getState()).liveCanary;
       const evidence = { ...previous, status: 'UNKNOWN', lastStructuralStatus: previous?.lastStructuralStatus || (previous?.status === 'RED' ? 'RED' : null), checkedAt: new Date(now()).toISOString(), reason: String(error?.message || error) };
       await save({ liveCanary: evidence }); await schedule({ catchUp: true }); return { ok: false, liveCanary: evidence };
@@ -181,7 +209,7 @@ export function createLiveCanaryRuntime({ getState, save, runProbe, readOpening,
     const state = await getState();
     if (!canaryConfig(state.canaryConfig).enabled || state.settings?.readOnlyMode) { await alarms.clear(CANARY_ALARM); return true; }
     if (!offPeak(now())) await schedule({ catchUp: true });
-    else if (!(await run({ trigger: 'weekly' })).ok) await schedule({ catchUp: true });
+    else if (!(await run({ trigger: canaryConfig(state.canaryConfig).frequency === 'daily' ? 'nightly' : 'weekly' })).ok) await schedule({ catchUp: true });
     return true;
   }
   async function hydrate() {
