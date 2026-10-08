@@ -1,0 +1,105 @@
+# ============================================================================
+#  KIỂM THỬ TỰ ĐỘNG — chạy mỗi lần đẩy mã và mỗi PR
+#
+#  Ba việc, chạy song song:
+#    1. Linux   : toàn bộ bộ kiểm thử + chạy lại các ca ngày/giá ở 4 múi giờ.
+#    2. Windows : toàn bộ bộ kiểm thử, GỒM 10 bài cầu nối E-HSMT chỉ chạy được
+#                 trên Windows (biên dịch bằng csc.exe, chạy tệp .exe). Tệp .exe
+#                 được biên dịch NGAY TẠI ĐÂY từ native-agent/NativeHost.cs — bài
+#                 kiểm chạy trên đúng mã nguồn ai cũng đọc được, không phải trên
+#                 một tệp nhị phân không rõ nguồn gốc.
+#    3. Trình duyệt: Chromium thật + máy chủ e-GP giả lập ở chế độ "khó tính"
+#                 (trang tự tải danh sách mặc định, bỏ qua thao tác khi bận, mạng
+#                 rớt). Đây là lớp bắt được lỗi chập chờn "e-GP chưa trả dữ liệu"
+#                 của 4.16.0 — bộ kiểm thử đơn vị không bắt được.
+#
+#  KHÔNG chạm vào e-GP thật. Kiểm thử trực tiếp trên e-GP vẫn phải chạy trên
+#  máy có mạng tới e-GP (tests/live-*.mjs) — xem tools/check-live-evidence.py.
+# ============================================================================
+name: Kiểm thử
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: kiem-thu-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  linux:
+    name: Bộ kiểm thử (Linux, 4 múi giờ)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm test
+      - run: npm run test:tz
+
+  windows:
+    name: Bộ kiểm thử (Windows, gồm cầu nối E-HSMT)
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Biên dịch cầu nối từ mã nguồn
+        shell: pwsh
+        run: |
+          $csc = 'C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe'
+          & $csc /nologo /target:exe /optimize+ /r:System.Web.Extensions.dll `
+            /out:native-agent\GiaoSuCuiBap.NativeHost.exe native-agent\NativeHost.cs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          New-Item -ItemType Directory -Force test-results | Out-Null
+      - run: npm test
+
+  trinh-duyet:
+    name: Chromium + e-GP giả lập khó tính
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Cài Playwright + Chromium
+        run: |
+          npm install --no-save --no-package-lock playwright@1.48.2
+          npx playwright install --with-deps chromium
+      - name: Chứng chỉ cho máy chủ giả lập
+        run: |
+          mkdir -p tools/test/certs
+          openssl req -x509 -newkey rsa:2048 -nodes -days 2 \
+            -keyout tools/test/certs/key.pem -out tools/test/certs/cert.pem \
+            -subj "/CN=muasamcong.mpi.gov.vn" \
+            -addext "subjectAltName=DNS:muasamcong.mpi.gov.vn,IP:127.0.0.1"
+      - name: Nạp mọi trang giao diện
+        run: xvfb-run -a node tools/test/load-all.mjs "$PWD/GiaoSuCuiBap"
+      - name: Ba luồng tra cứu dưới e-GP khó tính
+        env:
+          MOCK_PORT: '9443'
+          MOCK_CHAOS: autoload,early,busy,nativeslow=3500,slow=300,flaky=0.2,seed=11
+          MOCK_LOG: ${{ runner.temp }}/mock.log
+        run: |
+          # Ghi NỐI (>>) để lệnh làm rỗng nhật ký giữa các kịch bản không để lại byte rác.
+          node tools/test/mock-egp.mjs >> "$MOCK_LOG" 2>&1 &
+          for i in $(seq 1 30); do curl -sk --max-time 2 https://127.0.0.1:9443/ -o /dev/null && break; sleep 1; done
+          # Mỗi kịch bản tự kiểm qua nhật ký máy chủ rằng lượt "đạt" thật sự
+          # hỏi e-GP; nhật ký được làm mới giữa các kịch bản để đếm đúng.
+          xvfb-run -a node tools/test/bidopen-scan.mjs "$PWD/GiaoSuCuiBap" 6
+          : > "$MOCK_LOG"
+          xvfb-run -a node tools/test/tbmt-search.mjs "$PWD/GiaoSuCuiBap" 6
+          : > "$MOCK_LOG"
+          xvfb-run -a node tools/test/plan-lookup.mjs "$PWD/GiaoSuCuiBap" 5
+      - name: Nhật ký máy chủ giả lập khi hỏng
+        if: failure()
+        run: tail -200 "${{ runner.temp }}/mock.log" || true
