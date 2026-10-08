@@ -1,3 +1,4 @@
+import { pairStats, RELATION_NOTE } from './lib/relations.js';
 import { renderInsufficientRecords } from './insufficient-records.js';
 import { initInvestorInput, readInvestorInput } from './investor-input.js';
 /* ============================================================================
@@ -243,6 +244,8 @@ function drawPanel() {
 const weak = (reliable) => (reliable ? '' : ' class="weak" title="Cỡ mẫu nhỏ, chưa đủ tin"');
 
 function drawContractors(s) {
+  // Hồ sơ MỘT chủ đầu tư: mọi gói quy về một khoá để tỉ trọng là "% số gói của chủ đầu tư này".
+  const rel = new Map(pairStats((s.packages || []).map((p) => ({ ...p, investorCode: '__ho_so_nay__' })), { scope: 'investor' }).map((r) => [r.taxCode, r]));
   $('panel').innerHTML = `
     <div class="muted small" style="margin-bottom:10px">
       Đây là các nhà thầu <b>đã TRÚNG</b> của chủ đầu tư này — đầy đủ, đếm theo mã số thuế.
@@ -252,9 +255,10 @@ function drawContractors(s) {
       <thead><tr>
         <th>Nhà thầu</th><th class="num">Số gói</th><th class="num">Tỷ trọng</th>
         <th class="num">Độc lập / Liên danh</th><th class="num">Giá trị trúng</th>
-        <th class="num">Giảm giá</th><th>Năm</th>
+        <th class="num">Giảm giá</th><th class="num" title="Chỉ định thầu, chỉ định rút gọn, mua sắm trực tiếp, tự thực hiện, đàm phán giá — trên số gói đã biết hình thức">Ít cạnh tranh</th>
+        <th class="num" title="Trên số gói e-GP có ghi số nhà thầu; gói ghi 0 = không có số liệu">Chỉ 1 NT dự</th><th>Năm</th>
       </tr></thead>
-      <tbody>${s.contractors.map((c) => `
+      <tbody>${s.contractors.map((c) => { const r = rel.get(c.taxCode); return `
         <tr>
           <td>${esc(c.name || '(e-GP không ghi tên)')}
             <span class="sub code">${esc(c.taxCode)}</span></td>
@@ -265,13 +269,17 @@ function drawContractors(s) {
             ${c.ventureValue > 0 ? `<span class="sub">+ ${money(c.ventureValue)} liên danh</span>` : ''}</td>
           <td class="num"${weak(c.discount.reliable)}>${pct(c.discount.median)}
             <span class="sub">n=${c.discount.n}</span></td>
+          <td class="num"${r ? weak(r.lessCompetitive.share.reliable) : ''}>${r ? `${esc(r.lessCompetitive.share.text)} <span class="sub">${r.lessCompetitive.count}/${r.lessCompetitive.known}</span>` : '—'}</td>
+          <td class="num"${r ? weak(r.singleBidder.share.reliable) : ''}>${r ? `${esc(r.singleBidder.share.text)} <span class="sub">${r.singleBidder.count}/${r.singleBidder.known}</span>` : '—'}
+            ${r?.review ? `<span class="pill" style="background:#fffbeb;color:#92400e" title="${esc(r.flags.join(' · '))}">Cần xem</span>` : ''}</td>
           <td>${esc((c.years || []).join(', '))}</td>
-        </tr>`).join('')}
+        </tr>`; }).join('')}
       </tbody>
     </table>
     <div class="muted small" style="margin-top:10px">
       Giá trị gói <b>liên danh</b> để riêng, không cộng vào giá trị trúng độc lập:
       e-GP không công bố tỷ lệ góp vốn nên không thể quy giá trị cả gói cho một thành viên.
+      <br>${esc(RELATION_NOTE)}
     </div>`;
 }
 

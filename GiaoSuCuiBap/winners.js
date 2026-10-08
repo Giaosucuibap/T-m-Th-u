@@ -1,3 +1,4 @@
+import { contractorRelationsHtml } from './lib/relations-view.js';
 import { transparencyIndex, transparencyChip } from './lib/transparency.js';
 import { renderInsufficientRecords } from './insufficient-records.js';
 import { initInvestorInput, readInvestorInput } from './investor-input.js';
@@ -256,6 +257,7 @@ function renderPackages(lk) {
   $('by-field').innerHTML = chips(s.byField, (x) => `${x.name}: ${x.count}`);
   $('by-year').innerHTML = chips(s.byYear, (x) => `${x.year}: ${x.count}`);
   $('by-investor').innerHTML = chips(s.byInvestor, (x) => `${x.name} (${x.count})`);
+  $('relations').innerHTML = contractorRelationsHtml(list, lk.focusTaxCode, { esc, formatMoney });
 
   // Cả mã TBMT lẫn tên gói đều là link mở thẳng trang KQLCNT gốc trên e-GP.
   $('rows').innerHTML = list.map((p) => `
@@ -402,3 +404,4 @@ document.addEventListener('click', (e) => {
 send('RECONCILE_LOOKUPS').then(() => refresh()).catch(() => refresh());
 
 send('AREA_OPTIONS',{provincesOnly:true}).then(r=>{if(r?.ok)$('province-list').innerHTML=(r.provinces||[]).map(n=>`<option value="${esc(n)}">`).join('');}).catch(()=>{});
+
