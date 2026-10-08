@@ -6,7 +6,9 @@ const UD = fs.mkdtempSync('/tmp/ud-');
 const errors = [];
 const ctx = await chromium.launchPersistentContext(UD, {
    headless: false,
-  args: [`--disable-extensions-except=${EXT}`,`--load-extension=${EXT}`,'--no-sandbox','--disable-dev-shm-usage','--no-first-run','--no-proxy-server']
+  args: [`--disable-extensions-except=${EXT}`,`--load-extension=${EXT}`,'--no-sandbox','--disable-dev-shm-usage','--no-first-run','--no-proxy-server',
+    // Không bao giờ để kịch bản thử chạm e-GP THẬT (màn hình tra cứu tự mở sẵn trang e-GP).
+    `--host-resolver-rules=MAP muasamcong.mpi.gov.vn 127.0.0.1:${process.env.MOCK_PORT||9443}`]
 });
 const sw = ctx.serviceWorkers()[0] || await ctx.waitForEvent('serviceworker',{timeout:15000});
 const ID = new URL(sw.url()).host;

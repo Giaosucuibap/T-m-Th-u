@@ -23,9 +23,18 @@ export function activeListJob(state={},exceptId=''){
 /** Owns one reusable native list tab. BBMT details use their own two-tab pool.
  * Native queries remain page-owned; this module owns lifecycle, cache replay
  * and isolated canary receipts, never an HTTP or CAPTCHA request. */
-export function createQueryRuntime({getState,tabs,sendToTab,waitForTab,routeResults,routeDone,markCacheHit,cryptoApi=globalThis.crypto}){
+/* TAB E-GP MỞ SẴN (4.17.0)
+ * Lượt tra cứu đầu tiên trong phiên mất thời gian chủ yếu ở việc MỞ trang e-GP:
+ * tải trang, chạy ứng dụng, tự tải danh sách mặc định. Khi người dùng mở một
+ * màn hình tra cứu, ta mở sẵn trang đó ở một tab nền trong lúc họ còn đang nhập
+ * tiêu chí. Không gửi tiêu chí, không bấm gì — chỉ là trang e-GP người dùng vẫn
+ * mở tay. Tab của người dùng KHÔNG bao giờ bị điều hướng ở bước này. */
+export const WARM_MAX_AGE_MS=30*60_000;
+export const WARM_READY_WAIT_MS=15_000;
+export function createQueryRuntime({getState,tabs,sendToTab,waitForTab,routeResults,routeDone,markCacheHit,cryptoApi=globalThis.crypto,
+  now=()=>Date.now(),sleep=ms=>new Promise(r=>setTimeout(r,ms))}){
   const cache=createQueryCache(), captures=new Map(), probes=new Map(),privateTabs=new Set();
-  let idleTabId=null, acquiring=null,probePending=false;
+  let idleTabId=null, acquiring=null,probePending=false,warm=null,warming=null;
   const tuple=(id,index=0)=>`${id}:${index}`;
   async function assertAllowed({probe=false}={}){
     const s=await getState();
@@ -38,6 +47,9 @@ export function createQueryRuntime({getState,tabs,sendToTab,waitForTab,routeResu
     if(probes.size&&!probe)throw Error('Đang kiểm tra cấu trúc e-GP. Hãy chờ kiểm tra hoàn tất.');
     if(acquiring)return acquiring;
     acquiring=(async()=>{
+      // Tab mở sẵn đang được tạo/đang tải: chờ nó, đừng mở thêm tab thứ hai.
+      if(warming)await warming.catch(()=>{});
+      if(warm?.loading)await warm.loading;
       const s=await getState();
       const reserved=new Set([s.activeRun,s.winnerLookup,s.planLookup,s.areaScan,s.investorScan].filter(j=>j&&['STARTING','OPENING','RUNNING','LISTING'].includes(j.status)).map(j=>j.tabId).filter(Number.isInteger));
       if(s.bidOpenScan?.status==='LISTING'&&Number.isInteger(s.bidOpenScan.tabId))reserved.add(s.bidOpenScan.tabId);
@@ -46,7 +58,12 @@ export function createQueryRuntime({getState,tabs,sendToTab,waitForTab,routeResu
       const candidates=known.filter(t=>!reserved.has(t.id)&&/contractor-selection/i.test(t.url||''));
       candidates.sort((a,b)=>(b.id===idleTabId?1:0)-(a.id===idleTabId?1:0));
       for(const tab of candidates){
-        const probeResult=await sendToTab(tab.id,{type:'KQLCNT_PROBE'}).catch(()=>null);
+        let probeResult=await sendToTab(tab.id,{type:'KQLCNT_PROBE'}).catch(()=>null);
+        // Tab mở sẵn có thể vừa tải xong mà ứng dụng e-GP chưa vẽ xong ô tìm kiếm.
+        // Chờ nó sẵn sàng thay vì tải lại — tải lại là bỏ phí đúng thứ ta mở sẵn.
+        if(warm?.tabId===tab.id)for(const until=now()+WARM_READY_WAIT_MS;now()<until&&!probeResult?.busy&&!probeResult?.ready&&!probeResult?.pageError;){
+          await sleep(400);probeResult=await sendToTab(tab.id,{type:'KQLCNT_PROBE'}).catch(()=>null);
+        }
         if(!probeResult||probeResult.busy)continue;
         idleTabId=tab.id;
         if(probe)privateTabs.add(tab.id);
@@ -63,6 +80,40 @@ export function createQueryRuntime({getState,tabs,sendToTab,waitForTab,routeResu
       const tab=await tabs.create({url:EGP_SEARCH_PAGE,active:Boolean(active)});idleTabId=tab.id;if(probe)privateTabs.add(tab.id);await waitForTab(tab.id,40000);return tab;
     })();
     try{return await acquiring;}finally{acquiring=null;}
+  }
+  /** Mở sẵn trang tra cứu e-GP ở tab nền. Không bao giờ ném lỗi: đây chỉ là
+   * tăng tốc, hỏng thì lượt tra cứu tự mở tab như cũ. */
+  async function prewarm(){
+    if(warming)return {ok:true,warmed:false,reason:'warming'};
+    warming=(async()=>{
+      let s;
+      try{s=await assertAllowed();}catch(error){return {ok:true,warmed:false,reason:'blocked',message:String(error?.message||error)};}
+      if(s.settings?.keepEgpTabWarm===false)return {ok:true,warmed:false,reason:'off'};
+      if(acquiring||probePending||probes.size||activeListJob(s))return {ok:true,warmed:false,reason:'busy'};
+      const known=(await tabs.query({url:'https://muasamcong.mpi.gov.vn/*'})).filter(t=>/contractor-selection/i.test(t.url||''));
+      const own=warm&&known.find(t=>t.id===warm.tabId);
+      if(own){
+        // Trang để quá lâu có thể đã cũ; làm mới khi KHÔNG ai đang xem/dùng nó.
+        if(now()-warm.openedAt<WARM_MAX_AGE_MS||own.active)return {ok:true,warmed:false,reason:'warm',tabId:own.id};
+        const probe=await sendToTab(own.id,{type:'KQLCNT_PROBE'}).catch(()=>null);
+        if(probe?.busy)return {ok:true,warmed:false,reason:'busy',tabId:own.id};
+        await tabs.update(own.id,{url:EGP_SEARCH_PAGE});
+        warm={tabId:own.id,openedAt:now(),loading:waitForTab(own.id,40000).catch(()=>null)};
+        return {ok:true,warmed:true,refreshed:true,tabId:own.id};
+      }
+      warm=null;
+      // Người dùng đã có trang tra cứu e-GP: lượt tra cứu sẽ dùng lại nó.
+      if(known.length)return {ok:true,warmed:false,reason:'user-tab',tabId:known[0].id};
+      const tab=await tabs.create({url:EGP_SEARCH_PAGE,active:false});
+      // Chrome hay "ngủ" tab nền khi thiếu RAM — tab ngủ thì mở sẵn cũng vô ích.
+      await Promise.resolve(tabs.update(tab.id,{autoDiscardable:false})).catch(()=>{});
+      idleTabId=tab.id;
+      warm={tabId:tab.id,openedAt:now(),loading:waitForTab(tab.id,40000).catch(()=>null)};
+      return {ok:true,warmed:true,tabId:tab.id};
+    })();
+    try{return await warming;}
+    catch(error){return {ok:true,warmed:false,reason:'error',message:String(error?.message||error)};}
+    finally{warming=null;}
   }
   async function dispatch(tabId,payload){
     await assertAllowed();
@@ -130,5 +181,5 @@ export function createQueryRuntime({getState,tabs,sendToTab,waitForTab,routeResu
     }
     return {ok:true,probe:true};
   }
-  return {acquire,dispatch,assertAllowed,runProbe,routeProbe,captureResult,captureDone,stop,cache,isBusy:()=>probePending||privateTabs.size>0,isProbeTab:id=>privateTabs.has(id)};
+  return {acquire,prewarm,warmTabId:()=>warm?.tabId??null,dispatch,assertAllowed,runProbe,routeProbe,captureResult,captureDone,stop,cache,isBusy:()=>probePending||privateTabs.size>0,isProbeTab:id=>privateTabs.has(id)};
 }

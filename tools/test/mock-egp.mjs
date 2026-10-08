@@ -165,7 +165,9 @@ function datasetFor(env) {
  *   nativeslow=N: danh sách mặc định (không bộ lọc) chậm N ms MỖI LẦN mở trang.
  *   autoload    : trang TỰ TẢI danh sách mặc định khi mở, như e-GP thật.
  *   flaky=p     : cắt ngang kết nối với xác suất p — như mạng chập chờn.
- *   seed=k      : hạt giống cho flaky, để lần chạy lặp lại được. */
+ *   seed=k      : hạt giống cho flaky, để lần chạy lặp lại được.
+ *   pageslow=N  : bản thân TRANG e-GP tải chậm N ms (e-GP thật mất vài giây để
+ *                 tải trang); dùng để đo lợi ích của tab mở sẵn. */
 const CHAOS = Object.fromEntries(String(process.env.MOCK_CHAOS || '').split(',').filter(Boolean)
   .map((part) => { const [k, v] = part.split('='); return [k.trim(), v === undefined ? true : Number(v)]; }));
 let chaosSeed = Number(CHAOS.seed || 1), searchCount = 0;
@@ -269,8 +271,9 @@ const server = https.createServer(
             x.open('POST', '${LOT_OPEN}'); x.send('{}');` : ''}</script></body>`);
         return;
       }
-      res.writeHead(200, { 'content-type': 'text/html;charset=UTF-8' });
-      res.end(PAGE_HTML);
+      const gui = () => { res.writeHead(200, { 'content-type': 'text/html;charset=UTF-8' }); res.end(PAGE_HTML); };
+      console.log(`[mock] PAGE ${url.pathname}${CHAOS.pageslow ? ` (chậm ${CHAOS.pageslow} ms)` : ''}`);
+      if (CHAOS.pageslow) setTimeout(gui, CHAOS.pageslow); else gui();
       return;
     }
 

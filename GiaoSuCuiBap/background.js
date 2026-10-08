@@ -4217,6 +4217,7 @@ chrome.runtime.onMessage.addListener((message,sender,sendResponse)=>{
       case 'CLEAR_WINNER_CACHE': await save({[KEYS.winnerCache]:{}});sendResponse({ok:true});break;
       case 'EXPORT_WINNERS_CSV': await exportWinnersCsv();sendResponse({ok:true});break;
       case 'OPEN_OPTIONS': await chrome.runtime.openOptionsPage();sendResponse({ok:true});break;
+      case 'EGP_PREWARM': sendResponse(await queryRuntime.prewarm());break;
       case 'OPEN_EGP': {const s=await getState();await chrome.tabs.create({url:s.template?.sourcePageUrl||EGP_DEFAULT_URL});sendResponse({ok:true});break;}
       case 'SCAN_CURRENT_TAB': {const [tab]=await chrome.tabs.query({active:true,currentWindow:true});if(!tab?.url?.startsWith('https://muasamcong.mpi.gov.vn/'))throw new Error('Tab hiện tại không phải e-GP.');sendResponse(await sendToTab(tab.id,{type:'SCAN_CURRENT_PAGE'}));break;}
       default: sendResponse({ok:false,message:'Lệnh không được hỗ trợ.'});

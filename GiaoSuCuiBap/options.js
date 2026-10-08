@@ -3,7 +3,7 @@ import {validateCriteria} from './lib/workspace.js';
 
 const ids = ['minPrice', 'maxPrice', 'minDaysToClose', 'reportMinScore', 'maxPagesHint', 'dailyTime',
   'maxStoredTenders', 'scanTimeoutSeconds', 'alertMinScore', 'telegramMinScore'];
-const checks = ['requireConstruction', 'autoScan', 'scanOnStartup', 'openScheduledTabActive',
+const checks = ['requireConstruction', 'autoScan', 'scanOnStartup', 'openScheduledTabActive', 'keepEgpTabWarm',
   'autoExportMobileReport', 'telegramEnabled', 'telegramDailySummary', 'readOnlyMode'];
 const lines = ['provinces', 'positiveKeywords', 'requiredKeywords', 'negativeKeywords'];
 const texts = ['requirementText', 'telegramBotToken', 'telegramChatId', 'notifyEmail', 'notifyWebhook', 'webhookSecret', 'operatorName'];

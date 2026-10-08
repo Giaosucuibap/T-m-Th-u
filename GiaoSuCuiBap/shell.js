@@ -20,6 +20,11 @@ const nav = [
   ['options.html','settings','Cấu hình']
 ];
 const file=location.pathname.split('/').pop();
+// Màn hình nào sẽ hỏi e-GP thì mở sẵn trang tra cứu e-GP ở tab nền ngay khi mở
+// (người dùng còn đang nhập tiêu chí). Tắt được ở Cấu hình. Hỏng thì bỏ qua —
+// lượt tra cứu vẫn tự mở tab như cũ.
+export const PREWARM_PAGES=['search.html','bidopen.html','plans.html','winners.html','market.html','investor.html'];
+if(PREWARM_PAGES.includes(file))Promise.resolve().then(()=>chrome.runtime.sendMessage({type:'EGP_PREWARM'})).catch(()=>{});
 const shell=document.getElementById('workspace-nav');
 const navLink=([href,i,label])=>`<a href="${href}" ${file===href?'aria-current="page"':''}>${icon(i,19)}<span>${label}</span>${file===href?'<i></i>':''}</a>`;
 if(shell) shell.innerHTML=`<a class="ws-brand" href="search.html"><img src="icons/brand-mark.svg" width="42" height="42" alt=""><span>Giáo Sư Cùi Bắp<small>KHÔNG GIAN TÌM THẦU</small></span></a><div class="nav-caption">QUY TRÌNH LÀM VIỆC</div><nav aria-label="Chức năng chính">${nav.slice(0,4).map(navLink).join('')}<details class="advanced-nav" ${nav.slice(4).some(n=>n[0]===file)?'open':''}><summary>Nâng cao</summary><div>${nav.slice(4).map(navLink).join('')}<a href="diagnostics.html">${icon('shield',19)}<span>Kiểm tra dữ liệu</span></a></div></details></nav><div class="ws-side-bottom">${icon('shield',19)}<div>Dữ liệu trên máy bạn<small>Không lưu mật khẩu e-GP</small></div></div><div class="ws-version">PHIÊN BẢN ${chrome.runtime.getManifest().version}<span>VN / UTC+7</span></div>`;

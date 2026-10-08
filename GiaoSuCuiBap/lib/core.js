@@ -32,6 +32,8 @@ export const DEFAULT_SETTINGS = Object.freeze({
   scanTimeoutSeconds: 75,
   autoExportMobileReport: false,
   openScheduledTabActive: false,
+  // Mở sẵn trang tra cứu e-GP ở tab nền khi mở màn hình tra cứu (4.17.0).
+  keepEgpTabWarm: true,
   alertMinScore: 85,
   telegramEnabled: false,
   telegramBotToken: '',

@@ -36,8 +36,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
       - run: npm test
@@ -48,8 +48,8 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
       - name: Biên dịch cầu nối từ mã nguồn
@@ -67,8 +67,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
       - name: Cài Playwright + Chromium
@@ -100,6 +100,16 @@ jobs:
           xvfb-run -a node tools/test/tbmt-search.mjs "$PWD/GiaoSuCuiBap" 6
           : > "$MOCK_LOG"
           xvfb-run -a node tools/test/plan-lookup.mjs "$PWD/GiaoSuCuiBap" 5
+      - name: Tab e-GP mở sẵn phải làm lượt đầu nhanh hơn
+        env:
+          MOCK_PORT: '9443'
+          MOCK_CHAOS: autoload,early,busy,pageslow=4000,nativeslow=2500,slow=300
+          MOCK_LOG: ${{ runner.temp }}/mock.log
+        run: |
+          pkill -f "node tools/test/mock-egp.mjs" || true
+          node tools/test/mock-egp.mjs >> "$MOCK_LOG" 2>&1 &
+          for i in $(seq 1 30); do curl -sk --max-time 2 https://127.0.0.1:9443/ -o /dev/null && break; sleep 1; done
+          xvfb-run -a node tools/test/prewarm-speed.mjs "$PWD/GiaoSuCuiBap" 3 6
       - name: Nhật ký máy chủ giả lập khi hỏng
         if: failure()
         run: tail -200 "${{ runner.temp }}/mock.log" || true
