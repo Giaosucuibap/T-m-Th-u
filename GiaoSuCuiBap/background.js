@@ -8,6 +8,7 @@ import { buildKhlcntQueries } from './lib/khlcnt.js';
 import { buildInvestorDiscoveryQueries } from './lib/investor.js';
 import { createLiveCanaryRuntime, canarySourceDigest } from './lib/live-canary.js';
 import { createNativeAgent } from './lib/native-agent.js';
+import { traceEntry, appendTrace, summarizeTrace, MODE_LABELS, STAGES } from './lib/run-trace.js';
 import { createQueryRuntime, readQueryControlState, schemaIsRed, activeListJob, SCHEMA_STOP_MESSAGE } from './lib/runtime-query.js';
 import { resolveWardSelection } from './lib/area-match.js';
 import { wardIdentitiesForProvince } from './lib/areas.js';
@@ -3368,6 +3369,13 @@ function runtimeSenderKind(sender){
 }
 
 function shortString(value,max=500){return String(value??'').slice(0,max);}
+/** Sổ giai đoạn từ trang e-GP: chỉ nhận nhãn ngắn và số, bỏ mọi thứ khác. */
+function safeTrace(t){
+  if(!t||typeof t!=='object'||Array.isArray(t))return null;
+  const num=v=>v===null||v===undefined?null:Number.isFinite(Number(v))?Number(v):null;
+  return {stage:shortString(t.stage,20),hookMs:num(t.hookMs),firstPageMs:num(t.firstPageMs),totalMs:num(t.totalMs),
+    pages:num(t.pages),reReads:num(t.reReads),status:num(t.status)};
+}
 function nullableCount(value,max=1_000_000){
   return typeof value==='number'&&Number.isInteger(value)&&value>=0&&value<=max?value:null;
 }
@@ -3435,7 +3443,7 @@ function sanitizeContentPayload(type,input){
     applied:p.applied&&typeof p.applied==='object'&&!Array.isArray(p.applied)?p.applied:null
   };
   if(type==='KQLCNT_DONE')return {planId:shortString(p.planId,120),mode:shortString(p.mode,30),queryIndex:nullableCount(p.queryIndex,100),
-    ok:p.ok!==false,partial:Boolean(p.partial),message:shortString(p.message,1000)};
+    ok:p.ok!==false,partial:Boolean(p.partial),message:shortString(p.message,1000),trace:safeTrace(p.trace)};
   if(type==='BBMT_BIDDERS')return {url:isEgpUrl(p.url)?shortString(p.url,2000):'',
     rows:assertObjectRows(p.rows||[],500,'rows'),status:safeCount(p.status,999),kind:p.kind==='package'?'package':'lot'};
   if(type==='BBMT_PRICE_BASIS')return {url:isEgpUrl(p.url)?shortString(p.url,2000):'',status:safeCount(p.status,999),
@@ -3595,9 +3603,23 @@ async function routeKqlcntResultsOnce(payload,sender){
   return {...(result||{}),ok:result?.ok!==false,pageIndex:effective.pageIndex};
 }
 
+/* Sổ giai đoạn: ghi nối tiếp qua một hàng đợi để hai lượt kết thúc cùng lúc
+   không ghi đè mất dòng của nhau. Hỏng ghi sổ không bao giờ làm hỏng lượt. */
+let runTraceChain=Promise.resolve();
+function recordRunTrace(payload,sender){
+  const open=payload.fromCache?null:queryRuntime.takeOpenTime(sender.tab?.id);
+  const entry=traceEntry(payload,{openMs:open?.ms??null,warm:open?open.warm:null});
+  runTraceChain=runTraceChain.then(async()=>{
+    const {runTrace=[]}=await chrome.storage.local.get({runTrace:[]});
+    const next=appendTrace(runTrace,entry);
+    if(next!==runTrace)await chrome.storage.local.set({runTrace:next});
+  }).catch(()=>{});
+  return runTraceChain;
+}
 async function routeKqlcntDone(payload,sender){
   const privateReply=queryRuntime.routeProbe('KQLCNT_DONE',payload,sender);if(privateReply)return privateReply;
   queryRuntime.captureDone(payload,sender);
+  void recordRunTrace(payload,sender);
   const tabId=sender.tab?.id;
   const pending=pendingKqlcntDoneByTab.get(tabId);
   if(pending&&(Date.now()-pending.at)<=60_000&&
@@ -4217,6 +4239,9 @@ chrome.runtime.onMessage.addListener((message,sender,sendResponse)=>{
       case 'CLEAR_WINNER_CACHE': await save({[KEYS.winnerCache]:{}});sendResponse({ok:true});break;
       case 'EXPORT_WINNERS_CSV': await exportWinnersCsv();sendResponse({ok:true});break;
       case 'OPEN_OPTIONS': await chrome.runtime.openOptionsPage();sendResponse({ok:true});break;
+      case 'RUN_TRACE_SUMMARY': {const {runTrace=[]}=await chrome.storage.local.get({runTrace:[]});
+        sendResponse({ok:true,summary:summarizeTrace(runTrace),last7d:summarizeTrace(runTrace,{sinceMs:7*864e5}),recent:runTrace.slice(-30).reverse(),modes:MODE_LABELS,stages:STAGES});break;}
+      case 'CLEAR_RUN_TRACE': await chrome.storage.local.set({runTrace:[]});sendResponse({ok:true});break;
       case 'EGP_PREWARM': sendResponse(await queryRuntime.prewarm());break;
       case 'OPEN_EGP': {const s=await getState();await chrome.tabs.create({url:s.template?.sourcePageUrl||EGP_DEFAULT_URL});sendResponse({ok:true});break;}
       case 'SCAN_CURRENT_TAB': {const [tab]=await chrome.tabs.query({active:true,currentWindow:true});if(!tab?.url?.startsWith('https://muasamcong.mpi.gov.vn/'))throw new Error('Tab hiện tại không phải e-GP.');sendResponse(await sendToTab(tab.id,{type:'SCAN_CURRENT_PAGE'}));break;}

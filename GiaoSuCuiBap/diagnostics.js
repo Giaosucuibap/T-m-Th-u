@@ -64,6 +64,41 @@ $('test').onclick = () => {
   $('result').textContent = JSON.stringify({...tests,allPassed:Object.values(tests).every(v=>v===true),canaryDetail:canary,_phạmVi:'Mẫu kiểm thử cục bộ; không xác nhận kết nối hay độ đầy đủ của dữ liệu e-GP hiện tại.'}, null, 2);
 };
 
+/* ĐỘ ỔN ĐỊNH TRA CỨU (4.17.0) — số đo thật từ sổ giai đoạn, không ước đoán. */
+let traceData=null;
+const giay=(v)=>v===null||v===undefined?'—':`${(v/1000).toFixed(1)} s`;
+const phanTram=(v)=>v===null||v===undefined?'—':`${(v*100).toFixed(v>0&&v<0.1?1:0)}%`;
+export function renderTrace(data){
+  const s=data.summary||{},d=data.last7d||{},stages=data.stages||{},modes=data.modes||{};
+  if(!s.runs&&!s.cached)return {summary:'<p class="muted">Chưa có lượt tra cứu nào được đo. Chạy một lượt tra cứu rồi quay lại đây.</p>',modes:'',recent:''};
+  const loi=Object.entries(s.failures||{}).sort((a,b)=>b[1]-a[1])
+    .map(([k,n])=>`<li>${esc(stages[k]||k)}: <b>${n}</b> lượt</li>`).join('');
+  const summary=`<p><b>${s.ok}/${s.runs}</b> lượt hỏi e-GP thành công · tỉ lệ lỗi <b>${phanTram(s.errorRate)}</b> (7 ngày qua: ${phanTram(d.errorRate)} trên ${d.runs||0} lượt)</p>
+    <p>Thời gian một lượt thành công: trung vị <b>${giay(s.p50)}</b>, chậm nhất 5% từ <b>${giay(s.p95)}</b> · chờ trang đầu: trung vị ${giay(s.firstPageP50)}, p95 ${giay(s.firstPageP95)} · mở tab e-GP: trung vị ${giay(s.openP50)}</p>
+    <p class="muted small">${s.cached} lượt lấy ngay từ bộ nhớ đệm · ${s.cancelled} lượt bạn tự dừng · ${s.reReads} lần phải đọc lại trang do e-GP chập chờn (đã tự xử lý).</p>
+    ${loi?`<p><b>Hỏng ở đâu:</b></p><ul>${loi}</ul>`:'<p>Chưa có lượt nào hỏng.</p>'}`;
+  const rows=Object.entries(s.byMode||{}).map(([m,v])=>`<tr><td>${esc(modes[m]||m)}</td><td>${v.ok}/${v.runs}</td><td>${phanTram(v.errorRate)}</td><td>${giay(v.p50)}</td><td>${giay(v.p95)}</td><td>${giay(v.firstPageP50)}</td></tr>`).join('');
+  const modesHtml=rows?`<table><thead><tr><th>Chức năng</th><th>Thành công</th><th>Tỉ lệ lỗi</th><th>Trung vị</th><th>p95</th><th>Trang đầu (trung vị)</th></tr></thead><tbody>${rows}</tbody></table>`:'';
+  const recent=(data.recent||[]).map(r=>`<tr><td>${esc(new Date(r.at).toLocaleString('vi-VN'))}</td><td>${esc(modes[r.mode]||r.mode)}</td><td>${r.cached?'Bộ nhớ đệm':esc(stages[r.stage]||r.stage)}</td><td>${giay(r.totalMs)}</td><td>${giay(r.firstPageMs)}</td><td>${giay(r.openMs)}${r.warm?' (mở sẵn)':''}</td><td>${r.pages}</td><td>${r.reReads}</td>${r.status?`<td>HTTP ${r.status}</td>`:'<td></td>'}</tr>`).join('');
+  const recentHtml=recent?`<table><thead><tr><th>Lúc</th><th>Chức năng</th><th>Kết quả</th><th>Tổng</th><th>Trang đầu</th><th>Mở tab</th><th>Trang</th><th>Đọc lại</th><th></th></tr></thead><tbody>${recent}</tbody></table>`:'';
+  return {summary,modes:modesHtml,recent:recentHtml};
+}
+async function loadTrace(){
+  try{
+    traceData=await msg('RUN_TRACE_SUMMARY');
+    if(!traceData?.ok)throw new Error(traceData?.message||'Chưa đọc được sổ đo.');
+    const html=renderTrace(traceData);
+    $('trace-summary').innerHTML=html.summary;$('trace-modes').innerHTML=html.modes;$('trace-recent').innerHTML=html.recent;
+  }catch(e){$('trace-summary').textContent=String(e.message||e);}
+}
+$('trace-refresh').onclick=loadTrace;
+$('trace-clear').onclick=async()=>{
+  if(!confirm('Xóa toàn bộ sổ đo độ ổn định? Không ảnh hưởng dữ liệu gói thầu.'))return;
+  const r=await msg('CLEAR_RUN_TRACE');$('trace-summary').textContent=r?.ok?'Đã xóa sổ đo.':r?.message||'Chưa xóa được.';
+  if(r?.ok)loadTrace();
+};
+loadTrace();
+
 $('export').onclick = async () => {
   const safe = redactSettings(state.settings);
   const payload = {
@@ -76,7 +111,9 @@ $('export').onclick = async () => {
     template: state.template ? stripSecretsDeep({ ...state.template, body: '[đã ẩn trong file chẩn đoán]' }) : null,
     lastTemplate: state.lastTemplate ? stripSecretsDeep({ ...state.lastTemplate, body: '[đã ẩn]' }) : null,
     runs: state.runs.slice(0, 50).map(safeRunForBackup),
-    counts: { tenders: state.tenders.length }
+    counts: { tenders: state.tenders.length },
+    // Chỉ số và nhãn giai đoạn — không có tiêu chí hay dữ liệu gói thầu.
+    runTrace: traceData?.ok ? { summary: traceData.summary, last7d: traceData.last7d, recent: traceData.recent } : null
   };
   const url = 'data:application/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(payload, null, 2));
   chrome.downloads.download({ url, filename: 'GiaoSuCuiBap/diagnostic.json', saveAs: true });

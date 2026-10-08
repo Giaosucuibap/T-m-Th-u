@@ -42,7 +42,16 @@ export function createQueryRuntime({getState,tabs,sendToTab,waitForTab,routeResu
     if(!probe&&schemaIsRed(s))throw Error(SCHEMA_STOP_MESSAGE);
     return s;
   }
-  async function acquire(active=false,{probe=false}={}){
+  // Thời gian mở/chuẩn bị tab cho lượt gần nhất của mỗi tab — cho sổ giai đoạn.
+  const openTimes=new Map();
+  async function acquire(active=false,opts={}){
+    const t0=now(),wasWarm=warm!==null;
+    const tab=await acquireTab(active,opts);
+    if(tab&&Number.isInteger(tab.id)){openTimes.set(tab.id,{ms:now()-t0,warm:wasWarm&&warm?.tabId===tab.id});while(openTimes.size>20)openTimes.delete(openTimes.keys().next().value);}
+    return tab;
+  }
+  function takeOpenTime(tabId){const v=openTimes.get(tabId)||null;openTimes.delete(tabId);return v;}
+  async function acquireTab(active=false,{probe=false}={}){
     await assertAllowed({probe});
     if(probes.size&&!probe)throw Error('Đang kiểm tra cấu trúc e-GP. Hãy chờ kiểm tra hoàn tất.');
     if(acquiring)return acquiring;
@@ -127,7 +136,7 @@ export function createQueryRuntime({getState,tabs,sendToTab,waitForTab,routeResu
         const reply=await routeResults({...page,planId:payload.id,mode:payload.mode,queryIndex:payload.queryIndex||0},sender);
         if(reply?.ok===false)throw Error(reply.message||'Không khôi phục được trang cache.');
       }
-      await routeDone({...hit.done,planId:payload.id,mode:payload.mode,queryIndex:payload.queryIndex||0},sender);
+      await routeDone({...hit.done,planId:payload.id,mode:payload.mode,queryIndex:payload.queryIndex||0,fromCache:true},sender);
       return {ok:true,cached:true};
     }
     captures.set(id,{key,tabId,mode:payload.mode,pages:[],bytes:0,fetchedAt:Date.now()});
@@ -181,5 +190,5 @@ export function createQueryRuntime({getState,tabs,sendToTab,waitForTab,routeResu
     }
     return {ok:true,probe:true};
   }
-  return {acquire,prewarm,warmTabId:()=>warm?.tabId??null,dispatch,assertAllowed,runProbe,routeProbe,captureResult,captureDone,stop,cache,isBusy:()=>probePending||privateTabs.size>0,isProbeTab:id=>privateTabs.has(id)};
+  return {acquire,takeOpenTime,prewarm,warmTabId:()=>warm?.tabId??null,dispatch,assertAllowed,runProbe,routeProbe,captureResult,captureDone,stop,cache,isBusy:()=>probePending||privateTabs.size>0,isProbeTab:id=>privateTabs.has(id)};
 }

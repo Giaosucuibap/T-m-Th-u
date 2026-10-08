@@ -26,7 +26,7 @@ const SRC = content.slice(a, b);
 function dung({ sentSeq = [true], pageSeq = [{ ok: true, sourcePageIndex: 0 }], inFlight = 0, rejected = null } = {}) {
   const log = { thaoTac: 0, choRanh: 0, bao: [] };
   const select = { value: '50', options: [{ value: '10' }, { value: '50' }], dispatchEvent: () => { log.thaoTac++; } };
-  const ctx = vm.createContext({
+  const ctx = vm.createContext({ kqTr: null,
     document: { querySelectorAll: () => [] }, clean: (s) => String(s).trim(), Event: class {},
     kqPageSizeSelect: () => select, kqClickSearch: () => { log.thaoTac++; return true; },
     kqPlan: { id: 'p' }, kqCancelled: false, kqRejected: null, kqPageWaiter: null, kqSentWaiter: null,

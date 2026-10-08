@@ -550,7 +550,7 @@
       if(page&&!page.superseded){
         if(!page.ok&&!page.cancelled&&page.status===0&&!page.schemaIssue&&timeouts===0&&attempt<KQ_TRIGGER_ATTEMPTS-1){
           // Rớt kết nối giữa chừng: gửi lại đúng một lần.
-          timeouts++;lastPage=page;
+          timeouts++;lastPage=page;if(kqTr)kqTr.reReads++;
           kqReport('Kết nối tới e-GP bị gián đoạn; đang gửi lại yêu cầu trang đầu…');
           continue;
         }
@@ -736,32 +736,38 @@
   async function kqRunHarvest(){
     const plan=kqPlan;
     if(!plan)return;
+    if(!kqTr)kqTraceReset(plan);   // tiếp tục sau khi e-GP tải lại trang
 
     // `plan.query` do background.js dựng sẵn bằng lib/kqlcnt.js hoặc lib/bbmt.js.
     // Không chạy tiếp khi chưa có xác nhận: thu dữ liệu bằng truy vấn của e-GP
     // thay vì của phần mềm sẽ cho ra con số 0 trông y như một câu trả lời thật.
     const hookAccepted=await kqSendPlanToHook(plan);
     if(kqPlan!==plan)return;
-    if(kqCancelled){kqFinish(false,'Đã dừng lượt tra cứu theo yêu cầu.');return;}
+    if(kqCancelled){kqFinish(false,'Đã dừng lượt tra cứu theo yêu cầu.','cancelled');return;}
     if(!hookAccepted){
       kqFinish(false,'Phần mềm không giao được tiêu chí cho trang e-GP (không có phản hồi từ trang). '
-        +'Hãy tải lại trang e-GP (F5) rồi tra lại. Nếu vẫn vậy, vào chrome://extensions bấm ↻ Reload cho tiện ích.');
+        +'Hãy tải lại trang e-GP (F5) rồi tra lại. Nếu vẫn vậy, vào chrome://extensions bấm ↻ Reload cho tiện ích.','hook');
       return;
     }
 
+    if(kqTr)kqTr.hookMs=Date.now()-kqTr.t0;
     kqReport(`Đang hỏi e-GP về ${plan.label}...`);
     let page=await kqTriggerFirstPage();
-    if(page?.status===429)page=await kqRecoverRateLimit(page,0,plan);
+    if(page?.status===429){if(kqTr)kqTr.reReads++;page=await kqRecoverRateLimit(page,0,plan);}
     if(kqPlan!==plan)return;
     if(page&&!page.ok&&page.status>=500&&kqTransientFailure(page)){
+      if(kqTr)kqTr.reReads++;
       page=await kqRecoverTransient(page,0,plan);
       if(kqPlan!==plan)return;
     }
-    if(kqCancelled||page?.cancelled){kqFinish(false,'Đã dừng lượt tra cứu theo yêu cầu.');return;}
+    if(kqCancelled||page?.cancelled){kqFinish(false,'Đã dừng lượt tra cứu theo yêu cầu.','cancelled');return;}
     if(!page||!page.ok){
-      kqFinish(false,page?.failureReason||`e-GP chưa trả dữ liệu cho lượt tra cứu${page&&page.status?` (HTTP ${page.status})`:''}. Hãy thử lại sau ít phút.`);
+      if(kqTr&&page?.status)kqTr.status=page.status;
+      kqFinish(false,page?.failureReason||`e-GP chưa trả dữ liệu cho lượt tra cứu${page&&page.status?` (HTTP ${page.status})`:''}. Hãy thử lại sau ít phút.`,
+        page?.stage||(page?.status>=400?'http':'response'));
       return;
     }
+    if(kqTr)kqTr.firstPageMs=Date.now()-kqTr.t0;
 
     let collected=0,pageIndex=0,totalPages=null,totalElements=null,deliveryFailed=false;
     let schemaIssue=false,failureReason='';
@@ -820,11 +826,12 @@
       if(kqPlan!==plan)return;
       if(kqCancelled)break;
       page=await kqGoNextPage();
-      if(page?.status===429)page=await kqRecoverRateLimit(page,pageIndex,plan);
+      if(page?.status===429){if(kqTr)kqTr.reReads++;page=await kqRecoverRateLimit(page,pageIndex,plan);}
       if(kqPlan!==plan)return;
       // `null` ở đây có hai nghĩa: hết hạn chờ phản hồi (thoáng qua) hoặc nút
       // "trang sau" đã tắt. Chỉ đọc lại khi còn trang để đọc.
       if((page!==null||pageIndex<(totalPages??Infinity))&&kqTransientFailure(page)){
+        if(kqTr)kqTr.reReads++;
         page=await kqRecoverTransient(page,pageIndex,plan);
         if(kqPlan!==plan)return;
       }
@@ -847,6 +854,7 @@
     },{requireAck:true,attempts:3});
     if(kqPlan!==plan)return;
     const transferFailed=!finalAck?.ok;
+    if(kqTr)kqTr.pages=pageIndex;
     kqFinish(!incomplete&&!transferFailed,kqCancelled
       ?`Đã dừng theo yêu cầu: lấy được ${collected} kết quả của ${plan.label}.`
       :transferFailed
@@ -855,10 +863,24 @@
         ?`Mất kết nối khi chuyển một trang dữ liệu. Đã giữ ${collected} kết quả và đánh dấu chưa đầy đủ.`
       :incomplete
         ?`${failureReason||'e-GP ngừng trả dữ liệu.'} Đã giữ ${collected} kết quả (${pageIndex}/${totalPages??'?'} trang) và đánh dấu chưa đầy đủ.`
-        :`Xong: ${collected} kết quả của ${plan.label}${capped?` (mới lấy ${maxPages} trang đầu)`:''}.`);
+        :`Xong: ${collected} kết quả của ${plan.label}${capped?` (mới lấy ${maxPages} trang đầu)`:''}.`,
+      transferFailed||deliveryFailed?'delivery':schemaIssue?'schema':'harvest');
   }
 
-  function kqFinish(ok,message){
+  /* Sổ giai đoạn (4.17.0): chỉ là con số và nhãn — không tiêu chí, không dữ liệu.
+     Mốc bắt đầu nằm trong plan nên vẫn đúng khi e-GP tải lại trang giữa lượt. */
+  let kqTr=null;
+  function kqTraceReset(plan){
+    kqTr={t0:Number(plan?.traceStart)||Date.now(),hookMs:null,firstPageMs:null,reReads:0,pages:0,stage:null,status:null};
+  }
+  function kqTraceSummary(ok,cancelled,stage){
+    const tr=kqTr||{t0:Date.now(),reReads:0,pages:0};
+    return {stage:cancelled?'cancelled':ok?'ok':(stage||tr.stage||'response'),hookMs:tr.hookMs??null,
+      firstPageMs:tr.firstPageMs??null,totalMs:Date.now()-tr.t0,pages:tr.pages||0,reReads:tr.reReads||0,status:tr.status??null};
+  }
+  function kqFinish(ok,message,stage){
+    const trace=kqTraceSummary(ok,kqCancelled,stage);
+    kqTr=null;
     const donePlan=kqPlan?{planId:kqPlan.id,queryIndex:kqPlan.queryIndex??0,mode:kqPlan.mode||'',focusTaxCode:kqPlan.focusTaxCode||''}:{};
     const cancelled=kqCancelled;
     if(kqPageWaiter)kqPageWaiter({ok:false,cancelled:true,status:0});
@@ -871,7 +893,7 @@
     kqReport(message,ok?'success':'error');
     // KQLCNT_DONE là chốt cuối của job. Gửi có ACK/retry để service worker
     // vừa được Chrome khởi động lại vẫn có cơ hội nhận tín hiệu hoàn tất.
-    void kqSend('KQLCNT_DONE',{...donePlan,ok,cancelled,partial:!ok,message},
+    void kqSend('KQLCNT_DONE',{...donePlan,ok,cancelled,partial:!ok,message,trace},
       {requireAck:true,attempts:3});
   }
 
@@ -895,13 +917,15 @@
       :'Trang e-GP đang từ chối truy cập hoặc báo lỗi hệ thống. Mở e-GP để kiểm tra và thử lại khi trang hoạt động; chưa có dữ liệu để kết luận kết quả tìm kiếm.';
   }
   async function kqStart(plan){
+    if(!plan.traceStart)plan.traceStart=Date.now();
+    kqTraceReset(plan);
     kqPlan=plan;
     kqCancelled=false;
     kqUiPage=null;
     kqSaveState(plan);
     const pageError=kqNativePageError(document.readyState,document.title,document.body?.innerText);
     if(pageError){
-      kqFinish(false,kqPageErrorMessage(pageError));
+      kqFinish(false,kqPageErrorMessage(pageError),'page');
       return;
     }
     if(kqIsResultsView()){ await kqRunHarvest(); return; }
@@ -920,7 +944,7 @@
     if(plan.query){
       kqReport(`Đang mở màn hình kết quả trên e-GP cho ${plan.label}...`);
       if(!kqSeedCriterion()){
-        kqFinish(false,'Không thấy ô tìm kiếm trên trang e-GP. Hãy mở trang Tra cứu › Lựa chọn nhà thầu rồi chạy lại.');
+        kqFinish(false,'Không thấy ô tìm kiếm trên trang e-GP. Hãy mở trang Tra cứu › Lựa chọn nhà thầu rồi chạy lại.','page');
         return;
       }
       await new Promise(r=>setTimeout(r,300));
@@ -932,7 +956,7 @@
     }
     kqSaveState({...plan,stage:'harvest',applied});
     if(!kqClickSearch()){
-      kqFinish(false,'Không thấy nút "Tìm kiếm" trên trang e-GP. Hãy mở lại trang tra cứu rồi thử lại.');
+      kqFinish(false,'Không thấy nút "Tìm kiếm" trên trang e-GP. Hãy mở lại trang tra cứu rồi thử lại.','page');
       return;
     }
     // e-GP thường tải lại trang sau khi bấm "Tìm kiếm" — khi đó khối
@@ -955,7 +979,7 @@
     const boot=setInterval(()=>{
       if(kqPlan!==waitingPlan){clearInterval(boot);return;}
       const pageError=kqNativePageError(document.readyState,document.title,document.body?.innerText);
-      if(pageError){clearInterval(boot);kqFinish(false,kqPageErrorMessage(pageError));return;}
+      if(pageError){clearInterval(boot);kqFinish(false,kqPageErrorMessage(pageError),'page');return;}
       if(!kqIsResultsView())return;
       clearInterval(boot);
       kqRunHarvest();
@@ -965,7 +989,7 @@
       if(kqPlan===waitingPlan&&!kqIsResultsView()){
         const pageError=kqNativePageError(document.readyState,document.title,document.body?.innerText);
         kqFinish(false,pageError?kqPageErrorMessage(pageError):'Trang e-GP không mở được màn hình kết quả trong 40 giây. '
-          +'Hãy mở trang Tra cứu Lựa chọn nhà thầu, bấm "Tìm kiếm" một lần cho ra danh sách, rồi chạy lại.');
+          +'Hãy mở trang Tra cứu Lựa chọn nhà thầu, bấm "Tìm kiếm" một lần cho ra danh sách, rồi chạy lại.','page');
       }
     },40000);
   }

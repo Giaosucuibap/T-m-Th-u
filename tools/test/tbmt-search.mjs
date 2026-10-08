@@ -59,6 +59,16 @@ if (process.env.MOCK_LOG && fs.existsSync(process.env.MOCK_LOG)) {
   hoiThat = fs.readFileSync(process.env.MOCK_LOG, 'utf8').split('\n').filter((l) => /SEARCH page=0 /.test(l) && /filters=type/.test(l)).length;
   console.log(`e-GP thật sự được hỏi: ${hoiThat}/${RUNS - hong.length} lượt đạt`);
 }
+// Sổ giai đoạn phải ghi ĐÚNG mỗi lượt một dòng, với giai đoạn khớp kết quả.
+const so = await send('RUN_TRACE_SUMMARY');
+const dong = (so?.recent || []).filter((r) => r.mode === 'tbmt' && !r.cached);
+const sum = so?.summary || {};
+if (process.env.DEBUG_TRACE) console.log(JSON.stringify(dong.slice(0, 2)));
+console.log(`Sổ giai đoạn: ${sum.ok}/${sum.runs} thành công · trung vị ${(sum.p50 / 1000).toFixed(1)}s · p95 ${(sum.p95 / 1000).toFixed(1)}s · trang đầu trung vị ${(sum.firstPageP50 / 1000).toFixed(1)}s · đọc lại ${sum.reReads} lần · lỗi theo giai đoạn ${JSON.stringify(sum.failures)}`);
+const daDat = ketQua.filter((k) => k.status === 'SUCCESS').length;
+const soSai = dong.length !== ketQua.filter((k) => k.status !== 'KHÔNG KHỞI ĐỘNG').length || sum.ok !== daDat
+  || dong.some((r) => r.ok && !(r.totalMs > 0 && r.firstPageMs > 0 && r.pages > 0));
+if (soSai) console.log(`  ✗ Sổ giai đoạn không khớp: ${dong.length} dòng, ${sum.ok} ok — kỳ vọng ${ketQua.length} dòng, ${daDat} ok`);
 await ctx.close();
 fs.rmSync(UD, { recursive: true, force: true });
-process.exit(hong.length || (hoiThat !== null && hoiThat < RUNS - hong.length) ? 1 : 0);
+process.exit(hong.length || soSai || (hoiThat !== null && hoiThat < RUNS - hong.length) ? 1 : 0);
