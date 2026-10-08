@@ -42,6 +42,12 @@ jobs:
           node-version: 22
       - run: npm test
       - run: npm run test:tz
+      - name: Bộ kiểm thử trên bản xuống dòng CRLF (như máy Windows)
+        run: |
+          mkdir -p "$RUNNER_TEMP/crlf" && git ls-files -z | xargs -0 cp --parents -t "$RUNNER_TEMP/crlf"
+          cd "$RUNNER_TEMP/crlf"
+          find . -type f \( -name '*.js' -o -name '*.mjs' -o -name '*.json' -o -name '*.html' \) -print0 | xargs -0 sed -i 's/\r*$/\r/'
+          node --test tests/*.test.mjs
 
   windows:
     name: Bộ kiểm thử (Windows, gồm cầu nối E-HSMT)

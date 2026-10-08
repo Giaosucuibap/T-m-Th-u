@@ -85,7 +85,7 @@ test('redispatch: trang tải lại báo lỗi / đang bận / không có tiêu 
 });
 
 test('background: chạy lại được quyết định TRƯỚC khi đánh lỗi lượt, có ghi dấu chống chạy lại lần hai, tôn trọng nút Dừng', ()=>{
-  const bg=fs.readFileSync(new URL('../GiaoSuCuiBap/background.js',import.meta.url),'utf8');
+  const bg=fs.readFileSync(new URL('../GiaoSuCuiBap/background.js',import.meta.url),'utf8').replace(/\r\n/g,'\n');
   const f=bg.slice(bg.indexOf('async function routeKqlcntDone('));
   const retry=f.indexOf('await scheduleAutoRetry(key,job,payload)'),fail=f.indexOf("if(payload.ok===false){\n    if(key==='activeRun')await finishRun(");
   assert.ok(retry>0&&fail>retry);
@@ -93,6 +93,6 @@ test('background: chạy lại được quyết định TRƯỚC khi đánh lỗ
   assert.ok(g.indexOf('autoRetries:[...(cur.autoRetries||[]),decision.qi]')<g.indexOf('queryRuntime.redispatch('),'ghi dấu TRƯỚC khi chạy lại');
   assert.match(g,/cur\.cancelled\|\|!\['STARTING','OPENING','RUNNING','LISTING'\]\.includes\(cur\.status\)\)return;/);
   assert.match(g,/Đã tự chạy lại một lần nhưng không được/);
-  const content=fs.readFileSync(new URL('../GiaoSuCuiBap/content.js',import.meta.url),'utf8');
+  const content=fs.readFileSync(new URL('../GiaoSuCuiBap/content.js',import.meta.url),'utf8').replace(/\r\n/g,'\n');
   assert.match(content,/attempt:kqPlan\?\.autoRetry\?2:1/);
 });

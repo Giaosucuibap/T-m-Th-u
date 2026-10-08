@@ -127,9 +127,9 @@ test('trang Cấu hình có ô bật/tắt, mặc định BẬT', async()=>{
   const fs=await import('node:fs');
   const {DEFAULT_SETTINGS}=await import('../GiaoSuCuiBap/lib/core.js');
   assert.equal(DEFAULT_SETTINGS.keepEgpTabWarm,true);
-  assert.match(fs.readFileSync(new URL('../GiaoSuCuiBap/options.html',import.meta.url),'utf8'),/id="keepEgpTabWarm"/);
-  assert.match(fs.readFileSync(new URL('../GiaoSuCuiBap/options.js',import.meta.url),'utf8'),/'keepEgpTabWarm'/);
-  assert.match(fs.readFileSync(new URL('../GiaoSuCuiBap/background.js',import.meta.url),'utf8'),/case 'EGP_PREWARM': sendResponse\(await queryRuntime\.prewarm\(\)\)/);
+  assert.match(fs.readFileSync(new URL('../GiaoSuCuiBap/options.html',import.meta.url),'utf8').replace(/\r\n/g,'\n'),/id="keepEgpTabWarm"/);
+  assert.match(fs.readFileSync(new URL('../GiaoSuCuiBap/options.js',import.meta.url),'utf8').replace(/\r\n/g,'\n'),/'keepEgpTabWarm'/);
+  assert.match(fs.readFileSync(new URL('../GiaoSuCuiBap/background.js',import.meta.url),'utf8').replace(/\r\n/g,'\n'),/case 'EGP_PREWARM': sendResponse\(await queryRuntime\.prewarm\(\)\)/);
 });
 
 test('mọi kịch bản trình duyệt trong tools/test đều chỉ e-GP về máy giả lập — không chạm e-GP thật', async()=>{
@@ -139,7 +139,7 @@ test('mọi kịch bản trình duyệt trong tools/test đều chỉ e-GP về 
   const fs=await import('node:fs');
   const dir=new URL('../tools/test/',import.meta.url);
   const thieu=fs.readdirSync(dir).filter(f=>f.endsWith('.mjs')).filter(f=>{
-    const src=fs.readFileSync(new URL(f,dir),'utf8');
+    const src=fs.readFileSync(new URL(f,dir),'utf8').replace(/\r\n/g,'\n');
     return /chromium\.launch/.test(src)&&!/--host-resolver-rules=MAP muasamcong\.mpi\.gov\.vn 127\.0\.0\.1:/.test(src);
   });
   assert.deepEqual(thieu,[]);

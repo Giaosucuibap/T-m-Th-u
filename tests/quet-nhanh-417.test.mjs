@@ -128,11 +128,11 @@ test('bộ săn: chỉ TBMT được bật quét nhanh; trạng thái được l
 });
 
 test('nối dây: mọi truy vấn của lượt nhanh đều có sàn ngày; lưu bộ săn đổi tiêu chí thì xóa trạng thái cũ', ()=>{
-  const bg=fs.readFileSync(new URL('../GiaoSuCuiBap/background.js',import.meta.url),'utf8');
+  const bg=fs.readFileSync(new URL('../GiaoSuCuiBap/background.js',import.meta.url),'utf8').replace(/\r\n/g,'\n');
   assert.match(bg,/query:deltaQuery\(run,nativeTbmtQueryFromTemplate\(template\)\)/,'truy vấn thứ 2+ của lượt');
   assert.match(bg,/query:deltaQuery\(run,buildTbmtQuery\(queue\[0\]\.criteria\)\)/,'truy vấn đầu');
   assert.match(bg,/hunt\.deltaState=sameCriteria&&!message\.payload\?\.resetDelta\?old\.deltaState:/);
-  const rt=fs.readFileSync(new URL('../GiaoSuCuiBap/lib/runtime-hunt.js',import.meta.url),'utf8');
+  const rt=fs.readFileSync(new URL('../GiaoSuCuiBap/lib/runtime-hunt.js',import.meta.url),'utf8').replace(/\r\n/g,'\n');
   assert.match(rt,/if\(result\?\.followUpFull\)setTimeout\(\(\)=>\{void runHuntById\(job\.huntId,\{forceFull:true\}\)/);
   assert.match(rt,/if\(!duplicate&&hunt\.kind==='tbmt'&&hunt\.delta&&job\.huntPlan\)/,'đánh giá đúng một lần mỗi lượt');
 });

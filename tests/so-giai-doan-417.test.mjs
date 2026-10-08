@@ -83,7 +83,7 @@ test('thống kê theo khoảng thời gian (7 ngày)', ()=>{
 });
 
 /* ---- content.js: tín hiệu KQLCNT_DONE mang theo giai đoạn thật ---- */
-const content=fs.readFileSync(new URL('../GiaoSuCuiBap/content.js',import.meta.url),'utf8');
+const content=fs.readFileSync(new URL('../GiaoSuCuiBap/content.js',import.meta.url),'utf8').replace(/\r\n/g,'\n');
 function hamContent(){
   const a=content.indexOf('  let kqTr=null;'),b=content.indexOf('  function kqFinish(',a);
   assert.ok(a>0&&b>a);
@@ -111,19 +111,19 @@ test('content: mọi đường kết thúc lỗi đều ghi rõ giai đoạn', (
 });
 
 test('background: ghi sổ ở KQLCNT_DONE, lượt kiểm tra cấu trúc không vào sổ, xóa sổ bị khóa khi chỉ xem', ()=>{
-  const bg=fs.readFileSync(new URL('../GiaoSuCuiBap/background.js',import.meta.url),'utf8');
+  const bg=fs.readFileSync(new URL('../GiaoSuCuiBap/background.js',import.meta.url),'utf8').replace(/\r\n/g,'\n');
   const f=bg.slice(bg.indexOf('async function routeKqlcntDone('));
   const probe=f.indexOf("routeProbe('KQLCNT_DONE'"),rec=f.indexOf('recordRunTrace(payload,sender)');
   assert.ok(probe>0&&rec>probe,'lượt kiểm tra cấu trúc phải rẽ đi TRƯỚC khi ghi sổ');
   assert.match(bg,/case 'CLEAR_RUN_TRACE'/,'tên CLEAR_ để khóa chỉ-xem chặn được');
-  const rq=fs.readFileSync(new URL('../GiaoSuCuiBap/lib/runtime-query.js',import.meta.url),'utf8');
+  const rq=fs.readFileSync(new URL('../GiaoSuCuiBap/lib/runtime-query.js',import.meta.url),'utf8').replace(/\r\n/g,'\n');
   assert.match(rq,/queryIndex:payload\.queryIndex\|\|0,fromCache:true\}/,'lượt phát lại từ bộ nhớ đệm phải được đánh dấu');
 });
 
 test('background: bộ lọc tín hiệu từ trang e-GP GIỮ sổ giai đoạn (chỉ nhãn ngắn và số)', ()=>{
   /* Lỗi thật đã gặp khi chạy Chromium: bộ lọc KQLCNT_DONE bỏ mất trường trace,
      sổ ghi đủ dòng nhưng mọi thời gian đều trống. Bài đơn vị cũ không bắt được. */
-  const bg=fs.readFileSync(new URL('../GiaoSuCuiBap/background.js',import.meta.url),'utf8');
+  const bg=fs.readFileSync(new URL('../GiaoSuCuiBap/background.js',import.meta.url),'utf8').replace(/\r\n/g,'\n');
   assert.match(bg,/if\(type==='KQLCNT_DONE'\)return \{[^;]*trace:safeTrace\(p\.trace\)\};/);
   const a=bg.indexOf('function shortString('),b=bg.indexOf('function nullableCount(');
   const ctx=vm.createContext({});vm.runInContext(bg.slice(a,b),ctx);
