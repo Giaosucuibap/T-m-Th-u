@@ -78,6 +78,11 @@ before(async()=>{
   const built=spawnSync('C:/Windows/Microsoft.NET/Framework64/v4.0.30319/csc.exe',['/nologo','/target:exe','/optimize+','/r:System.Web.Extensions.dll',`/out:${fixture}`,cs],{windowsHide:true,encoding:'utf8'});
   assert.equal(built.status,0,built.stdout+built.stderr);
   log.push({fixture:true,port,outputDir,deadlineMs:1000,productionDeadlineMs:300000,productionSha256:createHash('sha256').update(fs.readFileSync(production)).digest('hex')});
+  /* Khởi động trước khi đo: lần gọi HTTP đầu tiên của .NET trên máy CI lạnh (dò proxy hệ
+     thống, quét tệp .exe vừa biên dịch) có lúc vượt hạn 1 giây CỐ Ý của bản thử, làm bài
+     tải đầu tiên đỏ chập chờn (CI 4.17.1: 1,75 s; lần chạy song song cùng commit thì đạt).
+     Một lượt tải bỏ đi — không nới hạn thời gian, không đổi điều các bài kiểm. */
+  await host(fixture,pack({command:'download',fileId:uuid(1),fileName:'khoi-dong.pdf'})).catch(()=>{});
 });
 after(async()=>{
   if(!WIN)return;
