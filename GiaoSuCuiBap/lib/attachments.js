@@ -13,7 +13,7 @@
  *
  *      GET http://localhost:1234/api/download/file/browser/public?fileId=<uuid>
  *
- *  Đã thử 6 đường dẫn tương ứng trên chính máy chủ muasamcong.mpi.gov.vn với
+ *  Đã thử 6 đường dẫn tương ứng trên chính máy chủ e-GP (khi đó là muasamcong.mpi.gov.vn) với
  *  đúng mã tệp — CẢ 6 ĐỀU TRẢ 404. Đường `edocproxy/file/share/<hash>` thì chạy
  *  nhưng chỉ phục vụ tài liệu hướng dẫn tĩnh, không dùng cho hồ sơ gói thầu.
  *

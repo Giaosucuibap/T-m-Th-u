@@ -1,3 +1,4 @@
+import { isEgpHost, currentEgpUrl } from './egp-host.js';
 // Shared, pure search/workspace rules. No network, storage, or DOM dependencies.
 import { parseMoney, parseDate, bidStatus, formatDate } from './core.js';
 import { normalizeCategory, isUnknownCategory } from './tender-categories.js';
@@ -175,7 +176,8 @@ export function freshness(t, now = Date.now()) {
 export function safeSource(value) {
   try {
     const u = new URL(value);
-    return u.protocol === 'https:' && u.hostname === 'muasamcong.mpi.gov.vn' && !u.username && !u.password && !u.port ? u.href : '';
+    // Nhận cả địa chỉ cũ, trả về địa chỉ mới để người dùng bấm vào trang đang hoạt động.
+    return u.protocol === 'https:' && isEgpHost(u.hostname) && !u.username && !u.password && !u.port ? currentEgpUrl(u.href) : '';
   } catch { return ''; }
 }
 

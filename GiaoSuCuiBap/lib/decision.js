@@ -1,3 +1,4 @@
+import { isEgpUrl } from './egp-host.js';
 /* ============================================================================
  *  lib/decision.js — BIẾN DANH SÁCH TÌM THẤY THÀNH BẢNG RA QUYẾT ĐỊNH
  *
@@ -148,7 +149,7 @@ export function dataConfidence(t) {
   if ((st === 'PLAN' && cleanText(t?.bidNo)) || parseDate(t?.closeDate)) score += 16;
   if (cleanText(t?.location)) score += 12;
   if (cleanText(t?.investorName) || cleanText(t?.procuringEntityName)) score += 12;
-  if (t && /^https:\/\/muasamcong\.mpi\.gov\.vn\//i.test(String(t.detailUrl || ''))) score += 14;
+  if (t && isEgpUrl(t.detailUrl)) score += 14;
   const value = Math.min(100, score);
   const level = value >= 85 ? 'GOOD' : value >= 65 ? 'FAIR' : 'CHECK';
   const label = level === 'GOOD' ? 'Đủ trường chính' : level === 'FAIR' ? 'Thiếu một số trường' : 'Cần bổ sung dữ liệu';
@@ -170,7 +171,7 @@ export function riskSignals(t) {
   if ((t && t.negHits || []).length) {
     out.push({ code: 'EXCLUDED', level: 'MEDIUM', label: `Có từ khóa hạn chế: ${t.negHits.slice(0, 2).join(', ')}` });
   }
-  if (!t || !/^https:\/\/muasamcong\.mpi\.gov\.vn\//i.test(String(t.detailUrl || ''))) {
+  if (!t || !isEgpUrl(t.detailUrl)) {
     out.push({ code: 'SOURCE', level: 'HIGH', label: 'Thiếu liên kết nguồn e-GP hợp lệ' });
   }
   return out;

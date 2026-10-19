@@ -1,8 +1,9 @@
-const ORIGIN='https://muasamcong.mpi.gov.vn';
+import { EGP_ORIGIN, isEgpOrigin } from './egp-host.js';
+const ORIGIN=EGP_ORIGIN;
 export function samePlanDetailUrl(plan,url){
   try{
     const page=new URL(url);
-    return page.origin===ORIGIN&&page.pathname.endsWith('/contractor-selection')&&
+    return isEgpOrigin(page.origin)&&page.pathname.endsWith('/contractor-selection')&&
       page.searchParams.get('id')===plan.sourceId&&page.searchParams.get('planNo')===plan.planNo&&
       page.searchParams.get('type')==='es-plan-project-p';
   }catch{return false;}

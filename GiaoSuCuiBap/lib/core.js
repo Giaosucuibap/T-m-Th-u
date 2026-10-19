@@ -1,3 +1,4 @@
+import { EGP_ORIGIN, isEgpOrigin, currentEgpUrl } from './egp-host.js';
 import { applyCapability } from './capability.js';
 import { tenderFieldOf } from './tender-categories.js';
 import { recordWardIdentities } from './area-match.js';
@@ -358,7 +359,7 @@ function extractPlanNo(obj, rawText='') {
  *    Biên bản mở thầu   : stepCode=notify-contractor-step-2-kqmt · step=bbmt
  *    Kết quả LCNT       : stepCode=notify-contractor-step-4-kqlcnt · step=kqlcnt
  * ------------------------------------------------------------------------- */
-const EGP_ORIGIN_URL = 'https://muasamcong.mpi.gov.vn';
+const EGP_ORIGIN_URL = EGP_ORIGIN;   // địa chỉ mới; xem lib/egp-host.js
 const EGP_SEARCH = `${EGP_ORIGIN_URL}/vi/web/guest/contractor-selection?render=search`;
 
 /** Từ stepCode của bản ghi suy ra giá trị `step` mà route chi tiết cần. */
@@ -404,14 +405,14 @@ function buildTenderDetailUrl(obj) {
 }
 
 function isBareEgpHome(s) {
-  return /^https:\/\/muasamcong\.mpi\.gov\.vn(\/(vi|en))?(\/web\/guest)?(\/home)?\/?$/i.test(s);
+  return /^https:\/\/muasamcong\.(?:mof|mpi)\.gov\.vn(\/(vi|en))?(\/web\/guest)?(\/home)?\/?$/i.test(s);
 }
 
 /** Chuẩn hóa một liên kết e-GP; trả fallback nếu khác giao thức hoặc khác origin. */
 export function canonicalEgpUrl(value, fallback = '') {
   try {
     const u = new URL(cleanText(value));
-    return u.protocol === 'https:' && u.origin === EGP_ORIGIN_URL ? u.href : fallback;
+    return u.protocol === 'https:' && isEgpOrigin(u.origin) ? currentEgpUrl(u.href) : fallback;
   } catch { return fallback; }
 }
 
@@ -902,8 +903,9 @@ export function sanitizeRequestTemplate(request, sourcePageUrl='', candidateCoun
   if (!request?.url) return null;
   let url;
   try {
-    const u = new URL(request.url, sourcePageUrl || 'https://muasamcong.mpi.gov.vn/');
-    if (u.protocol !== 'https:' || u.origin !== 'https://muasamcong.mpi.gov.vn') return null;
+    const u = new URL(request.url, sourcePageUrl || `${EGP_ORIGIN}/`);
+    if (u.protocol !== 'https:' || !isEgpOrigin(u.origin)) return null;
+    if (u.hostname !== new URL(EGP_ORIGIN).hostname) u.hostname = new URL(EGP_ORIGIN).hostname;
     if (u.pathname !== '/o/egp-portal-contractor-selection-v2/services/smart/search') return null;
     for (const key of [...u.searchParams.keys()]) {
       if (/token|jwt|session|auth|signature|secret/i.test(key)) u.searchParams.delete(key);
@@ -949,7 +951,7 @@ export function sanitizeRequestTemplate(request, sourcePageUrl='', candidateCoun
   const body = JSON.stringify(parsed);
   // Không cần mang query của tab nguồn sang lần chạy sau. Dùng route tìm kiếm
   // chuẩn giúp loại cả token phiên có tên lạ mà blacklist không thể đoán hết.
-  const safeSource = 'https://muasamcong.mpi.gov.vn/vi/web/guest/contractor-selection?render=search';
+  const safeSource = `${EGP_ORIGIN}/vi/web/guest/contractor-selection?render=search`;
   return {
     url,
     method: 'POST',

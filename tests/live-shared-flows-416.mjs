@@ -14,7 +14,7 @@ import {sanitizedHarEntry} from './har-sanitize.mjs';
 const require=createRequire(import.meta.url),{chromium}=require('C:/Users/ADMIN/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright');
 const extension=path.resolve('GiaoSuCuiBap'),out=path.resolve('../../test-results/4.16.0/live-shared');
 await fs.mkdir(out,{recursive:true});
-const profile=path.join(out,`.profile-shared-${Date.now()}`),origin='https://muasamcong.mpi.gov.vn';
+const profile=path.join(out,`.profile-shared-${Date.now()}`),origin='https://muasamcong.mof.gov.vn';
 const investor='vn5800939408',alias='ban 1 tỉnh lâm đồng',province='Tỉnh Lâm Đồng';
 const hash=b=>crypto.createHash('sha256').update(b).digest('hex'),pause=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 async function inventory(){const values={};async function walk(dir,prefix=''){for(const entry of await fs.readdir(dir,{withFileTypes:true})){const relative=prefix+entry.name,full=path.join(dir,entry.name);if(entry.isDirectory())await walk(full,relative+'/');else values[relative]=hash(await fs.readFile(full));}}await walk(extension);return Object.fromEntries(Object.entries(values).sort(([a],[b])=>a.localeCompare(b)));}

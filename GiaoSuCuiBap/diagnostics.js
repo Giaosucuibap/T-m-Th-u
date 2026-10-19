@@ -46,7 +46,7 @@ $('test').onclick = () => {
     bidPrice: '68.500.000.000',
     bidCloseDate: '20/08/2026 09:00'
   };
-  const cand = normalizeCandidate(sample, { sourcePageUrl: 'https://muasamcong.mpi.gov.vn/' });
+  const cand = normalizeCandidate(sample, { sourcePageUrl: 'https://muasamcong.mof.gov.vn/' });
   const score = scoreTender(cand, DEFAULT_SETTINGS);
   const canary=canaryCheck({tbmt:normalizeCandidate,khlcnt:normalizeKhlcntPlan},parseDate);
   const tests = {

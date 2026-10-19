@@ -140,7 +140,8 @@ test('mọi kịch bản trình duyệt trong tools/test đều chỉ e-GP về 
   const dir=new URL('../tools/test/',import.meta.url);
   const thieu=fs.readdirSync(dir).filter(f=>f.endsWith('.mjs')).filter(f=>{
     const src=fs.readFileSync(new URL(f,dir),'utf8').replace(/\r\n/g,'\n');
-    return /chromium\.launch/.test(src)&&!/--host-resolver-rules=MAP muasamcong\.mpi\.gov\.vn 127\.0\.0\.1:/.test(src);
+    // e-GP có HAI địa chỉ (mới mof, cũ mpi) — phải chặn CẢ HAI.
+    return /chromium\.launch/.test(src)&&!(/MAP muasamcong\.mof\.gov\.vn 127\.0\.0\.1:/.test(src)&&/MAP muasamcong\.mpi\.gov\.vn 127\.0\.0\.1:/.test(src));
   });
   assert.deepEqual(thieu,[]);
 });

@@ -287,7 +287,7 @@ function metadataSheet(spec,sheets) {
   const info=spec.exportInfo||{};
   const rows=[
     {label:'Nguồn dữ liệu',value:info.source||'Hệ thống mạng đấu thầu quốc gia (e-GP); bản dữ liệu tiện ích đã nhận.',kind:'note'},
-    {label:'Trang nguồn',value:'https://muasamcong.mpi.gov.vn',kind:'url'},
+    {label:'Trang nguồn',value:'https://muasamcong.mof.gov.vn',kind:'url'},
     {label:'Thời điểm xuất (giờ Việt Nam)',value:info.exportedAt||new Date().toISOString(),kind:'datetime'},
     {label:'Phạm vi',value:info.scope||'Chỉ các bản ghi được chọn để xuất từ dữ liệu đã thu thập.',kind:'note'},
     {label:'Độ đầy đủ',value:info.coverage||'Không suy ra toàn bộ dữ liệu trên e-GP từ số dòng trong tệp.',kind:'note'},

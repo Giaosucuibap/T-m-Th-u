@@ -1,3 +1,4 @@
+import { isEgpUrl } from './egp-host.js';
 import { foldText, cleanText } from './core.js';
 import { codesForProvinceName, recordCodes } from './area-match.js';
 import { parseInvestorFilter } from './investor-filter.js';
@@ -27,7 +28,7 @@ export function officialDirectoryEntries(data={}) {
     const sources=array(raw.sources).map(s=>({...s,url:safeSource(s.url)})).filter(s=>s.url);
     if(!name||!provinceName||!sources.length||[raw.status,raw.legalState].some(s=>['inactive','dissolved','superseded','unverified','proposal','needs-verification','needs-review','uncertain'].includes(s)))return [];
     const proof=raw.egpProof, candidateCode=String(raw.eGpCode||raw.egpCode||'');
-    const proofBound=isEgpOrganizationCode(candidateCode)&&proof?.sourceUrl?.startsWith('https://muasamcong.mpi.gov.vn/')
+    const proofBound=isEgpOrganizationCode(candidateCode)&&isEgpUrl(proof?.sourceUrl)
       && proof.reference && proof.codeAtSource?.toLowerCase()===candidateCode.toLowerCase()
       && provinceIdentity(proof.provinceName)===provinceIdentity(provinceName)
       && scopedLegalKey(proof.nameAtSource,provinceName)===scopedLegalKey(name,provinceName);
@@ -57,7 +58,7 @@ export function observationsFromRows(rows, areas={}, seenAt=new Date().toISOStri
     const names=unique(provincials.map(p=>p.name).concat(named).filter(Boolean));
     const sourceUrl=safeSource(row.detailUrl||row.sourcePageUrl);
     const reference=cleanText(row.notifyNo||row.planNo);
-    if(!sourceUrl.startsWith('https://muasamcong.mpi.gov.vn/')||!reference||!names.length)continue;
+    if(!isEgpUrl(sourceUrl)||!reference||!names.length)continue;
     for(const [codeField,nameField] of [['investorCode','investorName'],['procuringEntityCode','procuringEntityName']]){
       const eGpCode=cleanText(row[codeField]),name=typeof row[nameField]==='string'?cleanText(row[nameField]):'';
       if(!isEgpOrganizationCode(eGpCode)||!name)continue;
@@ -76,7 +77,7 @@ export function mergeDirectoryObservations(old=[], fresh=[]) {
   for(const raw of [...array(old),...array(fresh)]){
     const proof=raw?.egpProof;
     if(raw?.status!=='observed'||!isEgpOrganizationCode(raw.eGpCode)||!raw.name||!raw.provinceName
-      ||!safeSource(proof?.sourceUrl).startsWith('https://muasamcong.mpi.gov.vn/')||!proof.reference
+      ||!isEgpUrl(safeSource(proof?.sourceUrl))||!proof.reference
       ||String(proof.codeAtSource||'').toLowerCase()!==String(raw.eGpCode).toLowerCase()
       ||provinceIdentity(proof.provinceName)!==provinceIdentity(raw.provinceName)
       ||scopedLegalKey(proof.nameAtSource,raw.provinceName)!==scopedLegalKey(raw.name,raw.provinceName))continue;

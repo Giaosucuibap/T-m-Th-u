@@ -15,7 +15,7 @@ const ctx = await chromium.launchPersistentContext(UD, {
     `--load-extension=${EXT}`,
     '--no-sandbox','--disable-dev-shm-usage','--no-first-run','--no-proxy-server',
     // Không bao giờ để kịch bản thử chạm e-GP THẬT.
-    `--host-resolver-rules=MAP muasamcong.mpi.gov.vn 127.0.0.1:${process.env.MOCK_PORT||9443}`
+    `--host-resolver-rules=MAP muasamcong.mof.gov.vn 127.0.0.1:${process.env.MOCK_PORT||9443}, MAP muasamcong.mpi.gov.vn 127.0.0.1:${process.env.MOCK_PORT||9443}`
   ]
 });
 

@@ -1,3 +1,4 @@
+import { EGP_TAB_PATTERNS } from './egp-host.js';
 import { createQueryCache, queryHash } from './query-cache.js';
 import { EGP_SEARCH_PAGE } from './kqlcnt.js';
 import { DEFAULT_SETTINGS } from './core.js';
@@ -63,7 +64,7 @@ export function createQueryRuntime({getState,tabs,sendToTab,waitForTab,routeResu
       const reserved=new Set([s.activeRun,s.winnerLookup,s.planLookup,s.areaScan,s.investorScan].filter(j=>j&&['STARTING','OPENING','RUNNING','LISTING'].includes(j.status)).map(j=>j.tabId).filter(Number.isInteger));
       if(s.bidOpenScan?.status==='LISTING'&&Number.isInteger(s.bidOpenScan.tabId))reserved.add(s.bidOpenScan.tabId);
       if(s.bidOpenScan?.status==='SCANNING')for(const id of s.bidOpenScan.detailTabIds||[])reserved.add(id);
-      const known=await tabs.query({url:'https://muasamcong.mpi.gov.vn/*'});
+      const known=await tabs.query({url:[...EGP_TAB_PATTERNS]});
       const candidates=known.filter(t=>!reserved.has(t.id)&&/contractor-selection/i.test(t.url||''));
       candidates.sort((a,b)=>(b.id===idleTabId?1:0)-(a.id===idleTabId?1:0));
       for(const tab of candidates){
@@ -99,7 +100,7 @@ export function createQueryRuntime({getState,tabs,sendToTab,waitForTab,routeResu
       try{s=await assertAllowed();}catch(error){return {ok:true,warmed:false,reason:'blocked',message:String(error?.message||error)};}
       if(s.settings?.keepEgpTabWarm===false)return {ok:true,warmed:false,reason:'off'};
       if(acquiring||probePending||probes.size||activeListJob(s))return {ok:true,warmed:false,reason:'busy'};
-      const known=(await tabs.query({url:'https://muasamcong.mpi.gov.vn/*'})).filter(t=>/contractor-selection/i.test(t.url||''));
+      const known=(await tabs.query({url:[...EGP_TAB_PATTERNS]})).filter(t=>/contractor-selection/i.test(t.url||''));
       const own=warm&&known.find(t=>t.id===warm.tabId);
       if(own){
         // Trang để quá lâu có thể đã cũ; làm mới khi KHÔNG ai đang xem/dùng nó.

@@ -18,7 +18,8 @@
   const CONTENT_SOURCE = 'BID_RADAR_ONE_CONTENT';
 
   /* --- TRA CỨU NHÀ THẦU (KQLCNT / Biên bản mở thầu) ---------------------- */
-  const EGP_ORIGIN = 'https://muasamcong.mpi.gov.vn';
+  /* e-GP đã đổi sang muasamcong.mof.gov.vn (Bộ Tài chính); địa chỉ cũ vẫn nhận. */
+  const EGP_ORIGINS = new Set(['https://muasamcong.mof.gov.vn', 'https://muasamcong.mpi.gov.vn']);
   const PORTAL_SERVICE_ROOT = '/o/egp-portal-contractor-selection-v2';
   const SEARCH_ENDPOINT = `${PORTAL_SERVICE_ROOT}/services/smart/search`;
   const LOT_OPEN_DETAIL_ENDPOINTS = new Set([
@@ -59,7 +60,7 @@
   function officialEgpUrl(value) {
     try {
       const url = new URL(String(value || ''), location.href);
-      return url.protocol === 'https:' && url.origin === EGP_ORIGIN
+      return url.protocol === 'https:' && EGP_ORIGINS.has(url.origin)
         && !url.username && !url.password ? url : null;
     } catch {
       return null;

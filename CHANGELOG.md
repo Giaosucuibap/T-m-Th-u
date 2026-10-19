@@ -2,6 +2,30 @@
 
 Tài liệu này ghi lại các thay đổi quan trọng của Giáo Sư Cùi Bắp. Cấu trúc tham khảo [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) và phiên bản tuân theo cách đánh số ngữ nghĩa ở mức sản phẩm.
 
+## [4.17.1] — 2026-10-19
+
+### e-GP đổi địa chỉ sang Bộ Tài chính
+Hệ thống mạng đấu thầu quốc gia chuyển từ `muasamcong.mpi.gov.vn` sang
+**`muasamcong.mof.gov.vn`** (cùng phần mềm EGP_v2.0, cùng cấu trúc đường dẫn —
+xác minh qua chỉ mục tìm kiếm công khai; môi trường phát triển không truy cập
+trực tiếp được trang này).
+
+- `lib/egp-host.js`: một nơi duy nhất giữ hai địa chỉ. Đường dẫn phần mềm **tự
+  tạo** (mở trang tra cứu, trang chi tiết, danh mục địa bàn, tab mở sẵn) dùng
+  địa chỉ **mới**; mọi chỗ **kiểm tra** nhận **cả hai** địa chỉ, nên tab đang mở
+  ở địa chỉ cũ, kho gói đã lưu và dữ liệu tham chiếu cũ vẫn dùng được. Liên kết cũ
+  khi đưa ra cho người dùng bấm được đổi sang địa chỉ mới. Không nhận tên miền
+  giả/lồng (`…mof.gov.vn.evil.com`), http, cổng lạ.
+- `manifest.json`: thêm đúng `https://muasamcong.mof.gov.vn/*` vào quyền và chỗ
+  chạy tiện ích, cùng phạm vi như địa chỉ cũ. Không thêm quyền nào khác.
+- Kịch bản thử trình duyệt chặn cả hai tên miền về máy giả lập; các kịch bản kiểm
+  tra trực tiếp trên e-GP thật (`tests/live-*`…) chuyển sang địa chỉ mới.
+- 8 bài kiểm thử mới (`tests/dia-chi-moi-4171.test.mjs`), đỏ 7/8 trên 4.17.0.
+
+**Chưa xác nhận được:** chưa chạy trên trang `muasamcong.mof.gov.vn` thật. Nếu
+địa chỉ mới đổi cả đường dẫn dịch vụ (`/o/egp-portal-contractor-selection-v2/…`),
+kiểm tra cấu trúc e-GP ở Chẩn đoán sẽ báo ĐỎ và phần mềm tự dừng quét.
+
 ## [4.17.0] — 2026-10-08
 
 Mười hạng mục nâng cấp theo kế hoạch sau 4.16.1. Mỗi hạng mục có bài kiểm thử

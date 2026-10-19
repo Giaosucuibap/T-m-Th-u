@@ -145,7 +145,7 @@ function tenderCard(t) {
   const d = daysToClose(t.closeDate);
   const closeTxt = esc(deadlineInfo(t).label);
   const loc = t.location || 'Chưa xác định địa điểm';
-  const link = safeSource(t.detailUrl) || safeSource(t.sourcePageUrl) || 'https://muasamcong.mpi.gov.vn/';
+  const link = safeSource(t.detailUrl) || safeSource(t.sourcePageUrl) || 'https://muasamcong.mof.gov.vn/';
   const { code, label } = codeOf(t);
   return `
   <div class="tender" data-key="${esc(t.key)}">

@@ -131,10 +131,12 @@ test('413 adds no domains, host permissions or content injection scope beyond th
   // Exact relevant fields copied from the accepted 4.12.0 manifest. Kept in
   // this standalone test so an extracted release needs no sibling checkout.
   const before={permissions:['storage','unlimitedStorage','alarms','tabs','downloads','notifications','nativeMessaging'],
-    host_permissions:['https://muasamcong.mpi.gov.vn/*','https://api.telegram.org/*'],
+    // 4.17.1: e-GP đổi sang muasamcong.mof.gov.vn (Bộ Tài chính). Thêm ĐÚNG tên miền đó,
+    // cùng phạm vi như địa chỉ cũ — không thêm gì khác.
+    host_permissions:['https://muasamcong.mof.gov.vn/*','https://muasamcong.mpi.gov.vn/*','https://api.telegram.org/*'],
     content_security_policy:{extension_pages:"script-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; img-src 'self' data: https: blob:; style-src 'self' 'unsafe-inline'"},
     content_scripts:[
-      {matches:['https://muasamcong.mpi.gov.vn/*/web/guest/contractor-selection*','https://muasamcong.mpi.gov.vn/web/guest/contractor-selection*'],js:['page-hook.js'],run_at:'document_start',world:'MAIN'},
-      {matches:['https://muasamcong.mpi.gov.vn/*/web/guest/contractor-selection*','https://muasamcong.mpi.gov.vn/web/guest/contractor-selection*'],js:['content.js'],run_at:'document_start',world:'ISOLATED'}]};
+      {matches:['https://muasamcong.mof.gov.vn/*/web/guest/contractor-selection*','https://muasamcong.mof.gov.vn/web/guest/contractor-selection*','https://muasamcong.mpi.gov.vn/*/web/guest/contractor-selection*','https://muasamcong.mpi.gov.vn/web/guest/contractor-selection*'],js:['page-hook.js'],run_at:'document_start',world:'MAIN'},
+      {matches:['https://muasamcong.mof.gov.vn/*/web/guest/contractor-selection*','https://muasamcong.mof.gov.vn/web/guest/contractor-selection*','https://muasamcong.mpi.gov.vn/*/web/guest/contractor-selection*','https://muasamcong.mpi.gov.vn/web/guest/contractor-selection*'],js:['content.js'],run_at:'document_start',world:'ISOLATED'}]};
   for(const key of ['permissions','host_permissions','content_scripts','content_security_policy'])assert.deepEqual(manifest[key],before[key],key);
 });

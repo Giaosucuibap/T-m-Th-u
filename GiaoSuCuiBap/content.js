@@ -39,7 +39,7 @@
     const map={};
     for(const a of document.querySelectorAll('a[href]')){
       let h=''; try{h=a.href;}catch{}
-      if(!/^https?:\/\/muasamcong\.mpi\.gov\.vn\//i.test(h))continue;
+      if(!/^https?:\/\/muasamcong\.(?:mof|mpi)\.gov\.vn\//i.test(h))continue;
       if(/\/web\/guest(\/home)?\/?$/i.test(h))continue;
       const m=clean((a.textContent||'')+' '+h).match(/\bIB\d{6,}\b/i);
       if(m){const no=m[0].toUpperCase(); if(!map[no])map[no]=h;}
@@ -375,7 +375,7 @@
   function kqNativeSearchRoute(){
     try{
       const url=new URL(location.href);
-      if(url.origin!=='https://muasamcong.mpi.gov.vn'||!/^\/vi\/web\/guest\/contractor-selection\/?$/i.test(url.pathname))return false;
+      if(!/^https:\/\/muasamcong\.(?:mof|mpi)\.gov\.vn$/.test(url.origin)||!/^\/vi\/web\/guest\/contractor-selection\/?$/i.test(url.pathname))return false;
       for(const [key,value] of url.searchParams){
         if(/(?:^|_)render$/i.test(key)&&/detail/i.test(value))return false;
         // p_p_id selects the Liferay portlet, not an individual procurement.
@@ -1130,7 +1130,7 @@
     if(!snapshot||!['ttnt-card-bbmt-ldt','ttnt-card-bbmt-khac','ttnt-card-bbmt-adbwb'].includes(snapshot.cardId))return null;
     let url;
     try{url=new URL(snapshot.url);}catch{return null;}
-    if(url.origin!=='https://muasamcong.mpi.gov.vn'||!url.pathname.endsWith('/contractor-selection'))return null;
+    if(!/^https:\/\/muasamcong\.(?:mof|mpi)\.gov\.vn$/.test(url.origin)||!url.pathname.endsWith('/contractor-selection'))return null;
     const expected=text(url.searchParams.get('notifyNo')).toUpperCase();
     const actual=text(snapshot.fields?.['Mã TBMT']).toUpperCase();
     if(!/^IB\d{6,}$/.test(expected)||!new RegExp('^'+expected+'(?:-\\d{2})?$').test(actual))return null;

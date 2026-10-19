@@ -1,3 +1,4 @@
+import { isEgpOrigin } from './egp-host.js';
 /* ============================================================================
  *  Giáo Sư Cùi Bắp — lib/bbmt.js
  *  BIÊN BẢN MỞ THẦU — gói thầu ĐÃ MỞ THẦU nhưng CHƯA CÓ KẾT QUẢ, kèm giá dự
@@ -80,7 +81,7 @@ export function openingFinancialPricePending(bidder) {
 export function sameBbmtDetailPage(expectedUrl, actualUrl) {
   try {
     const a=new URL(expectedUrl), b=new URL(actualUrl);
-    if(a.origin!==EGP_ORIGIN||b.origin!==EGP_ORIGIN||!b.pathname.endsWith('/contractor-selection'))return false;
+    if(!isEgpOrigin(a.origin)||!isEgpOrigin(b.origin)||!b.pathname.endsWith('/contractor-selection'))return false;
     const value=(u,k)=>{const v=u.searchParams.get(k);return !v||v==='undefined'||v==='null'?'':v;};
     if(!value(a,'notifyNo')||value(a,'notifyNo')!==value(b,'notifyNo'))return false;
     const notice=u=>value(u,'notifyId')||value(u,'id');

@@ -1,5 +1,6 @@
 /* Máy chủ e-GP giả lập — dựng lại đúng hình dạng dữ liệu của
- * muasamcong.mpi.gov.vn để chạy thử tiện ích mà không đụng vào máy chủ thật. */
+ * muasamcong.mof.gov.vn (địa chỉ mới) và muasamcong.mpi.gov.vn (địa chỉ cũ) để chạy thử
+ * tiện ích mà không đụng vào máy chủ thật. */
 import https from 'node:https';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -335,7 +336,7 @@ const server = https.createServer(
         return;
       }
       const gui = () => { res.writeHead(200, { 'content-type': 'text/html;charset=UTF-8' }); res.end(PAGE_HTML); };
-      console.log(`[mock] PAGE ${url.pathname}${CHAOS.pageslow ? ` (chậm ${CHAOS.pageslow} ms)` : ''}`);
+      console.log(`[mock] PAGE host=${req.headers.host || ''} ${url.pathname}${CHAOS.pageslow ? ` (chậm ${CHAOS.pageslow} ms)` : ''}`);
       if (CHAOS.pageslow) setTimeout(gui, CHAOS.pageslow); else gui();
       return;
     }

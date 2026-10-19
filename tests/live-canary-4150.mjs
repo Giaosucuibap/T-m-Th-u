@@ -16,11 +16,11 @@ try {
   ctx = await chromium.launchPersistentContext(profile, { channel: 'chrome', executablePath: 'C:/Program Files/Google/Chrome/Application/chrome.exe', headless: false, ignoreDefaultArgs: ['--disable-extensions'], viewport: { width: 1440, height: 1000 } });
   report.browser = ctx.browser().version(); /* Fresh profile has no messaging credentials; test settings disable outbound notifications. Passive capture leaves network untouched. */
   ctx.on('request', r => requestStarts.set(r, Date.now()));
-  ctx.on('response', r => { if (!r.url().startsWith('https://muasamcong.mpi.gov.vn/')) return; pending.push((async () => {
+  ctx.on('response', r => { if (!r.url().startsWith('https://muasamcong.mof.gov.vn/')) return; pending.push((async () => {
     let data; try { if (/smart\/search$|area-api-list$|\/bid-open$|\/lotOpenDetail$|\/notify$|\/roundmng$/.test(new URL(r.url()).pathname)) data = await r.json(); } catch { }
     const started = requestStarts.get(r.request()) || Date.now(), entry = sanitizedHarEntry({ url: r.url(), method: r.request().method(), requestBody: r.request().postData(), requestHeaders: await r.request().allHeaders(), responseHeaders: await r.allHeaders(), status: r.status(), startedAt: new Date(started).toISOString(), elapsedMs: Date.now() - started, data }); if (entry) entries.push(entry);
   })().catch(e => { report.errors.push({ capture: e.message }); })); });
-  ctx.on('requestfailed', r => { if (r.url().startsWith('https://muasamcong.mpi.gov.vn/')) report.failures.push({ path: new URL(r.url()).pathname, error: r.failure()?.errorText }); });
+  ctx.on('requestfailed', r => { if (r.url().startsWith('https://muasamcong.mof.gov.vn/')) report.failures.push({ path: new URL(r.url()).pathname, error: r.failure()?.errorText }); });
   ctx.on('page', p => p.on('pageerror', e => report.errors.push({ page: p.url().split('?')[0], message: e.message })));
   const cdp = await ctx.browser().newBrowserCDPSession(); assert.equal((await cdp.send('Extensions.loadUnpacked', { path: extension })).id, id); await cdp.detach();
   const mute = w => w.evaluate(() => { chrome.notifications.create = async () => 'TEST-MUTED'; }); ctx.on('serviceworker', w => mute(w).catch(() => {})); for (const w of ctx.serviceWorkers()) await mute(w);
@@ -31,7 +31,7 @@ try {
   for (let attempt = 1; attempt <= 2; attempt++) {
     const at = Date.now();
     try {
-      await seed.goto('https://muasamcong.mpi.gov.vn/vi/web/guest/contractor-selection?render=search', { waitUntil: 'commit', timeout: 30000 });
+      await seed.goto('https://muasamcong.mof.gov.vn/vi/web/guest/contractor-selection?render=search', { waitUntil: 'commit', timeout: 30000 });
       await seed.locator('input[placeholder*="TBMT"]:visible, input[placeholder*="Nhập từ khoá"]:visible').first().waitFor({ state: 'visible', timeout: 45000 });
       report.navigations.push({ attempt, ok: true, elapsedMs: Date.now() - at }); nativeReady = true; break;
     } catch (error) {

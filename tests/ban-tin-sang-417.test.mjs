@@ -77,7 +77,8 @@ test('liên kết gọn, chỉ tới e-GP; bản tin đầy vẫn vừa MỘT ti
   const b=buildBulletin({now:NOW,tenders:many,lastRun:{startedAt:new Date(NOW-H).toISOString(),status:'SUCCESS'}});
   assert.ok(b.text.length<=3800,`dài thô ${b.text.length} — hàm gửi Telegram sẽ cắt thành nhiều tin`);
   assert.ok(b.counts.linked>=1&&b.counts.linked<10,`gắn ${b.counts.linked} liên kết khi còn chỗ`);
-  assert.match(b.text,/<a href="https:\/\/muasamcong\.mpi\.gov\.vn\/[^"]*">Mở e-GP<\/a>/);
+  // Đường dẫn cũ (mpi) được đổi sang địa chỉ mới (mof) — e-GP đã chuyển sang Bộ Tài chính.
+  assert.match(b.text,/<a href="https:\/\/muasamcong\.mof\.gov\.vn\/[^"]*">Mở e-GP<\/a>/);
   const xau=buildBulletin({now:NOW,tenders:[t('E',{detailUrl:'javascript:alert(1)'}),t('F',{detailUrl:'https://evil.example/x'})]});
   assert.doesNotMatch(xau.text,/javascript:|evil\.example/);
 });

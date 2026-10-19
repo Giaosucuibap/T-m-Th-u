@@ -1,3 +1,4 @@
+import { EGP_HOSTS, EGP_TAB_PATTERNS, isEgpOrigin } from './lib/egp-host.js';
 import { createDirectoryRuntime } from './lib/runtime-directory.js';
 import { createPlanDetailReader } from './lib/plan-detail-reader.js';
 import { parseInvestorFilter } from './lib/investor-filter.js';
@@ -251,7 +252,7 @@ async function resolveProvinceCodes(provinceText){
 
 function newRun(mode){return {foundKeys:[],id:`${Date.now()}-${Math.random().toString(36).slice(2,8)}`,mode,status:'STARTING',startedAt:new Date().toISOString(),finishedAt:null,captured:0,newCount:0,updatedCount:0,matchedCount:0,message:'Đang mở Hệ thống mạng đấu thầu quốc gia...',tabId:null,queue:[],qi:0,pendingAlerts:[],pendingMatches:[]};}
 function isEgpUrl(url){
-  try{const u=new URL(url);return u.protocol==='https:'&&u.origin==='https://muasamcong.mpi.gov.vn';}catch{return false;}
+  try{const u=new URL(url);return u.protocol==='https:'&&isEgpOrigin(u.origin);}catch{return false;}
 }
 function samePageContext(currentUrl,sourcePageUrl=''){
   if(!isEgpUrl(currentUrl))return false;
@@ -811,7 +812,7 @@ async function reviewDeadlines(){
 }
 
 async function compareOpenEgpDom(){
-  const tabs=await chrome.tabs.query({url:'https://muasamcong.mpi.gov.vn/*contractor-selection*'});
+  const tabs=await chrome.tabs.query({url:EGP_HOSTS.map(h=>`https://${h}/*contractor-selection*`)});
   const tab=tabs.find(t=>t.id)&&tabs[0];
   if(!tab?.id){
     await save({[KEYS.domRegression]:{ok:false,at:new Date().toISOString(),message:'Không có tab e-GP đang mở để đối chiếu DOM.'}});
@@ -2021,7 +2022,7 @@ async function getAttachments(payload={}){
  *
  * VÌ SAO KHÔNG DÙNG ĐỂ CHẶN NỮA: `fetch` từ service worker của tiện ích tới
  * localhost:1234 bị CORS chặn, vì phần mềm hỗ trợ chỉ cho phép gốc
- * `https://muasamcong.mpi.gov.vn`, không cho phép `chrome-extension://`.
+ * e-GP (`https://muasamcong.mof.gov.vn`, hoặc địa chỉ cũ `muasamcong.mpi.gov.vn`), không cho phép `chrome-extension://`.
  * Nên phép dò này BÁO SAI là "không chạy" ngay cả khi phần mềm đang chạy tốt
  * — đúng lỗi người dùng gặp: bấm trên e-GP tải được, bấm trong tiện ích lại
  * báo không liên lạc được.
@@ -3029,7 +3030,7 @@ chrome.tabs.onRemoved.addListener(async tabId=>{
  * Coi là kẹt khi: quá hạn RUN_STALE_MS, HOẶC không còn tab e-GP nào mở.
  */
 async function reconcileStaleLookups({coldStart=false}={}){
-  const tabs=await chrome.tabs.query({url:'https://muasamcong.mpi.gov.vn/*'});
+  const tabs=await chrome.tabs.query({url:[...EGP_TAB_PATTERNS]});
   const tabIds=new Set(tabs.map(t=>t.id));
   const noTab=tabs.length===0;
   const s=await getState();
@@ -4331,7 +4332,7 @@ chrome.runtime.onMessage.addListener((message,sender,sendResponse)=>{
       case 'MORNING_BULLETIN_SEND': sendResponse(await maybeSendBulletin({force:true}));break;
       case 'EGP_PREWARM': sendResponse(await queryRuntime.prewarm());break;
       case 'OPEN_EGP': {const s=await getState();await chrome.tabs.create({url:s.template?.sourcePageUrl||EGP_DEFAULT_URL});sendResponse({ok:true});break;}
-      case 'SCAN_CURRENT_TAB': {const [tab]=await chrome.tabs.query({active:true,currentWindow:true});if(!tab?.url?.startsWith('https://muasamcong.mpi.gov.vn/'))throw new Error('Tab hiện tại không phải e-GP.');sendResponse(await sendToTab(tab.id,{type:'SCAN_CURRENT_PAGE'}));break;}
+      case 'SCAN_CURRENT_TAB': {const [tab]=await chrome.tabs.query({active:true,currentWindow:true});if(!isEgpUrl(tab?.url))throw new Error('Tab hiện tại không phải e-GP.');sendResponse(await sendToTab(tab.id,{type:'SCAN_CURRENT_PAGE'}));break;}
       default: sendResponse({ok:false,message:'Lệnh không được hỗ trợ.'});
     }
   })().catch(error=>sendResponse({ok:false,message:String(error?.message||error)}));

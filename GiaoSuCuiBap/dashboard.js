@@ -158,7 +158,7 @@ function renderPriority() {
   const action = actionFor(tender);
   const decision = normalizeDecisionState(tender.decisionState);
   const { code, label } = codeOf(tender);
-  const link = tender.detailUrl || tender.sourcePageUrl || 'https://muasamcong.mpi.gov.vn/';
+  const link = tender.detailUrl || tender.sourcePageUrl || 'https://muasamcong.mof.gov.vn/';
   statePill.textContent = `${STATUS_LABEL[status] || status} · ${DECISION_STATE_LABEL[decision]}`;
   box.innerHTML = `
     <div class="priority-head">
@@ -257,7 +257,7 @@ function resultCard(tender) {
   const changed = changeSignal(tender);
   const decision = normalizeDecisionState(tender.decisionState);
   const { code, label } = codeOf(tender);
-  const link = tender.detailUrl || tender.sourcePageUrl || 'https://muasamcong.mpi.gov.vn/';
+  const link = tender.detailUrl || tender.sourcePageUrl || 'https://muasamcong.mof.gov.vn/';
   const cardClass = decision === 'NO_GO' ? 'no-go'
     : ['GO', 'BID', 'SUBMITTED'].includes(decision) ? 'go'
       : Number(tender.score || 0) >= 70 && status !== 'CLOSED' ? 'priority' : '';

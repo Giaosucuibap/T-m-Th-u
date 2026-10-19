@@ -1,3 +1,4 @@
+import { isEgpUrl, currentEgpUrl } from './egp-host.js';
 /* ============================================================================
  *  BẢN TIN BUỔI SÁNG QUA TELEGRAM (4.17.0)
  *
@@ -51,7 +52,7 @@ function left(close,now){
  * @param minScore   ngưỡng điểm cho mục "gói mới"
  */
 /** Chỉ đường dẫn https tới e-GP mới được đưa vào tin. */
-function safeLink(u){try{const x=new URL(String(u||''));return x.protocol==='https:'&&x.hostname==='muasamcong.mpi.gov.vn'?x.href:'';}catch{return '';}}
+function safeLink(u){return isEgpUrl(u)?currentEgpUrl(u):'';}
 
 export function buildBulletin({tenders=[],minScore=70,now=Date.now(),lastRun=null,liveCanary=null,trace=null,limit=10,maxRaw=3800}={}){
   const open=t=>{const c=Date.parse(t.closeDate);return Number.isFinite(c)&&c>now;};

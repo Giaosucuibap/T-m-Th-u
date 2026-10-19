@@ -40,9 +40,9 @@ import { foldText, cleanText, wardCoreName } from './core.js';
 
 // Đường dẫn TUYỆT ĐỐI, vì tệp này chạy trong service worker của tiện ích —
 // đường dẫn tương đối ở đó sẽ trỏ về gốc chrome-extension://, không phải e-GP.
-// Gọi được nhờ "https://muasamcong.mpi.gov.vn/*" trong host_permissions.
+// Gọi được nhờ "https://muasamcong.mof.gov.vn/*" trong host_permissions (địa chỉ mới).
 const AREA_ENDPOINT =
-  'https://muasamcong.mpi.gov.vn/o/egp-portal-contractor-selection-v2/services/get/area-api-list';
+  'https://muasamcong.mof.gov.vn/o/egp-portal-contractor-selection-v2/services/get/area-api-list';
 
 /** Mã địa bàn e-GP: areaType 1 = tỉnh/thành, areaType 2 = xã/phường. */
 export const AREA_TYPE_PROVINCE = '1';

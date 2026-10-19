@@ -1,3 +1,4 @@
+import { isEgpOrigin } from './egp-host.js';
 /* ============================================================================
  *  Giáo Sư Cùi Bắp — lib/khlcnt.js
  *  KẾ HOẠCH LỰA CHỌN NHÀ THẦU (KHLCNT) — tra theo CHỦ ĐẦU TƯ và XÃ/PHƯỜNG.
@@ -358,7 +359,7 @@ export function applyKhlcntPackageDetail(plan, receipt) {
   }
   let url;
   try { url = new URL(receipt.url); } catch { return reject('detail-url', 'Đường dẫn chi tiết không hợp lệ.'); }
-  if (url.origin !== EGP_ORIGIN || url.username || url.password ||
+  if (!isEgpOrigin(url.origin) || url.username || url.password ||
       !/^\/(?:vi\/)?web\/guest\/contractor-selection\/?$/.test(url.pathname) ||
       ['id','planNo','type','step'].some(key => url.searchParams.getAll(key).length !== 1) ||
       url.searchParams.get('id') !== sourceId || url.searchParams.get('planNo') !== planNo ||

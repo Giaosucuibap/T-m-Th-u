@@ -14,10 +14,10 @@ let context,page;const at=Date.now();
 try{
   context=await chromium.launchPersistentContext(profile,{headless:false,channel:'chrome',executablePath:'C:/Program Files/Google/Chrome/Application/chrome.exe',viewport:{width:1440,height:1000}});
   report.browser=context.browser().version();
-  context.on('requestfailed',request=>{if(request.url().startsWith('https://muasamcong.mpi.gov.vn/'))report.failures.push({path:new URL(request.url()).pathname,error:request.failure()?.errorText});});
-  context.on('response',response=>{if(response.request().resourceType()==='document'&&response.url().startsWith('https://muasamcong.mpi.gov.vn/'))report.documentResponses.push({path:new URL(response.url()).pathname,status:response.status()});});
+  context.on('requestfailed',request=>{if(request.url().startsWith('https://muasamcong.mof.gov.vn/'))report.failures.push({path:new URL(request.url()).pathname,error:request.failure()?.errorText});});
+  context.on('response',response=>{if(response.request().resourceType()==='document'&&response.url().startsWith('https://muasamcong.mof.gov.vn/'))report.documentResponses.push({path:new URL(response.url()).pathname,status:response.status()});});
   page=await context.newPage();
-  await page.goto('https://muasamcong.mpi.gov.vn/vi/web/guest/contractor-selection?render=search',{waitUntil:'commit',timeout:30000});
+  await page.goto('https://muasamcong.mof.gov.vn/vi/web/guest/contractor-selection?render=search',{waitUntil:'commit',timeout:30000});
   await page.locator('input[placeholder*="TBMT"]:visible, input[placeholder*="Nhập từ khoá"]:visible').first().waitFor({state:'visible',timeout:45000});
   report.ok=true;
 }catch(error){report.error=error.message.split('\n')[0];}

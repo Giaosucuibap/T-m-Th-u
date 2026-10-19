@@ -1,7 +1,7 @@
 /* ============================================================================
  *  Giáo Sư Cùi Bắp — lib/kqlcnt.js
  *  TRA CỨU KẾT QUẢ LỰA CHỌN NHÀ THẦU (KQLCNT) trên Hệ thống mạng đấu thầu
- *  quốc gia — muasamcong.mpi.gov.vn (e-GP v2).
+ *  quốc gia — muasamcong.mof.gov.vn (e-GP v2; địa chỉ cũ muasamcong.mpi.gov.vn).
  *
  *  Toàn bộ hằng số dưới đây được đối chiếu trực tiếp với giao diện thật của
  *  e-GP (module egp-portal-contractor-selection-v2), nên kết quả trả về là
@@ -45,7 +45,9 @@ function singleInvestor(value, builder) {
   return terms[0] || '';
 }
 
-export const EGP_ORIGIN = 'https://muasamcong.mpi.gov.vn';
+/* Địa chỉ mới của e-GP (Bộ Tài chính); địa chỉ cũ vẫn được nhận — xem lib/egp-host.js. */
+export { EGP_ORIGIN, isEgpOrigin } from './egp-host.js';
+import { EGP_ORIGIN } from './egp-host.js';
 
 /** Trang tìm kiếm Lựa chọn nhà thầu (chế độ tìm kiếm nâng cao). */
 export const EGP_SEARCH_PAGE = `${EGP_ORIGIN}/vi/web/guest/contractor-selection?render=search`;
