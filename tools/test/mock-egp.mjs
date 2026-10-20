@@ -193,14 +193,22 @@ function datasetFor(env) {
  *   cutfirst=N  : cắt N yêu cầu tìm kiếm CÓ TIÊU CHÍ đầu tiên của cả phiên máy
  *                 chủ — e-GP chập chờn đúng lúc bắt đầu; dùng để thử tự chạy lại.
  *   pageslow=N  : bản thân TRANG e-GP tải chậm N ms (e-GP thật mất vài giây để
- *                 tải trang); dùng để đo lợi ích của tab mở sẵn. */
+ *                 tải trang); dùng để đo lợi ích của tab mở sẵn.
+ *   shape=obj|multi|double|blob|form : trang gửi thân yêu cầu tìm kiếm KHÁC dạng
+ *                 mảng-một-phần-tử (đối tượng; mảng nhiều truy vấn — phản hồi
+ *                 là mảng; JSON mã hoá hai lần; Blob; form = dạng CHƯA hỗ trợ,
+ *                 để xem câu báo lỗi có nói rõ dạng) — thử e-GP mới mof.gov.vn.
+ *   side        : mỗi lần tìm, trang phát thêm một yêu cầu PHỤ không có query.
+ *   wrap        : phản hồi bọc thêm lớp {success,data:{page}}. */
+const SHAPE = (String(process.env.MOCK_CHAOS || '').match(/shape=([a-z]+)/) || [])[1] || '';
 const CHAOS = Object.fromEntries(String(process.env.MOCK_CHAOS || '').split(',').filter(Boolean)
   .map((part) => { const [k, v] = part.split('='); return [k.trim(), v === undefined ? true : Number(v)]; }));
 let chaosSeed = Number(CHAOS.seed || 1), searchCount = 0, cutCount = 0, mutateCount = 0;
 const chaosRandom = () => { chaosSeed = (chaosSeed * 1103515245 + 12345) % 2147483648; return chaosSeed / 2147483648; };
 if (Object.keys(CHAOS).length) console.log('[mock] CHẾ ĐỘ KHÓ TÍNH:', JSON.stringify(CHAOS));
 const PAGE_HTML = fs.readFileSync(path.join(HERE, 'mock-page.html'), 'utf8')
-  .replace('<script>', `<script>window.__CHAOS=${JSON.stringify({ early: Boolean(CHAOS.early), busy: Boolean(CHAOS.busy), autoload: Boolean(CHAOS.autoload) })};</script>\n<script>`);
+  .replace('<script>', `<script>window.__CHAOS=${JSON.stringify({ early: Boolean(CHAOS.early), busy: Boolean(CHAOS.busy), autoload: Boolean(CHAOS.autoload),
+    side: Boolean(CHAOS.side), shape: SHAPE })};</script>\n<script>`);
 
 const server = https.createServer(
   {
@@ -246,8 +254,20 @@ const server = https.createServer(
       let body = '';
       req.on('data', (c) => (body += c));
       req.on('end', () => {
-        let env = {};
-        try { env = JSON.parse(body)[0] || {}; } catch {}
+        let env = {}, nhieu = 0;
+        try {
+          let parsed = JSON.parse(body);
+          if (typeof parsed === 'string') parsed = JSON.parse(parsed);
+          if (Array.isArray(parsed)) nhieu = parsed.length;
+          env = (Array.isArray(parsed) ? parsed[0] : parsed) || {};
+        } catch {}
+        if (!Array.isArray(env.query)) {
+          // Yêu cầu phụ (thống kê/gợi ý) — không phải danh sách.
+          console.log('[mock] SEARCH phụ (không có query)');
+          res.writeHead(200, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({ total: ALL.length }));
+          return;
+        }
         const size = Number(env.pageSize || 10);
         const page = Number(env.pageNumber ?? env.pageNo ?? env.page ?? 0);
         const start = page * size;
@@ -274,15 +294,9 @@ const server = https.createServer(
           (env.query ? ` | query.filters=${(env.query[0]?.filters || []).map((f) => f.fieldName).join(',')}` : ''));
         setTimeout(() => {
         res.writeHead(200, { 'content-type': 'application/json;charset=UTF-8' });
-        res.end(JSON.stringify({
-          page: {
-            content,
-            totalPages: Math.ceil(data.length / size),
-            totalElements: data.length,
-            currentPage: page,
-            pageSize: size
-          }
-        }));
+        const ket = { page: { content, totalPages: Math.ceil(data.length / size), totalElements: data.length, currentPage: page, pageSize: size } };
+        res.end(JSON.stringify(nhieu > 1 ? [ket, { page: { content: [], totalPages: 0, totalElements: 0 } }]
+          : CHAOS.wrap ? { success: true, data: ket } : ket));
         }, delay);
       });
       return;

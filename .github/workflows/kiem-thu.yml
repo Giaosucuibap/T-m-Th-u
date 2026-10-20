@@ -118,6 +118,19 @@ jobs:
           for i in $(seq 1 30); do curl -sk --max-time 2 https://127.0.0.1:9443/ -o /dev/null && break; sleep 1; done
           xvfb-run -a node tools/test/tbmt-search.mjs "$PWD/GiaoSuCuiBap" 2
           test "$(grep -c 'CẮT KẾT NỐI (cutfirst' "$MOCK_LOG")" = 6
+      - name: e-GP mới gửi yêu cầu tìm kiếm khác dạng — vẫn gắn được tiêu chí
+        env:
+          MOCK_PORT: '9443'
+          MOCK_LOG: ${{ runner.temp }}/mock.log
+        run: |
+          for dang in shape=obj shape=multi shape=double shape=blob side wrap shape=obj,side,wrap; do
+            pkill -f "node tools/test/mock-egp.mjs" || true; sleep 1
+            : > "$MOCK_LOG"
+            MOCK_CHAOS="autoload,busy,$dang" node tools/test/mock-egp.mjs >> "$MOCK_LOG" 2>&1 &
+            for i in $(seq 1 30); do curl -sk --max-time 2 https://127.0.0.1:9443/ -o /dev/null && break; sleep 1; done
+            echo "== $dang"
+            xvfb-run -a node tools/test/bidopen-scan.mjs "$PWD/GiaoSuCuiBap" 2
+          done
       - name: Quét nhanh bộ săn — e-GP lọc đúng / bỏ qua bộ lọc / lọc sai
         env:
           MOCK_PORT: '9443'

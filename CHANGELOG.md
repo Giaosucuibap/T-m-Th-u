@@ -2,6 +2,34 @@
 
 Tài liệu này ghi lại các thay đổi quan trọng của Giáo Sư Cùi Bắp. Cấu trúc tham khảo [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) và phiên bản tuân theo cách đánh số ngữ nghĩa ở mức sản phẩm.
 
+## [4.17.2] — 2026-10-20
+
+### Sửa lỗi "e-GP đã gửi yêu cầu tìm kiếm theo một cấu trúc tiện ích không nhận ra"
+Người dùng gặp ở "Gói đang chờ kết quả" (Tỉnh Lâm Đồng, 15 ngày) ngay sau khi e-GP
+chuyển sang `muasamcong.mof.gov.vn`. Nguyên nhân: `page-hook.js` chỉ gắn được tiêu
+chí vào **đúng một dạng** thân yêu cầu tìm kiếm — chuỗi JSON của mảng một phần tử —
+và `content.js` dừng cả lượt ngay lần đầu thấy một yêu cầu khác dạng.
+
+- `page-hook.js` nhận thêm: đối tượng không bọc mảng; mảng nhiều truy vấn (gắn vào
+  tất cả, phản hồi dạng mảng lấy phần tử đầu); JSON mã hoá hai lần; thân **Blob /
+  ArrayBuffer / Uint8Array** gửi bằng XHR hoặc fetch (bản cũ biến Blob thành `"{}"`);
+  phản hồi bọc thêm lớp `{data:{page}}`. Dạng mới **bắt buộc** đã có sẵn `query`
+  dạng mảng — yêu cầu phụ (đếm, gợi ý) không bị nhét tiêu chí, tránh đọc nhầm danh
+  sách mặc định thành kết quả.
+- `content.js`: một yêu cầu khác dạng (có thể là yêu cầu phụ của trang) không còn
+  làm hỏng cả lượt — thử lại bằng thao tác khác; lặp lại lần thứ hai mới kết luận.
+- Khi vẫn không gắn được, câu báo lỗi ghi **dạng yêu cầu** (chỉ tên trường và kiểu,
+  không có giá trị), ví dụ `dạng yêu cầu: Blob → đối tượng {pageSize,query[1]}`,
+  và nói rõ đây không phải kết quả rỗng — một ảnh chụp đủ để sửa đúng chỗ.
+- Máy e-GP giả lập thêm chế độ `shape=obj|multi|double|blob|form`, `side`, `wrap`;
+  CI chạy "Gói đang chờ kết quả" với 7 dạng. Bản 4.17.1 hỏng 6/7 (đúng câu lỗi
+  người dùng gặp), bản 4.17.2 đạt 7/7.
+- 12 bài kiểm thử mới (`tests/cau-truc-moi-4172.test.mjs`), đỏ 11/12 trên 4.17.1.
+
+**Chưa xác nhận được:** chưa thấy tận mắt yêu cầu của trang e-GP mới (môi trường
+phát triển bị chặn truy cập). Nếu e-GP dùng một dạng ngoài các dạng trên, lỗi sẽ
+hiện kèm "dạng yêu cầu: …" để sửa trong một lần.
+
 ## [4.17.1] — 2026-10-19
 
 ### e-GP đổi địa chỉ sang Bộ Tài chính

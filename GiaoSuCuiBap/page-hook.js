@@ -221,13 +221,41 @@
      gắn được tiêu chí: thân yêu cầu không còn đúng dạng đã biết (e-GP đổi cấu
      trúc), hoặc quá lớn. Báo ngay để lượt tra cứu dừng với lý do thật, thay vì
      chờ phản hồi của một yêu cầu không mang tiêu chí rồi kết luận sai. */
-  const rejectedSearch = (body) => {
+  const rejectedSearch = (body, kind) => {
     if (!kqlcntPlan) return;
     let reason = 'shape';
     if (typeof body !== 'string' || !body) reason = 'empty';
     else if (body.length > MAX_ENVELOPE_CHARS) reason = 'oversized';
-    post('KQLCNT_REQUEST_REJECTED', { planId: kqlcntPlan.id, queryIndex: kqlcntPlan.queryIndex ?? 0, reason });
+    post('KQLCNT_REQUEST_REJECTED', { planId: kqlcntPlan.id, queryIndex: kqlcntPlan.queryIndex ?? 0, reason,
+      shape: bodyShape(body, kind) });
   };
+
+  /* DẤU VÂN TAY của thân yêu cầu e-GP mà tiện ích không gắn được tiêu chí:
+     CHỈ tên trường và kiểu (mảng mấy phần tử, đối tượng có những khoá nào),
+     KHÔNG BAO GIỜ có giá trị. Hiện thẳng trong thông báo lỗi để chỉ cần một
+     ảnh chụp màn hình là biết e-GP đổi cấu trúc thế nào — không phải đoán. */
+  function bodyShape(body, kind) {
+    const keysOf = (obj) => {
+      const keys = Object.keys(obj).slice(0, 12).map((key) => {
+        const name = FIELD_NAME.test(key) ? key : '?';
+        const v = obj[key];
+        return Array.isArray(v) ? `${name}[${v.length}]` : isPlainObject(v) ? `${name}{}` : name;
+      });
+      return `{${keys.join(',')}${Object.keys(obj).length > 12 ? ',…' : ''}}`;
+    };
+    const shapeOfValue = (v) => Array.isArray(v)
+      ? `mảng[${v.length}]${v.length && isPlainObject(v[0]) ? ' ' + keysOf(v[0]) : v.length ? ' ' + typeof v[0] : ''}`
+      : isPlainObject(v) ? `đối tượng ${keysOf(v)}` : typeof v;
+    const prefix = kind && kind !== 'string' ? `${kind} → ` : '';
+    if (typeof body !== 'string' || !body) return `${prefix}rỗng`;
+    if (body.length > MAX_ENVELOPE_CHARS) return `${prefix}${body.length} ký tự (quá lớn)`;
+    let parsed;
+    try { parsed = JSON.parse(body); } catch { return `${prefix}không phải JSON (${body.length} ký tự)`; }
+    if (typeof parsed === 'string') {
+      try { return `${prefix}chuỗi JSON lồng: ${shapeOfValue(JSON.parse(parsed))}`.slice(0, 300); } catch { return `${prefix}chuỗi`; }
+    }
+    return `${prefix}${shapeOfValue(parsed)}`.slice(0, 300);
+  }
   const searchSettled = () => {
     searchesInFlight = Math.max(0, searchesInFlight - 1);
     post('EGP_SEARCH_ACTIVITY', { inFlight: searchesInFlight });
@@ -298,6 +326,22 @@
     return out;
   }
 
+  // Nhận diện theo nhãn built-in, không theo instanceof: thân yêu cầu có thể
+  // sinh ở realm khác (iframe, thư viện đóng gói) mà vẫn là ArrayBuffer thật.
+  const isArrayBufferLike = (body) => Boolean(body) && typeof body === 'object'
+    && (ArrayBuffer.isView(body) || Object.prototype.toString.call(body) === '[object ArrayBuffer]');
+  function isBinaryBody(body) {
+    return Boolean(body) && ((typeof Blob !== 'undefined' && body instanceof Blob) || isArrayBufferLike(body));
+  }
+  function bodyKindOf(body) {
+    if (typeof body === 'string' || !body) return 'string';
+    if (typeof Blob !== 'undefined' && body instanceof Blob) return 'Blob';
+    if (isArrayBufferLike(body)) return 'ArrayBuffer';
+    if (typeof FormData !== 'undefined' && body instanceof FormData) return 'FormData';
+    if (body instanceof URLSearchParams) return 'URLSearchParams';
+    return 'object';
+  }
+
   async function serializeFetchRequest(input, init = {}) {
     const isReq = typeof Request !== 'undefined' && input instanceof Request;
     const url = isReq ? input.url : String(input);
@@ -307,11 +351,17 @@
     if (!body && isReq && !['GET', 'HEAD'].includes(method)) {
       try { body = await input.clone().text(); } catch {}
     }
+    const bodyKind = bodyKindOf(body);
     if (body instanceof URLSearchParams) body = body.toString();
+    // Thân nhị phân (Blob/ArrayBuffer/mảng byte) chứa chữ JSON: đọc ra chữ. Trước
+    // đây JSON.stringify(Blob) cho ra "{}" — tiện ích tưởng e-GP đổi cấu trúc.
+    else if (isBinaryBody(body)) {
+      try { body = await new Response(body).text(); } catch { body = ''; }
+    }
     if (typeof body !== 'string' && body) {
       try { body = JSON.stringify(body); } catch { body = ''; }
     }
-    return { url, method, headers, body: String(body || '') };
+    return { url, method, headers, body: String(body || ''), bodyKind };
   }
 
   // Accept explicit, shallow response envelopes; never search arbitrary objects.
@@ -493,7 +543,7 @@
           ok: response.status >= 200 && response.status < 300,
           status: response.status,
           retryAfter: response.status === 429 ? (response.headers.get('retry-after') || '').slice(0, 100) : '',
-          data
+          data: planResponseData(data)
         });
       }
       const bidders = response.ok ? bidOpeningRows(responseUrl, data) : null;
@@ -546,7 +596,7 @@
     }
     request.pageUrl=location.href;
     const isSearch = isSearchRequest(request.url, request.method);
-    if (isSearch && kqlcntPlan && !planId) rejectedSearch(request.body);
+    if (isSearch && kqlcntPlan && !planId) rejectedSearch(request.body, request.bodyKind);
     if (isSearch) searchStarted(planId, queryIndex, request.body);
     let response;
     try { response = await originalFetch(fetchInput, fetchInit); }
@@ -576,8 +626,29 @@
     return XHRSetHeader.call(this, name, value);
   };
   XMLHttpRequest.prototype.send = function (body) {
+    /* Thân yêu cầu tìm kiếm là Blob: chỉ đọc được bất đồng bộ. Đọc ra chữ rồi
+       mới gửi (gửi muộn vài mili-giây, vẫn đúng yêu cầu đó, đúng token đó). */
+    if (this.__br && kqlcntPlan && typeof Blob !== 'undefined' && body instanceof Blob
+      && isSearchRequest(this.__br.url, this.__br.method)) {
+      const xhr = this, blob = body;
+      blob.text().then((text) => {
+        if (blob.type && !Object.keys(xhr.__br.headers).some((h) => /^content-type$/i.test(h))) {
+          try { XHRSetHeader.call(xhr, 'Content-Type', blob.type); } catch {}
+        }
+        xhrSend.call(xhr, text, 'Blob', blob);
+      }, () => xhrSend.call(xhr, blob, 'Blob'));
+      return undefined;
+    }
+    return xhrSend.call(this, body, bodyKindOf(body));
+  };
+  function xhrSend(body, kind, original) {
     if (this.__br) {
-      try { this.__br.body = typeof body === 'string' ? body : body ? JSON.stringify(body) : ''; } catch { this.__br.body = ''; }
+      try {
+        this.__br.body = typeof body === 'string' ? body
+          : body instanceof URLSearchParams ? body.toString()
+          : isArrayBufferLike(body) ? new TextDecoder().decode(body)
+            : body ? JSON.stringify(body) : '';
+      } catch { this.__br.body = ''; }
 
       // Đánh dấu mọi request tìm kiếm thuộc lượt tra cứu đang chạy, để phản hồi
       // được chuyển về đúng nơi. Chỉ thay tiêu chí khi kế hoạch đã qua allowlist
@@ -594,7 +665,7 @@
 
       this.__br.pageUrl=location.href;
       const isSearch=isSearchRequest(this.__br.url,this.__br.method);
-      if(isSearch&&kqlcntPlan&&!this.__brKqlcnt)rejectedSearch(this.__br.body);
+      if(isSearch&&kqlcntPlan&&!this.__brKqlcnt)rejectedSearch(this.__br.body,kind);
       if(isSearch){
         searchStarted(this.__brKqlcnt,this.__brQueryIndex,this.__br.body);
         this.addEventListener('loadend',searchSettled,{once:true});
@@ -623,7 +694,7 @@
               ok: this.status >= 200 && this.status < 300,
               status: this.status,
               retryAfter: this.status === 429 ? (this.getResponseHeader?.('retry-after') || '').slice(0, 100) : '',
-              data
+              data: planResponseData(data)
             });
           } catch {
             post('KQLCNT_PAGE', { planId: this.__brKqlcnt, queryIndex: this.__brQueryIndex, ok: false,
@@ -655,8 +726,9 @@
         } catch {}
       }, { once: true });
     }
-    return XHRSend.call(this, body);
-  };
+    // Blob không gắn được tiêu chí: gửi lại NGUYÊN Blob gốc, không đổi gì.
+    return XHRSend.call(this, original && !this.__brKqlcnt ? original : body);
+  }
 
   // ====================================================================
   //  TRA CỨU KQLCNT
@@ -682,7 +754,9 @@
    */
   function nativePageIndex(body){
     try{
-      const value=JSON.parse(body)?.[0]?.pageNumber;
+      let parsed=JSON.parse(body);
+      if(typeof parsed==='string')parsed=JSON.parse(parsed);
+      const value=(Array.isArray(parsed)?parsed[0]:parsed)?.pageNumber;
       return value!==null&&value!==undefined&&value!==''&&Number.isSafeInteger(Number(value))&&Number(value)>=0?Number(value):null;
     }catch{return null;}
   }
@@ -694,11 +768,47 @@
 
     let parsed;
     try { parsed = JSON.parse(rawBody); } catch { return null; }
-    if (!Array.isArray(parsed) || parsed.length !== 1 || !isPlainObject(parsed[0])) return null;
+    // Thân yêu cầu bị mã hoá JSON hai lần (chuỗi chứa JSON): gắn vào bên trong,
+    // rồi mã hoá lại đúng hai lần như e-GP gửi.
+    if (typeof parsed === 'string') {
+      let inner;
+      try { inner = JSON.parse(parsed); } catch { return null; }
+      const refined = refineEnvelopes(inner);
+      return refined === null ? null : JSON.stringify(JSON.stringify(refined));
+    }
+    const refined = refineEnvelopes(parsed);
+    return refined === null ? null : JSON.stringify(refined);
+  }
 
-    const envelope = { ...parsed[0], query: [kqlcntPlan.query] };
-    envelope.pageSize = String(kqlcntPlan.pageSize);
-    return JSON.stringify([envelope]);
+  /* Các dạng thân yêu cầu tìm kiếm được nhận:
+   *   [ {…, query:[…]} ]          — dạng e-GP dùng tới 2026 (1 phần tử);
+   *   {…, query:[…]}              — một đối tượng, không bọc mảng;
+   *   [ {…, query:[…]}, … ]       — nhiều truy vấn gộp một yêu cầu: gắn tiêu chí
+   *                                 vào TẤT CẢ để danh sách nào trang hiển thị
+   *                                 cũng là danh sách đã lọc (phản hồi lấy phần
+   *                                 tử đầu — xem planResponseData).
+   * Dạng mới thì BẮT BUỘC đã có sẵn `query` dạng mảng: đó là bằng chứng đây
+   * đúng là truy vấn tìm kiếm cùng họ cấu trúc, không phải một yêu cầu khác
+   * (đếm, gợi ý từ khoá…) mà tiện ích sẽ phá hỏng nếu nhét tiêu chí vào. */
+  function refineEnvelopes(parsed) {
+    const withPlan = (env) => ({ ...env, query: [kqlcntPlan.query], pageSize: String(kqlcntPlan.pageSize) });
+    const hasQuery = (env) => isPlainObject(env) && Array.isArray(env.query);
+    if (Array.isArray(parsed)) {
+      if (parsed.length === 1 && isPlainObject(parsed[0])) return [withPlan(parsed[0])];
+      if (parsed.length > 1 && parsed.length <= 10 && parsed.every(hasQuery)) return parsed.map(withPlan);
+      return null;
+    }
+    return hasQuery(parsed) ? withPlan(parsed) : null;
+  }
+
+  /* Phản hồi của lượt tra cứu về đúng dạng `{page:{content,…}}` mà content.js
+     đối soát. Yêu cầu gộp nhiều truy vấn trả về mảng; một số máy chủ bọc thêm
+     lớp `data`. Không đoán sâu hơn: dạng khác vẫn đi nguyên và bị báo là lỗi
+     cấu trúc phản hồi, không bao giờ bị đọc nhầm. */
+  function planResponseData(data) {
+    if (Array.isArray(data) && data.length && isPlainObject(data[0]) && isPlainObject(data[0].page)) return data[0];
+    if (isPlainObject(data) && !data.page && isPlainObject(data.data) && isPlainObject(data.data.page)) return data.data;
+    return data;
   }
 
   window.addEventListener('message', (event) => {

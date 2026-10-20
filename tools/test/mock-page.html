@@ -66,13 +66,28 @@ function call(){
     document.getElementById('results').style.display = 'block';
     document.getElementById('pg').classList.add('on');
   }
-  const body = JSON.stringify([{ pageNumber: page, pageSize: String(size), query: [{ index:'es-contractor-selection', filters: [] }] }]);
+  const env = { pageNumber: page, pageSize: String(size), query: [{ index:'es-contractor-selection', filters: [] }] };
+  /* shape=… : e-GP mới (mof.gov.vn) có thể gửi thân yêu cầu khác dạng 2026.
+     side      : mỗi lần tìm, trang phát thêm một yêu cầu PHỤ khác dạng. */
+  if (CHAOS.side) {
+    const phu = new XMLHttpRequest();
+    phu.open('POST', SEARCH); phu.setRequestHeader('content-type','application/json');
+    phu.send(JSON.stringify({ keyWord: '', thongKe: true }));
+  }
+  const body = CHAOS.shape === 'obj' ? JSON.stringify(env)
+    : CHAOS.shape === 'multi' ? JSON.stringify([env, { ...env, pageSize: '1' }])
+    : CHAOS.shape === 'double' ? JSON.stringify(JSON.stringify([env]))
+    : CHAOS.shape === 'blob' ? new Blob([JSON.stringify([env])], { type: 'application/json' })
+    : CHAOS.shape === 'form' ? new URLSearchParams({ q: JSON.stringify(env) })
+    : JSON.stringify([env]);
   const xhr = new XMLHttpRequest();
   xhr.open('POST', SEARCH);
-  xhr.setRequestHeader('content-type','application/json');
+  if (CHAOS.shape !== 'blob') xhr.setRequestHeader('content-type','application/json');
   xhr.onloadend = () => { inFlight = false; };
   xhr.onload = () => {
     let d = {}; try { d = JSON.parse(xhr.responseText); } catch {}
+    if (Array.isArray(d)) d = d[0] || {};
+    if (d.data && d.data.page) d = d.data;
     const rows = (d.page && d.page.content) || [];
     total = (d.page && d.page.totalElements) || 0;
     totalPages = (d.page && d.page.totalPages) || 1;

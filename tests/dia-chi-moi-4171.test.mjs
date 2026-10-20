@@ -54,7 +54,7 @@ test('tab e-GP người dùng đang mở ở địa chỉ CŨ vẫn được nh�
   assert.ok(scanTargetUrl('').startsWith(`${MOI}/`));
 });
 
-test('manifest: quyền và chỗ chạy tiện ích có CẢ HAI địa chỉ, cùng phạm vi; phiên bản 4.17.1', ()=>{
+test('manifest: quyền và chỗ chạy tiện ích có CẢ HAI địa chỉ, cùng phạm vi; phiên bản từ 4.17.1 trở lên', ()=>{
   const m=JSON.parse(read('manifest.json'));
   assert.deepEqual(m.host_permissions.filter(h=>h.includes('muasamcong')),[`${MOI}/*`,`${CU}/*`]);
   for(const cs of m.content_scripts){
@@ -63,7 +63,8 @@ test('manifest: quyền và chỗ chạy tiện ích có CẢ HAI địa chỉ, 
     assert.deepEqual(mof,mpi,'cùng phạm vi trang ở hai địa chỉ');
     assert.ok(mof.length>0);
   }
-  assert.equal(m.version,'4.17.1');
+  const [x,y,z]=m.version.split('.').map(Number);
+  assert.ok(x*1e6+y*1e3+z>=4017001,`phiên bản ${m.version} thấp hơn 4.17.1`);
 });
 
 test('trang e-GP ở địa chỉ mới: content.js nhận đúng trang tra cứu; page-hook nhận yêu cầu của trang', ()=>{

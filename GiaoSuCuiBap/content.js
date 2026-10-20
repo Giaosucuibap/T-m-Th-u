@@ -138,6 +138,7 @@
   /* Chờ trang e-GP xong yêu cầu nó tự phát (danh sách mặc định khi mở trang). */
   const KQ_IDLE_TIMEOUT=40000;
   const KQ_TRIGGER_ATTEMPTS=4;
+  const KQ_REJECT_LIMIT=2;     // số lần thấy yêu cầu khác dạng trước khi kết luận e-GP đổi cấu trúc
   // Rớt kết nối ở trang đầu: gửi lại tối đa 2 lần, chờ 0,8 s rồi 1,6 s.
   const KQ_NET_RESENDS=2, KQ_NET_BACKOFF=800;
   const KQ_ACK_TIMEOUT=15000;      // hạn chờ worker xác nhận một lần giao dữ liệu
@@ -503,10 +504,19 @@
     ];
   }
 
+  /** Lý do dừng khi e-GP gửi yêu cầu tìm kiếm theo dạng tiện ích chưa biết. */
+  function kqSchemaFailure(rejected){
+    const shape=String(rejected?.shape||'').slice(0,300);
+    return {ok:false,status:0,stage:'schema',schemaIssue:true,
+      failureReason:'e-GP gửi yêu cầu tìm kiếm theo dạng mới mà tiện ích chưa biết, nên chưa gắn được tiêu chí'
+        +(shape?` (dạng yêu cầu: ${shape})`:'')+'. e-GP CHƯA được hỏi theo tiêu chí của bạn — đây không phải kết quả rỗng. '
+        +'Hãy chụp màn hình thông báo này gửi người bảo trì tiện ích; dòng "dạng yêu cầu" chỉ có tên trường, không có dữ liệu.'};
+  }
+
   async function kqTriggerFirstPage(){
     const plan=kqPlan;
     const mechanisms=kqFirstPageMechanisms();
-    let fired=0,ignored=0,timeouts=0,netCuts=0,lastPage=null;
+    let fired=0,ignored=0,timeouts=0,netCuts=0,lastPage=null,rejections=0,lastRejected=null;
     const startedAt=Date.now();
     for(let attempt=0;attempt<KQ_TRIGGER_ATTEMPTS;attempt++){
       if(kqCancelled||kqPlan!==plan)return {ok:false,cancelled:true,status:0};
@@ -538,10 +548,17 @@
       if(!sent){
         if(kqPageWaiter)kqPageWaiter({ok:false,cancelled:true,status:0,superseded:true});
         if(kqCancelled||kqPlan!==plan)return {ok:false,cancelled:true,status:0};
+        /* e-GP phát một yêu cầu tìm kiếm tiện ích không gắn được tiêu chí. Có thể
+           là yêu cầu PHỤ của trang (đếm, gợi ý…) chạy cùng lúc — 4.17.1 dừng ngay
+           ở lần đầu nên chết oan. Nay thử lại bằng cách thao tác khác; chỉ kết
+           luận e-GP đổi cấu trúc khi lặp lại ở lần thứ hai, và nói rõ DẠNG yêu
+           cầu để sửa đúng chỗ thay vì đoán. */
         if(kqRejected){
-          return {ok:false,status:0,stage:'schema',schemaIssue:true,
-            failureReason:'e-GP đã gửi yêu cầu tìm kiếm theo một cấu trúc tiện ích không nhận ra, nên không gắn được tiêu chí. '
-              +'Chưa có dữ liệu để kết luận. Hãy mở Chẩn đoán → chạy kiểm tra cấu trúc e-GP.'};
+          rejections++;lastRejected=kqRejected;
+          if(rejections>=KQ_REJECT_LIMIT)return kqSchemaFailure(lastRejected);
+          kqReport(`e-GP vừa gửi một yêu cầu tìm kiếm khác dạng (lần ${rejections}); thử lại bằng thao tác khác…`);
+          await new Promise(r=>setTimeout(r,600+attempt*700));
+          continue;
         }
         ignored++;
         kqReport(`Trang e-GP chưa nhận thao tác tra cứu (lần ${attempt+1}/${KQ_TRIGGER_ATTEMPTS}); thử lại…`);
@@ -568,6 +585,7 @@
       kqReport('e-GP đã nhận yêu cầu nhưng chưa trả lời sau 45 giây; đang gửi lại một lần…');
     }
     const giay=Math.round((Date.now()-startedAt)/1000);
+    if(lastRejected&&!timeouts)return kqSchemaFailure(lastRejected);
     if(lastPage&&timeouts&&!ignored)return lastPage;
     if(timeouts){
       return {ok:false,status:0,stage:'response',
@@ -1026,7 +1044,8 @@
       return;
     }
     if(event.data.type==='KQLCNT_REQUEST_REJECTED'){
-      if(kqSameQuery(payload,kqPlan))kqRejected=String(payload.reason||'shape');
+      if(kqSameQuery(payload,kqPlan))kqRejected={reason:String(payload.reason||'shape').slice(0,20),
+        shape:typeof payload.shape==='string'?payload.shape.slice(0,300):''};
       return;
     }
 
