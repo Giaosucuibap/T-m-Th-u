@@ -199,7 +199,7 @@ test('new query clicks visible native page 1 after a prior query ended on a late
  const context=vm.createContext({document:{querySelectorAll:()=>[hidden,first]},clean:s=>s.trim(),
   kqAwaitPage:()=>Promise.resolve(response),kqAwaitSent:()=>Promise.resolve(true),kqPageWaiter:null,kqSentWaiter:null,
   kqPageSizeSelect:()=>select,kqClickSearch:()=>false,Event:class{},kqPlan:{id:'p'},kqCancelled:false,kqRejected:null,
-  egpInFlight:0,kqWaitEgpIdle:async()=>true,kqReport:()=>{},KQ_TRIGGER_ATTEMPTS:4,KQ_REJECT_LIMIT:2,setTimeout,Date});
+  egpInFlight:0,kqWaitEgpIdle:async()=>true,kqReport:()=>{},KQ_TRIGGER_ATTEMPTS:4,setTimeout,Date});
  const trigger=vm.runInContext(content.slice(a,b)+'\nkqTriggerFirstPage',context);
  assert.equal(await trigger(),response);assert.equal(firstClicks,1);assert.equal(selectChanges,0);
  first.classList.contains=()=>true;

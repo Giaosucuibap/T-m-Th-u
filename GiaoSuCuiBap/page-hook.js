@@ -226,9 +226,21 @@
     let reason = 'shape';
     if (typeof body !== 'string' || !body) reason = 'empty';
     else if (body.length > MAX_ENVELOPE_CHARS) reason = 'oversized';
+    else if (isSideRequest(body)) reason = 'side';
     post('KQLCNT_REQUEST_REJECTED', { planId: kqlcntPlan.id, queryIndex: kqlcntPlan.queryIndex ?? 0, reason,
       shape: bodyShape(body, kind) });
   };
+
+  /* YÊU CẦU PHỤ: JSON không mang `query` dạng mảng ở bất kỳ phần tử nào — trang
+     e-GP mới (mof.gov.vn) tự gọi cùng endpoint để đếm/gợi ý. Không phải danh
+     sách tìm kiếm, nên không phải dấu hiệu e-GP đổi cấu trúc: content.js bỏ qua,
+     như bản tác giả 4.17.1 (đã chạy trên e-GP thật) vẫn làm. */
+  function isSideRequest(body) {
+    let parsed;
+    try { parsed = JSON.parse(body); if (typeof parsed === 'string') parsed = JSON.parse(parsed); } catch { return false; }
+    const items = Array.isArray(parsed) ? parsed : [parsed];
+    return items.every((item) => !isPlainObject(item) || !Array.isArray(item.query));
+  }
 
   /* DẤU VÂN TAY của thân yêu cầu e-GP mà tiện ích không gắn được tiêu chí:
      CHỈ tên trường và kiểu (mảng mấy phần tử, đối tượng có những khoá nào),
@@ -781,32 +793,22 @@
   }
 
   /* Các dạng thân yêu cầu tìm kiếm được nhận:
-   *   [ {…, query:[…]} ]          — dạng e-GP dùng tới 2026 (1 phần tử);
-   *   {…, query:[…]}              — một đối tượng, không bọc mảng;
-   *   [ {…, query:[…]}, … ]       — nhiều truy vấn gộp một yêu cầu: gắn tiêu chí
-   *                                 vào TẤT CẢ để danh sách nào trang hiển thị
-   *                                 cũng là danh sách đã lọc (phản hồi lấy phần
-   *                                 tử đầu — xem planResponseData).
-   * Dạng mới thì BẮT BUỘC đã có sẵn `query` dạng mảng: đó là bằng chứng đây
-   * đúng là truy vấn tìm kiếm cùng họ cấu trúc, không phải một yêu cầu khác
-   * (đếm, gợi ý từ khoá…) mà tiện ích sẽ phá hỏng nếu nhét tiêu chí vào. */
+   *   [ {…} ]            — dạng e-GP dùng, ĐÃ CHẠY trên e-GP thật mof.gov.vn
+   *                        (bản tác giả 4.17.1, 20/10/2026: 156/156 bản ghi);
+   *   {…, query:[…]}     — cùng nội dung nhưng không bọc mảng (phòng xa).
+   * Mảng NHIỀU phần tử thì KHÔNG đụng: đó thường là yêu cầu đếm/thống kê của
+   * trang; nhét tiêu chí vào sẽ biến nó thành "trang đầu" giả của lượt tra cứu.
+   * Dạng phòng xa BẮT BUỘC đã có `query` dạng mảng. */
   function refineEnvelopes(parsed) {
     const withPlan = (env) => ({ ...env, query: [kqlcntPlan.query], pageSize: String(kqlcntPlan.pageSize) });
-    const hasQuery = (env) => isPlainObject(env) && Array.isArray(env.query);
-    if (Array.isArray(parsed)) {
-      if (parsed.length === 1 && isPlainObject(parsed[0])) return [withPlan(parsed[0])];
-      if (parsed.length > 1 && parsed.length <= 10 && parsed.every(hasQuery)) return parsed.map(withPlan);
-      return null;
-    }
-    return hasQuery(parsed) ? withPlan(parsed) : null;
+    if (Array.isArray(parsed)) return parsed.length === 1 && isPlainObject(parsed[0]) ? [withPlan(parsed[0])] : null;
+    return isPlainObject(parsed) && Array.isArray(parsed.query) ? withPlan(parsed) : null;
   }
 
   /* Phản hồi của lượt tra cứu về đúng dạng `{page:{content,…}}` mà content.js
-     đối soát. Yêu cầu gộp nhiều truy vấn trả về mảng; một số máy chủ bọc thêm
-     lớp `data`. Không đoán sâu hơn: dạng khác vẫn đi nguyên và bị báo là lỗi
-     cấu trúc phản hồi, không bao giờ bị đọc nhầm. */
+     đối soát; mở đúng một lớp `data` nếu máy chủ bọc thêm. Dạng khác đi nguyên
+     và bị báo là lỗi cấu trúc phản hồi, không bao giờ bị đọc nhầm. */
   function planResponseData(data) {
-    if (Array.isArray(data) && data.length && isPlainObject(data[0]) && isPlainObject(data[0].page)) return data[0];
     if (isPlainObject(data) && !data.page && isPlainObject(data.data) && isPlainObject(data.data.page)) return data.data;
     return data;
   }

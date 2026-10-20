@@ -5,11 +5,15 @@
  *    "e-GP đã gửi yêu cầu tìm kiếm theo một cấu trúc tiện ích không nhận ra,
  *     nên không gắn được tiêu chí."
  *  page-hook 4.17.1 CHỈ nhận đúng một dạng thân yêu cầu: chuỗi JSON của mảng
- *  MỘT phần tử. Môi trường phát triển không vào được e-GP thật, nên không biết
- *  chắc e-GP mới dùng dạng nào. Bài này khoá các dạng hợp lý mà bản mới nhận:
- *  đối tượng không bọc mảng, mảng nhiều truy vấn, chuỗi JSON lồng, thân Blob /
- *  ArrayBuffer (gửi bằng XHR hoặc fetch) — và dạng KHÔNG nhận thì phải nói rõ
- *  hình dạng (chỉ tên trường, không giá trị) để sửa đúng trong một lần.
+ *  MỘT phần tử. Môi trường phát triển không vào được e-GP thật.
+ *
+ *  4.17.3 — BẰNG CHỨNG MỚI: bản tác giả 4.17.1 (người dùng gửi, 20/10/2026) có
+ *  page-hook cũng CHỈ nhận mảng một phần tử mà vẫn đọc đủ 156/156 bản ghi trên
+ *  e-GP thật mof.gov.vn. Vậy yêu cầu CHÍNH không đổi dạng; thứ làm hỏng là yêu
+ *  cầu PHỤ của trang (không mang `query`) bị tính là "đổi cấu trúc". Bài này
+ *  khoá: yêu cầu phụ bị bỏ qua (lý do 'side'); mảng nhiều phần tử KHÔNG bị nhét
+ *  tiêu chí; các dạng phòng xa (đối tượng có query, JSON lồng, Blob/ArrayBuffer)
+ *  vẫn nhận; dạng lạ thật sự thì nói rõ hình dạng (chỉ tên trường).
  * ========================================================================== */
 import fs from 'node:fs';
 import vm from 'node:vm';
@@ -86,14 +90,15 @@ test('đối tượng KHÔNG bọc mảng → gắn được tiêu chí, giữ n
   assert.equal(b.cua('KQLCNT_PAGE').at(-1).data.page.totalElements, 1);
 });
 
-test('mảng NHIỀU truy vấn gộp → gắn vào tất cả; phản hồi dạng mảng lấy phần tử đầu', () => {
+test('mảng NHIỀU truy vấn (thường là yêu cầu đếm của trang) → KHÔNG nhét tiêu chí, gửi nguyên văn', () => {
+  /* 4.17.2 từng gắn tiêu chí vào mọi phần tử: một yêu cầu đếm sẽ thành "trang
+     đầu" giả của lượt tra cứu. Yêu cầu chính của e-GP thật là mảng MỘT phần tử. */
   const b = trinhDuyet();
-  const x = b.goiXHR(JSON.stringify([NATIVE, { ...NATIVE, pageSize: 1 }]));
-  const gui = JSON.parse(b.sent.at(-1).body);
-  assert.equal(gui.length, 2);
-  for (const env of gui) assert.deepEqual(env.query, [PLAN.query]);
-  x.tra(200, [PAGE, { page: { content: [], totalPages: 0, totalElements: 0 } }]);
-  assert.deepEqual(b.cua('KQLCNT_PAGE').at(-1).data, PAGE);
+  const body = JSON.stringify([NATIVE, { ...NATIVE, pageSize: 1 }]);
+  b.goiXHR(body);
+  assert.equal(b.sent.at(-1).body, body);
+  assert.equal(b.cua('KQLCNT_REQUEST_SENT').length, 0);
+  assert.equal(b.cua('KQLCNT_REQUEST_REJECTED').at(-1).reason, 'shape');
 });
 
 test('chuỗi JSON lồng (mã hoá hai lần) → gắn được, gửi lại đúng hai lần mã hoá', () => {
@@ -121,7 +126,9 @@ test('Blob không gắn được tiêu chí → gửi NGUYÊN Blob gốc, không
   b.goiXHR(blob);
   await nghi();
   assert.equal(b.sent.at(-1).body, blob);
-  assert.match(b.cua('KQLCNT_REQUEST_REJECTED').at(-1).shape, /^Blob → đối tượng \{goiY\}$/);
+  const r = b.cua('KQLCNT_REQUEST_REJECTED').at(-1);
+  assert.equal(r.reason, 'side');
+  assert.match(r.shape, /^Blob → đối tượng \{goiY\}$/);
 });
 
 test('XHR gửi ArrayBuffer / Uint8Array → gắn được tiêu chí', () => {
@@ -156,7 +163,8 @@ test('yêu cầu KHÔNG có `query` (đếm, gợi ý…) → KHÔNG nhét tiêu
   b.goiXHR(body);
   assert.equal(b.sent.at(-1).body, body, 'phải gửi nguyên văn');
   assert.equal(b.cua('KQLCNT_REQUEST_SENT').length, 0);
-  const shape = b.cua('KQLCNT_REQUEST_REJECTED').at(-1).shape;
+  const { shape, reason } = b.cua('KQLCNT_REQUEST_REJECTED').at(-1);
+  assert.equal(reason, 'side', 'yêu cầu không có query là yêu cầu PHỤ, không phải e-GP đổi cấu trúc');
   assert.equal(shape, 'đối tượng {keyWord,token,loai[2]}');
   assert.doesNotMatch(shape, /Lâm|bi-mat/);
   // Mảng nhiều phần tử mà có phần tử không phải truy vấn → không đụng.
@@ -164,6 +172,7 @@ test('yêu cầu KHÔNG có `query` (đếm, gợi ý…) → KHÔNG nhét tiêu
   b.goiXHR(tron);
   assert.equal(b.sent.at(-1).body, tron);
   assert.match(b.cua('KQLCNT_REQUEST_REJECTED').at(-1).shape, /^mảng\[2\] \{pageSize,pageNumber,query\[1\]\}$/);
+  assert.equal(b.cua('KQLCNT_REQUEST_REJECTED').at(-1).reason, 'shape');
 });
 
 test('hình dạng các thân yêu cầu lạ khác đều mô tả được và bị cắt ngắn', () => {
@@ -185,4 +194,14 @@ test('content.js đưa hình dạng vào câu báo lỗi; không còn câu "cấ
   assert.doesNotMatch(src, /cấu trúc tiện ích không nhận ra/);
   assert.match(src, /dạng yêu cầu: \$\{shape\}/);
   assert.match(src, /kqRejected=\{reason:/);
+});
+
+test('content.js bỏ qua yêu cầu PHỤ; chờ xác nhận giao tiêu chí ~5 giây; chờ trang phát yêu cầu 8 giây', () => {
+  /* Bản tác giả 4.17.1 đo trên e-GP thật: luồng chính của trang mới bận, xác
+     nhận có thể tới sau 750 ms (họ chờ 5 giây) và thao tác cần tới 20 giây mới
+     phát yêu cầu. 4.17.2 chỉ chờ ~2 giây và 5 giây. */
+  const src = fs.readFileSync(new URL('../GiaoSuCuiBap/content.js', import.meta.url), 'utf8').replace(/\r\n/g, '\n');
+  assert.match(src, /if\(payload\.reason==='side'\)return;/);
+  assert.match(src, /if\(tries\+\+>=12\)/);
+  assert.match(src, /const KQ_SENT_TIMEOUT=8000;/);
 });

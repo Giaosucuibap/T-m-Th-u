@@ -141,8 +141,11 @@ test('e-GP gửi yêu cầu theo cấu trúc lạ khi đang có lượt tra cứ
   b.tuNoiDung('KQLCNT_PLAN', PLAN);
   b.goiXHR(JSON.stringify({ khongPhaiMang: true }));
   assert.equal(b.cua('KQLCNT_REQUEST_SENT').length, 0);
-  assert.deepEqual(b.cua('KQLCNT_REQUEST_REJECTED').at(-1), { planId: 'plan-1', queryIndex: 0, reason: 'shape',
+  assert.deepEqual(b.cua('KQLCNT_REQUEST_REJECTED').at(-1), { planId: 'plan-1', queryIndex: 0, reason: 'side',
     shape: 'đối tượng {khongPhaiMang}' });
+  // 4.17.3: không có `query` → yêu cầu PHỤ của trang; content.js bỏ qua loại này.
+  b.goiXHR(JSON.stringify([{ query: [] }, { query: [] }]));
+  assert.equal(b.cua('KQLCNT_REQUEST_REJECTED').at(-1).reason, 'shape');
 });
 
 test('không có lượt tra cứu nào thì không báo gì về "từ chối"', () => {

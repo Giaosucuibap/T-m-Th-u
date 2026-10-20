@@ -195,10 +195,13 @@ function datasetFor(env) {
  *   pageslow=N  : bản thân TRANG e-GP tải chậm N ms (e-GP thật mất vài giây để
  *                 tải trang); dùng để đo lợi ích của tab mở sẵn.
  *   shape=obj|multi|double|blob|form : trang gửi thân yêu cầu tìm kiếm KHÁC dạng
- *                 mảng-một-phần-tử (đối tượng; mảng nhiều truy vấn — phản hồi
- *                 là mảng; JSON mã hoá hai lần; Blob; form = dạng CHƯA hỗ trợ,
- *                 để xem câu báo lỗi có nói rõ dạng) — thử e-GP mới mof.gov.vn.
+ *                 mảng-một-phần-tử (đối tượng; JSON mã hoá hai lần; Blob — các
+ *                 dạng phòng xa tiện ích nhận; multi, form = dạng KHÔNG nhận, để
+ *                 xem câu báo lỗi có nói rõ dạng).
  *   side        : mỗi lần tìm, trang phát thêm một yêu cầu PHỤ không có query.
+ *   sidemulti   : …và một yêu cầu ĐẾM gộp nhiều truy vấn (mảng 2 phần tử).
+ *   slowfire=N  : yêu cầu chính rời trình duyệt chậm N ms sau thao tác (luồng
+ *                 chính trang e-GP mới bận) — cùng side tái hiện lỗi 4.17.1.
  *   wrap        : phản hồi bọc thêm lớp {success,data:{page}}. */
 const SHAPE = (String(process.env.MOCK_CHAOS || '').match(/shape=([a-z]+)/) || [])[1] || '';
 const CHAOS = Object.fromEntries(String(process.env.MOCK_CHAOS || '').split(',').filter(Boolean)
@@ -208,7 +211,7 @@ const chaosRandom = () => { chaosSeed = (chaosSeed * 1103515245 + 12345) % 21474
 if (Object.keys(CHAOS).length) console.log('[mock] CHẾ ĐỘ KHÓ TÍNH:', JSON.stringify(CHAOS));
 const PAGE_HTML = fs.readFileSync(path.join(HERE, 'mock-page.html'), 'utf8')
   .replace('<script>', `<script>window.__CHAOS=${JSON.stringify({ early: Boolean(CHAOS.early), busy: Boolean(CHAOS.busy), autoload: Boolean(CHAOS.autoload),
-    side: Boolean(CHAOS.side), shape: SHAPE })};</script>\n<script>`);
+    side: Boolean(CHAOS.side), sidemulti: Boolean(CHAOS.sidemulti), slowfire: Number(CHAOS.slowfire) || 0, shape: SHAPE })};</script>\n<script>`);
 
 const server = https.createServer(
   {
@@ -289,7 +292,8 @@ const server = https.createServer(
         const macDinh = !(env.query?.[0]?.filters || []).length;
         const delay = (searchCount === 1 && CHAOS.firstslow ? CHAOS.firstslow : 0)
           + (macDinh && CHAOS.nativeslow ? CHAOS.nativeslow : 0) + (CHAOS.slow || 0);
-        console.log(`[mock] SEARCH page=${page} size=${size} -> ${content.length}/${data.length} bản ghi` +
+        // Yêu cầu đếm gộp nhiều truy vấn ghi riêng, để kịch bản không đếm nhầm là lượt tra cứu.
+        console.log(`[mock] ${nhieu > 1 ? 'SEARCH-DEM' : 'SEARCH'} page=${page} size=${size} -> ${content.length}/${data.length} bản ghi` +
           (delay ? ` (chậm ${delay} ms)` : '') +
           (env.query ? ` | query.filters=${(env.query[0]?.filters || []).map((f) => f.fieldName).join(',')}` : ''));
         setTimeout(() => {

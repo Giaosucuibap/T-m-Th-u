@@ -133,12 +133,14 @@
      danh sách mặc định, nên hết hạn trong khi yêu cầu thật còn chưa được gửi. */
   const KQ_RESPONSE_TIMEOUT=45000;
   /* Sau một thao tác, chờ tối đa chừng này để thấy yêu cầu MANG TIÊU CHÍ rời
-     trình duyệt. Không thấy là thao tác đã bị trang bỏ qua — làm lại ngay. */
-  const KQ_SENT_TIMEOUT=5000;
+     trình duyệt. Không thấy là thao tác đã bị trang bỏ qua — làm lại ngay.
+     4.17.3: 5 → 8 giây. Trang e-GP mới (mof.gov.vn) bận luồng chính, phát yêu cầu
+     chậm hơn (bản tác giả đo trên trang thật, cho tới 20 giây cho một thao tác);
+     thao tác lại quá sớm thì trang phát HAI yêu cầu trang đầu chồng nhau. */
+  const KQ_SENT_TIMEOUT=8000;
   /* Chờ trang e-GP xong yêu cầu nó tự phát (danh sách mặc định khi mở trang). */
   const KQ_IDLE_TIMEOUT=40000;
   const KQ_TRIGGER_ATTEMPTS=4;
-  const KQ_REJECT_LIMIT=2;     // số lần thấy yêu cầu khác dạng trước khi kết luận e-GP đổi cấu trúc
   // Rớt kết nối ở trang đầu: gửi lại tối đa 2 lần, chờ 0,8 s rồi 1,6 s.
   const KQ_NET_RESENDS=2, KQ_NET_BACKOFF=800;
   const KQ_ACK_TIMEOUT=15000;      // hạn chờ worker xác nhận một lần giao dữ liệu
@@ -548,14 +550,13 @@
       if(!sent){
         if(kqPageWaiter)kqPageWaiter({ok:false,cancelled:true,status:0,superseded:true});
         if(kqCancelled||kqPlan!==plan)return {ok:false,cancelled:true,status:0};
-        /* e-GP phát một yêu cầu tìm kiếm tiện ích không gắn được tiêu chí. Có thể
-           là yêu cầu PHỤ của trang (đếm, gợi ý…) chạy cùng lúc — 4.17.1 dừng ngay
-           ở lần đầu nên chết oan. Nay thử lại bằng cách thao tác khác; chỉ kết
-           luận e-GP đổi cấu trúc khi lặp lại ở lần thứ hai, và nói rõ DẠNG yêu
-           cầu để sửa đúng chỗ thay vì đoán. */
+        /* e-GP phát một yêu cầu tìm kiếm có `query` mà tiện ích không gắn được
+           tiêu chí. 4.17.1 dừng NGAY ở lần đầu — người dùng gặp đúng câu đó trên
+           mof.gov.vn. Nay không dừng giữa chừng: thử đủ các cách thao tác; chỉ
+           khi KHÔNG lần nào gắn được tiêu chí mới kết luận, kèm DẠNG yêu cầu.
+           (Yêu cầu phụ không có `query` thì content.js không hề tính tới.) */
         if(kqRejected){
           rejections++;lastRejected=kqRejected;
-          if(rejections>=KQ_REJECT_LIMIT)return kqSchemaFailure(lastRejected);
           kqReport(`e-GP vừa gửi một yêu cầu tìm kiếm khác dạng (lần ${rejections}); thử lại bằng thao tác khác…`);
           await new Promise(r=>setTimeout(r,600+attempt*700));
           continue;
@@ -627,7 +628,9 @@
       window.addEventListener('message',onAck);
       const attempt=()=>{
         if(settled)return;
-        if(tries++>=5){
+        // e-GP mới (mof.gov.vn) bận luồng chính lâu hơn: chờ tới ~5 giây (12 × 400 ms),
+        // như bản tác giả 4.17.1 đã đo trên trang thật; trước đây ~2 giây.
+        if(tries++>=12){
           window.removeEventListener('message',onAck);
           clearInterval(timer);
           resolve(false);
@@ -1044,6 +1047,8 @@
       return;
     }
     if(event.data.type==='KQLCNT_REQUEST_REJECTED'){
+      // Yêu cầu phụ của trang (đếm, gợi ý) — không liên quan lượt tra cứu.
+      if(payload.reason==='side')return;
       if(kqSameQuery(payload,kqPlan))kqRejected={reason:String(payload.reason||'shape').slice(0,20),
         shape:typeof payload.shape==='string'?payload.shape.slice(0,300):''};
       return;

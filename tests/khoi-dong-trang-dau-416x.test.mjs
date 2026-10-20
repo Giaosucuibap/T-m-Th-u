@@ -30,7 +30,7 @@ function dung({ sentSeq = [true], pageSeq = [{ ok: true, sourcePageIndex: 0 }], 
     document: { querySelectorAll: () => [] }, clean: (s) => String(s).trim(), Event: class {},
     kqPageSizeSelect: () => select, kqClickSearch: () => { log.thaoTac++; return true; },
     kqPlan: { id: 'p' }, kqCancelled: false, kqRejected: null, kqPageWaiter: null, kqSentWaiter: null,
-    egpInFlight: inFlight, KQ_TRIGGER_ATTEMPTS: 4, KQ_REJECT_LIMIT: 2, KQ_NET_RESENDS: 2, KQ_NET_BACKOFF: 800, Date,
+    egpInFlight: inFlight, KQ_TRIGGER_ATTEMPTS: 4, KQ_NET_RESENDS: 2, KQ_NET_BACKOFF: 800, Date,
     setTimeout: (fn, ms) => { log.ngu.push(ms ?? 0); fn(); }, // không thật sự ngủ, chỉ ghi lại
     kqWaitEgpIdle: async () => { log.choRanh++; ctx.egpInFlight = 0; return true; },
     kqReport: (m) => log.bao.push(m),
@@ -125,25 +125,24 @@ test('e-GP trả lỗi HTTP (4xx/429) thì KHÔNG tự gửi lại ở đây —
   }
 });
 
-test('e-GP gửi yêu cầu theo cấu trúc lạ LẶP LẠI → dừng sau lần thứ hai, nói rõ dạng yêu cầu', async () => {
+test('e-GP gửi yêu cầu theo cấu trúc lạ Ở MỌI LẦN → thử đủ các cách rồi mới dừng, nói rõ dạng yêu cầu', async () => {
   /* 4.17.1 dừng ngay ở lần đầu. Trên e-GP mới (mof.gov.vn, 20/10/2026) người
-     dùng gặp đúng câu đó; một yêu cầu phụ của trang cũng đủ gây ra nó. Nay
-     thử lại một lần bằng thao tác khác, lặp lại mới kết luận. */
+     dùng gặp đúng câu đó, trong khi yêu cầu chính của e-GP vẫn đúng dạng. */
   const rejected = { reason: 'shape', shape: 'đối tượng {pageSize,pageNumber,query[1]}' };
-  const { trigger, log } = dung({ sentSeq: [false, false, true], rejected });
+  const { trigger, log } = dung({ sentSeq: [false, false, false, false], rejected });
   const page = await trigger();
   assert.equal(page.stage, 'schema');
   assert.equal(page.schemaIssue, true);
-  assert.equal(log.thaoTac, 2);
+  assert.equal(log.thaoTac, 4);
   assert.match(page.failureReason, /dạng yêu cầu: đối tượng \{pageSize,pageNumber,query\[1\]\}/);
   assert.match(page.failureReason, /không phải kết quả rỗng/);
 });
 
-test('MỘT yêu cầu khác dạng (yêu cầu phụ của trang) → thử lại, lần sau gắn được tiêu chí thì chạy bình thường', async () => {
-  const { trigger, log } = dung({ sentSeq: [false, true], rejected: { reason: 'shape', shape: 'đối tượng {keyWord}' } });
+test('yêu cầu khác dạng ở các lần đầu → thử lại, lần sau gắn được tiêu chí thì chạy bình thường', async () => {
+  const { trigger, log } = dung({ sentSeq: [false, false, true], rejected: { reason: 'shape', shape: 'mảng[2] {query[1]}' } });
   const page = await trigger();
   assert.equal(page.ok, true);
-  assert.equal(log.thaoTac, 2);
+  assert.equal(log.thaoTac, 3);
   assert.ok(log.bao.some((m) => /khác dạng/.test(m)));
 });
 

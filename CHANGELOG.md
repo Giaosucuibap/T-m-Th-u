@@ -2,6 +2,33 @@
 
 Tài liệu này ghi lại các thay đổi quan trọng của Giáo Sư Cùi Bắp. Cấu trúc tham khảo [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) và phiên bản tuân theo cách đánh số ngữ nghĩa ở mức sản phẩm.
 
+## [4.17.3] — 2026-10-20
+
+### Sửa lại cho đúng nguyên nhân thật — dựa trên bản tác giả 4.17.1 đã chạy trên e-GP thật
+Người dùng gửi bản tác giả 4.17.1 (cùng ngày). page-hook của bản đó **chỉ nhận mảng
+một phần tử** — y như 4.17.1 của nhánh này — mà vẫn đọc đủ 156/156 bản ghi trên
+`muasamcong.mof.gov.vn` (theo báo cáo kèm bản đó). Vậy yêu cầu tìm kiếm CHÍNH của e-GP
+mới **không đổi dạng**; chẩn đoán "e-GP đổi dạng yêu cầu" ở 4.17.2 không trúng nguyên nhân.
+Khác biệt thật nằm ở hai chỗ:
+
+- **Yêu cầu phụ của trang** (không mang `query`) bị tính là "e-GP đổi cấu trúc" và làm
+  dừng cả lượt. Nay page-hook gắn nhãn `side`, content.js bỏ qua hoàn toàn — như bản tác giả.
+- **Thời gian chờ quá ngắn** cho trang e-GP mới (luồng chính bận): chờ xác nhận giao tiêu
+  chí ~2 → ~5 giây (bản tác giả: 5 giây); chờ trang phát yêu cầu sau thao tác 5 → 8 giây
+  (bản tác giả: 20 giây cho một thao tác — nhánh này thao tác lại tối đa 4 lần).
+- **Bỏ** việc gắn tiêu chí vào mảng NHIỀU truy vấn (thêm ở 4.17.2): đó thường là yêu cầu đếm
+  của trang. Trên máy giả lập có yêu cầu đếm gộp, 4.17.2 hỏng "trang trả về không đúng thứ tự";
+  4.17.3 đạt.
+- Không còn dừng giữa chừng khi gặp yêu cầu có `query` mà không gắn được: thử đủ các cách thao
+  tác, không lần nào được mới kết luận (vẫn kèm "dạng yêu cầu").
+- Giữ các dạng phòng xa của 4.17.2 (đối tượng có `query`, JSON lồng, Blob/ArrayBuffer, phản hồi
+  bọc `data`) — chúng không chạm yêu cầu phụ.
+- Máy giả lập thêm `sidemulti` (yêu cầu đếm gộp) và `slowfire=N` (trang phát yêu cầu chậm);
+  CI chạy 8 tổ hợp.
+
+**Vẫn chưa xác nhận trên e-GP thật** từ môi trường này; bằng chứng trang thật là của bản tác giả
+(tệp bằng chứng không có trong gói nhận được nên không đối chiếu được mã băm).
+
 ## [4.17.2] — 2026-10-20
 
 ### Sửa lỗi "e-GP đã gửi yêu cầu tìm kiếm theo một cấu trúc tiện ích không nhận ra"
