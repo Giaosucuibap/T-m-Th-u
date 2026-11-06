@@ -27,6 +27,7 @@ import { dateGate, coverageOf, GATE_LABEL } from './lib/match-gate.js';
 import { openingFingerprint, restoreOpening, cacheOpening, trimOpeningCache } from './lib/bbmt-cache.js';
 import { validateCriteria, safeSavedSearches, matchesAdditionalKeyword, matchesLocalFilters, splitProvinceNames } from './lib/workspace.js';
 import { safeHunts, validateHunt, huntAlarmName, parseHuntAlarm, MAX_HUNTS_ALLOWED, safeWatches } from './lib/hunts.js';
+import { wakeTimes } from './lib/station.js';
 import { touchLifecycle, inferLifecycleEvent, shouldRemindDeadline, investorWatchHit, schemaHealthOf, findPriorTenderVersion, newTenderChanges, deadlineReminderState } from './lib/lifecycle.js';
 import { normalizeCapability, checklistProgress, emptyChecklist, checklistItemsFor } from './lib/capability.js';
 import { safeHttpsWebhook, safeEmail, safeChatId, channelPayload } from './lib/channels.js';
@@ -3837,6 +3838,7 @@ chrome.runtime.onInstalled.addListener(async details=>{
   if(s0.tenders.length)patch[KEYS.tenders]=rescoreStoredTenders(s0.tenders,s0.settings);
   await save(patch);
   await ensureDailyAlarm();
+  void huntRuntime.heartbeat({startup:true}).catch(()=>{});
   if(details.reason==='install')chrome.tabs.create({url:chrome.runtime.getURL('onboarding.html')});
 });
 chrome.runtime.onStartup.addListener(async()=>{
@@ -3844,6 +3846,8 @@ chrome.runtime.onStartup.addListener(async()=>{
   // Máy tắt/ngủ lúc 7 giờ: gửi bù bản tin hôm nay khi Chrome mở lại (trước 12:00 VN).
   // KHÔNG gửi bù khi người dùng vừa lưu Cấu hình — dễ thành hai tin trùng với nút "Gửi thử".
   void maybeSendBulletin().catch(()=>{});
+  // Trạm săn: ghi khoảng Chrome/máy không chạy, xếp chạy bù lượt săn lỡ giờ, nhắn Telegram.
+  void huntRuntime.heartbeat({startup:true}).catch(()=>{});
   const s=await getState();
   if(!s.settings.scanOnStartup||!s.template)return;
   const now=Date.now();
@@ -3859,7 +3863,7 @@ chrome.alarms.onAlarm.addListener(async alarm=>{
   if(await liveCanaryRuntime.onAlarm(alarm))return;
   if((await getState()).settings.readOnlyMode&&!alarm.name.startsWith(TIMEOUT_PREFIX))return;
   if(alarm.name===DAILY_ALARM)await startScan('scheduled');
-  else if(alarm.name===DEADLINE_ALARM)await reviewDeadlines();
+  else if(alarm.name===DEADLINE_ALARM){await huntRuntime.heartbeat().catch(()=>{});await reviewDeadlines();}
   else if(alarm.name===BULLETIN_ALARM){await maybeSendBulletin();await ensureBulletinAlarm(await getState());}
   else if(alarm.name.startsWith(HUNT_RETRY_PREFIX))await runHuntById(alarm.name.slice(HUNT_RETRY_PREFIX.length));
   else if(alarm.name.startsWith(TIMEOUT_PREFIX)){
@@ -3934,7 +3938,12 @@ chrome.runtime.onMessage.addListener((message,sender,sendResponse)=>{
           const old=(s.hunts||[]).find(x=>x.id===hunt.id);
           const sameCriteria=old&&JSON.stringify(old.criteria)===JSON.stringify(hunt.criteria)&&old.kind===hunt.kind;
           hunt.deltaState=sameCriteria&&!message.payload?.resetDelta?old.deltaState:validateHunt({...hunt,deltaState:null}).hunt.deltaState;
-          if(old){for(const k of ['lastRunAt','lastStatus','lastCompletedJobId','lastMessage'])if(!hunt[k])hunt[k]=old[k];}
+          if(old){for(const k of ['lastRunAt','lastStatus','lastCompletedJobId','lastMessage','createdAt','activeSince','lastCatchup'])if(!hunt[k])hunt[k]=old[k];}
+          /* Trạm săn (4.19.0): mốc "bắt đầu có hiệu lực" — tạo mới, bật lại hoặc đổi giờ
+             thì tính từ bây giờ, để lượt chạy bù không chạy cho giờ chưa từng được hẹn. */
+          const nowIso=new Date().toISOString();
+          if(!old)hunt.createdAt=nowIso;
+          if(!old||(!old.enabled&&hunt.enabled)||(old.times||[]).join(',')!==(hunt.times||[]).join(','))hunt.activeSince=nowIso;
           const rest=(s.hunts||[]).filter(x=>x.id!==hunt.id);
           if(rest.length>=MAX_HUNTS_ALLOWED)throw new Error(`Đã đủ ${MAX_HUNTS_ALLOWED} bộ săn. Hãy xóa một bộ trước.`);
           const hunts=[hunt,...rest];
@@ -3955,6 +3964,11 @@ chrome.runtime.onMessage.addListener((message,sender,sendResponse)=>{
         sendResponse({ok:true,hunts:rows});break;
       }
       case 'RUN_HUNT': sendResponse(await runHuntById(message.payload?.id,{forceFull:message.payload?.full===true}));break;
+      case 'STATION_STATUS': {
+        const s=await getState();
+        sendResponse({ok:true,station:await huntRuntime.stationStatus(),huntTimes:wakeTimes(s.hunts,0),wakeTimes:wakeTimes(s.hunts,3),readOnly:Boolean(s.settings.readOnlyMode)});
+        break;
+      }
       case 'SAVE_WATCH': {
         const rows=await withLock(async()=>{
           const s=await getState();

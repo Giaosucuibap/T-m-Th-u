@@ -10,6 +10,11 @@ const TIME = /^([01]\d|2[0-3]):[0-5]\d$/;
 const MAX_HUNTS = 12;
 const MAX_TIMES = 4;
 
+function isoOrEmpty(value) {
+  const n = Date.parse(String(value || ''));
+  return Number.isFinite(n) ? new Date(n).toISOString() : '';
+}
+
 export function normalizeTime(value) {
   const raw = String(value ?? '').trim();
   return TIME.test(raw) ? raw : '';
@@ -42,6 +47,12 @@ export function validateHunt(raw = {}) {
       lastStatus: String(raw.lastStatus || '').slice(0, 40),
       lastCompletedJobId: String(raw.lastCompletedJobId || '').slice(0, 100),
       lastMessage: String(raw.lastMessage || '').slice(0, 300),
+      // Trạm săn (4.19.0): mốc bộ săn bắt đầu có hiệu lực — để phân biệt "lỡ giờ"
+      // với "chưa tồn tại / đang tắt / chưa có giờ đó" khi tính lượt chạy bù.
+      createdAt: isoOrEmpty(raw.createdAt),
+      activeSince: isoOrEmpty(raw.activeSince),
+      lastCatchup: raw.lastCatchup && isoOrEmpty(raw.lastCatchup.slot) && isoOrEmpty(raw.lastCatchup.at)
+        ? { slot: isoOrEmpty(raw.lastCatchup.slot), time: normalizeTime(raw.lastCatchup.time), at: isoOrEmpty(raw.lastCatchup.at) } : null,
       // Quét nhanh phần mới — chỉ cho TBMT, người dùng chủ động bật (lib/delta-scan.js).
       delta: kind === 'tbmt' && raw.delta === true,
       deltaState: safeDeltaState(raw.deltaState)

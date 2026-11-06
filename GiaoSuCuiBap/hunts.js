@@ -2,6 +2,7 @@ import { initInvestorInput, readInvestorInput } from './investor-input.js';
 import { TENDER_CATEGORIES, categoryLabel } from './lib/tender-categories.js';
 import { escapeHtml } from './lib/html.js';
 import { huntLabel } from './lib/hunts.js';
+import { slotLabel, durationLabel } from './lib/station.js';
 import { createWardPicker } from './ward-picker.js';
 
 const $ = (id) => document.getElementById(id);
@@ -70,7 +71,7 @@ async function refresh() {
     <div class="ws-result-top"><b>${esc(h.name)}</b><span class="code">${esc(h.kind === 'plan' ? 'KHLCNT' : 'TBMT')}</span></div>
     <p class="muted small">${esc(huntLabel(h))}${h.criteria?.investor?`<br>Chủ đầu tư: ${esc(h.criteria.investor)}`:''}<br>Giờ: ${esc((h.times || []).join(', '))} · ${h.enabled ? 'Đang bật' : 'Đang tắt'} · ${h.telegram ? 'Có Telegram' : 'Không Telegram'}</p>
     ${deltaLine(h)}
-    <p class="muted small">${h.lastRunAt ? `Lần chạy gần nhất: ${esc(h.lastRunAt)} · ${esc(h.lastStatus || '')} ${esc(h.lastMessage || '')}` : 'Chưa chạy'}</p>
+    <p class="muted small">${h.lastRunAt ? `Lần chạy gần nhất: ${esc(new Date(h.lastRunAt).toLocaleString('vi-VN'))} · ${esc(h.lastStatus || '')} ${esc(h.lastMessage || '')}` : 'Chưa chạy'}</p>
     <div class="result-links">
       <button type="button" data-edit="${esc(h.id)}">Sửa</button>
       <button type="button" data-run="${esc(h.id)}">Chạy ngay</button>
@@ -83,7 +84,47 @@ async function refresh() {
     <button type="button" data-unwatch="${esc(w.id)}" class="btn light" style="margin-left:8px">Bỏ theo dõi</button>
   </div>`).join('') || '<p class="muted">Chưa theo dõi đơn vị nào.</p>';
   window.__hunts = s.hunts || [];
+  await renderStation();
 }
+
+/* ---------------- Trạm săn (4.19.0) ---------------- */
+const LOG_KIND = { missed: 'Lỡ giờ', catchup: 'Chạy bù', skipped: 'Bỏ chạy bù' };
+async function backgroundGranted() {
+  try { return await chrome.permissions.contains({ permissions: ['background'] }); } catch { return null; }
+}
+async function renderStation() {
+  const bg = await backgroundGranted();
+  $('bg-toggle').textContent = bg ? 'Tắt chạy nền' : 'Bật chạy nền';
+  $('bg-state').textContent = bg == null ? 'Chrome này không hỗ trợ chạy nền cho tiện ích.' : bg ? 'Đang BẬT — đóng cửa sổ Chrome thì bộ săn vẫn chạy.' : 'Đang tắt — đóng Chrome là bộ săn dừng.';
+  const r = await send('STATION_STATUS').catch(() => null);
+  if (!r?.ok) { setNotice('station-status', r?.message || 'Không đọc được trạng thái trạm săn.', 'error'); return; }
+  const st = r.station || {};
+  const parts = [];
+  parts.push(st.lastAliveAt ? `Hoạt động gần nhất: ${new Date(st.lastAliveAt).toLocaleString('vi-VN')}.` : 'Chưa có nhịp hoạt động nào được ghi.');
+  parts.push(st.offlineCount ? `7 ngày qua Chrome/máy không chạy ${st.offlineCount} lần, tổng ${durationLabel(st.offlineMs)}.` : '7 ngày qua chưa ghi nhận lần Chrome/máy ngừng chạy.');
+  parts.push(`Lỡ giờ ${st.missed || 0} lượt · đã chạy bù ${st.caughtUp || 0}${st.skipped ? ` · ${st.skipped} lượt không cần chạy bù` : ''}.`);
+  if (st.pending?.length) parts.push(`Đang chờ chạy bù: ${st.pending.map((p) => `${p.name || p.huntId} (${p.time})`).join(', ')}.`);
+  if (r.readOnly) parts.push('Đang bật khóa chỉnh sửa và tự động hóa — bộ săn không chạy.');
+  setNotice('station-status', parts.join(' '), r.readOnly || (!bg && (r.huntTimes || []).length) ? 'warn' : 'ok');
+  const times = r.huntTimes || [];
+  $('wake-line').textContent = times.length ? times.join(',') : '— (chưa có bộ săn nào đang bật)';
+  $('wake-copy').disabled = !times.length;
+  $('wake-note').textContent = times.length ? `Máy sẽ được đánh thức lúc ${r.wakeTimes.join(', ')} (sớm 3 phút) và Chrome tự mở chạy nền khi anh đăng nhập Windows. Đổi giờ săn thì chạy lại bước này.` : '';
+  $('station-log').innerHTML = (st.log || []).length ? `<table><thead><tr><th>Lúc</th><th>Việc</th><th>Bộ săn</th><th>Giờ hẹn</th><th>Ghi chú</th></tr></thead><tbody>${st.log.map((e) => `<tr><td>${esc(new Date(e.at).toLocaleString('vi-VN'))}</td><td>${esc(LOG_KIND[e.kind] || e.kind)}</td><td>${esc(e.name || e.huntId)}</td><td>${e.slot ? esc(slotLabel(e.slot)) : ''}</td><td>${esc(e.note || '')}</td></tr>`).join('')}</tbody></table>` : '<p class="muted">Chưa có lượt nào bị lỡ giờ.</p>';
+}
+$('bg-toggle').onclick = async () => {
+  const on = await backgroundGranted();
+  try {
+    const ok = on ? await chrome.permissions.remove({ permissions: ['background'] }) : await chrome.permissions.request({ permissions: ['background'] });
+    if (!on && !ok) setNotice('alert', 'Chưa bật chạy nền (anh đã bấm Từ chối).', 'error');
+    else setNotice('alert', on ? 'Đã tắt chạy nền. Đóng Chrome thì bộ săn dừng; lượt lỡ sẽ chạy bù khi mở lại.' : 'Đã bật chạy nền. Chrome cần bật "Tiếp tục chạy ứng dụng nền khi đóng Google Chrome" trong Cài đặt › Hệ thống (mặc định đã bật).', 'ok');
+  } catch (error) { setNotice('alert', `Chrome không cho đổi quyền chạy nền: ${error?.message || error}`, 'error'); }
+  await renderStation();
+};
+$('wake-copy').onclick = async () => {
+  try { await navigator.clipboard.writeText($('wake-line').textContent.trim()); setNotice('alert', 'Đã chép giờ săn. Dán vào cửa sổ BAT-TRAM-SAN rồi nhấn Enter.', 'ok'); }
+  catch { setNotice('alert', 'Không chép được; hãy gõ tay dòng giờ săn.', 'error'); }
+};
 
 $('hunt-form').onsubmit = async (e) => {
   e.preventDefault();

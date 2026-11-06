@@ -15,6 +15,9 @@
     "notifications",
     "nativeMessaging"
   ],
+  "optional_permissions": [
+    "background"
+  ],
   "host_permissions": [
     "https://muasamcong.mof.gov.vn/*",
     "https://muasamcong.mpi.gov.vn/*",

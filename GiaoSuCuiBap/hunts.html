@@ -12,7 +12,7 @@
 <aside id="workspace-nav" class="ws-sidebar"></aside>
 <main id="main">
   <div class="ws-topbar"><div class="breadcrumb"><span>Không gian làm việc</span><span data-icon="chevron"></span><b>Bộ săn</b></div><a class="source-link" href="https://muasamcong.mof.gov.vn" target="_blank" rel="noopener">Nguồn: e-GP</a></div>
-  <section class="ws-intro"><div><div class="ws-kicker">4.4 · SĂN TỰ ĐỘNG TRÊN MÁY</div><h1>Nhiều bộ lọc.<br><em>Nhiều giờ chạy.</em></h1><p>Mỗi bộ săn là một tiêu chí TBMT hoặc KHLCNT, có lịch riêng và có thể đẩy Telegram. Chrome phải đang mở. Đây không phải dịch vụ máy chủ 24/7.</p></div></section>
+  <section class="ws-intro"><div><div class="ws-kicker">4.4 · SĂN TỰ ĐỘNG TRÊN MÁY</div><h1>Nhiều bộ lọc.<br><em>Nhiều giờ chạy.</em></h1><p>Mỗi bộ săn là một tiêu chí TBMT hoặc KHLCNT, có lịch riêng và có thể đẩy Telegram. Chrome cần đang chạy — có thể chạy nền, không cần mở cửa sổ (xem mục Trạm săn). Lượt lỡ giờ được chạy bù.</p></div></section>
   <div id="schema" class="notice hidden" role="status"></div>
   <div id="alert" class="notice hidden" role="alert"></div>
 
@@ -49,8 +49,23 @@
 
   <section class="card" style="margin-top:16px">
     <h2>Bộ săn đã lưu</h2>
-    <p class="muted small">Tối đa 12 bộ. Lịch dùng báo thức Chrome — máy tắt thì chạy bù khi mở lại.</p>
+    <p class="muted small">Tối đa 12 bộ. Lịch dùng báo thức Chrome — lượt lỡ giờ (máy tắt, Chrome đóng) được chạy bù khoảng 2 phút sau khi Chrome chạy lại.</p>
     <div id="hunt-list"></div>
+  </section>
+
+  <section class="card station" id="station" aria-labelledby="station-title" style="margin-top:16px">
+    <div class="section-label"><h2 id="station-title">Trạm săn — chạy cả khi đóng Chrome</h2></div>
+    <div id="station-status" class="notice" role="status">Đang đọc trạng thái trạm săn…</div>
+    <ol class="station-steps">
+      <li><b>Cho Chrome chạy nền.</b> Đóng hết cửa sổ Chrome thì bộ săn vẫn chạy; biểu tượng Chrome nằm ở khay hệ thống (góc phải dưới màn hình).
+        <div class="row" style="margin-top:6px"><button id="bg-toggle" class="btn light" type="button">Bật chạy nền</button><span id="bg-state" class="muted small" role="status"></span></div></li>
+      <li><b>Tự mở Chrome khi bật máy và đánh thức máy trước giờ săn (Windows).</b> Trong thư mục <code>native-agent</code> của gói cài, nhấp đúp <code>BAT-TRAM-SAN.bat</code>, rồi gõ đúng dòng giờ săn dưới đây và nhấn Enter.
+        <div class="row" style="margin-top:6px"><code id="wake-line" class="wake-line">—</code><button id="wake-copy" class="btn light" type="button">Chép giờ săn</button></div>
+        <p id="wake-note" class="muted small"></p></li>
+      <li><b>Lượt lỡ giờ được chạy bù.</b> Máy tắt lúc tới giờ săn thì khi Chrome chạy lại, bộ săn tự chạy bù và (nếu bộ săn bật Telegram) nhắn cho anh biết tin đến muộn vì sao.</li>
+    </ol>
+    <p class="muted small"><b>Giới hạn thật:</b> máy <b>tắt hẳn</b> (Shut down) thì không phần mềm nào trên máy chạy được — chỉ chạy bù khi bật lại. Máy ở chế độ <b>Ngủ</b> (Sleep) thì bước 2 đánh thức đúng giờ. Muốn không bao giờ lỡ, cài trên một máy luôn bật.</p>
+    <details class="help-more"><summary>Sổ trạm săn 7 ngày qua</summary><div id="station-log" class="small"></div></details>
   </section>
 
   <section class="card" style="margin-top:16px">
