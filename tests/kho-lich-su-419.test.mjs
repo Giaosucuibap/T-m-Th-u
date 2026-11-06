@@ -174,3 +174,21 @@ test('không thay mất kết quả anh vừa soi: kho chờ 2 giờ sau lượt
   h.at('2026-11-06T11:31:00');
   assert.equal((await h.rt.tick()).started, true, 'quá 2 giờ thì chạy');
 });
+
+test('anh bấm Dừng lượt do kho chạy → kho tạm dừng, không tự chạy lại sau 10 phút; bấm Tiếp tục thì chạy lại mục đó', async () => {
+  const h = harness();
+  await h.rt.configure({ months: 1, schedule: 'now', includeWatched: false });
+  assert.equal((await h.rt.tick()).started, true);
+  h.finish({ status: 'CANCELLED', packages: [] });
+  assert.equal((await h.rt.tick()).skipped, 'paused-after-cancel');
+  let st = (await h.rt.status()).state;
+  assert.equal(st.paused, true);
+  assert.match(st.lastSkip, /Tiếp tục/);
+  assert.equal(st.items[0].status, 'interrupted');
+  assert.equal(h.started.length, 1, 'không tự chạy lại');
+  await h.rt.setPaused(false);
+  h.setJobs({ bidOpenScan: null });
+  assert.equal((await h.rt.tick()).started, true, 'bấm Tiếp tục thì chạy lại đúng mục bị dừng');
+  st = (await h.rt.status()).state;
+  assert.equal(st.items[0].attempts, 2);
+});

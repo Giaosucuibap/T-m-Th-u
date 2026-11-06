@@ -66,6 +66,13 @@ export function createHistoryRuntime({ storage, alarms, readJobs, startScan, rea
         if (scan && scan.id === state.current.scanId) {
           if (isBusyScan(scan)) { await save({ ...state, lastTickAt: new Date(at).toISOString(), lastSkip: 'Đang nạp.' }); return { ok: true, skipped: 'running' }; }
           state = recordOutcome(state, state.current.itemId, outcomeFromScan(scan), at);
+          // Lượt của kho bị DỪNG (người dùng bấm Dừng, hoặc tiện ích vừa cập nhật): tôn trọng ý đó —
+          // tạm dừng cả kế hoạch thay vì tự chạy lại sau 10 phút.
+          if (scan.status === 'CANCELLED') {
+            state = { ...state, paused: true, lastTickAt: new Date(at).toISOString(), lastSkip: 'Lượt nạp bị dừng (anh bấm Dừng hoặc tiện ích vừa cập nhật) — kho tạm dừng. Bấm "Tiếp tục" để chạy tiếp.' };
+            await save(state);
+            return { ok: true, skipped: 'paused-after-cancel' };
+          }
         } else {
           state = recordOutcome(state, state.current.itemId, { status: 'INTERRUPTED', note: 'Lượt bị thay bởi một lượt soi biên bản khác, hoặc Chrome đóng giữa chừng — sẽ thử lại.' }, at);
         }
