@@ -312,9 +312,10 @@ document.querySelectorAll('.tab').forEach((t) => {
   t.addEventListener('click', () => {
     document.querySelectorAll('.tab').forEach((x) => x.classList.remove('on'));
     t.classList.add('on');
-    ['profile', 'discount', 'relations'].forEach((k) => {
+    ['profile', 'discount', 'relations', 'history'].forEach((k) => {
       $(`p-${k}`).classList.toggle('hidden', k !== t.dataset.t);
     });
+    if (t.dataset.t === 'history') loadHistory();
   });
 });
 
@@ -322,5 +323,39 @@ $('goProfile').addEventListener('click', showProfile);
 $('mst').addEventListener('keydown', (e) => { if (e.key === 'Enter') showProfile(); });
 $('goDiscount').addEventListener('click', showDiscount);
 $('goRel').addEventListener('click', showRelations);
+
+/* ---------------- KHO LỊCH SỬ (4.19.0) ---------------- */
+const H_STATUS = { pending: 'Chờ', running: 'Đang nạp', done: 'Xong', interrupted: 'Bị gián đoạn — sẽ thử lại', error: 'Lỗi' };
+const hEsc = (v) => String(v ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+function hNotice(text, kind) { const el = $('h-status'); el.textContent = text || ''; el.className = `notice ${kind || ''}${text ? '' : ' hidden'}`; }
+function renderHistory(r) {
+  if (!r?.ok) { hNotice(r?.message || 'Không đọc được kho lịch sử.', 'error'); return; }
+  const a = r.archive || {}, st = r.state || {}, p = r.progress || {};
+  const range = a.from ? ` · từ ${new Date(a.from).toLocaleDateString('vi-VN')} đến ${new Date(a.to).toLocaleDateString('vi-VN')}` : '';
+  const years = Object.entries(a.byYear || {}).sort().map(([y, n]) => `${y}: ${n.toLocaleString('vi-VN')}`).join(' · ');
+  $('h-archive').innerHTML = `<b>Kho hiện có:</b> ${(a.observations || 0).toLocaleString('vi-VN')} lượt nhà thầu dự thầu trên ${(a.packages || 0).toLocaleString('vi-VN')} gói${range}.${years ? `<br><span class="muted small">Theo năm — ${hEsc(years)}</span>` : ''}`;
+  if (st.config) {
+    $('hProvince').value = st.config.province; $('hField').value = st.config.field; $('hMonths').value = st.config.months;
+    $('hPerJob').value = st.config.perJob; $('hSchedule').value = st.config.schedule; $('hWatched').checked = st.config.includeWatched;
+  }
+  $('hPause').textContent = st.paused ? 'Tiếp tục' : 'Tạm dừng';
+  if (!st.items?.length) { hNotice('Chưa có kế hoạch nạp. Chọn tỉnh, lĩnh vực, số tháng rồi bấm "Lập kế hoạch và bắt đầu".', ''); $('h-table').innerHTML = ''; return; }
+  const head = st.finishedAt ? `Đã nạp xong kế hoạch lúc ${new Date(st.finishedAt).toLocaleString('vi-VN')}.` : st.paused ? 'Đang tạm dừng.' : st.current ? 'Đang nạp một lượt…' : `Chờ lượt kế tiếp${st.lastSkip ? ` — ${st.lastSkip}` : ''}.`;
+  hNotice(`${head} Xong ${p.done}/${p.total} mục · đọc ${(p.read || 0).toLocaleString('vi-VN')} biên bản${p.error ? ` · ${p.error} mục lỗi` : ''}.`, st.finishedAt ? 'ok' : p.error ? 'warn' : '');
+  $('h-table').innerHTML = `<table><thead><tr><th>Mục</th><th>Trạng thái</th><th>Gói trong khoảng</th><th>Đã đọc biên bản</th><th>Ghi chú</th></tr></thead><tbody>${st.items.map((i) => {
+    const o = i.outcome || {};
+    return `<tr><td>${hEsc(i.label)}${i.kind === 'investor' ? ' <span class="muted small">(chủ đầu tư)</span>' : ''}</td><td>${hEsc(H_STATUS[i.status] || i.status)}</td><td>${o.packages ?? ''}</td><td>${o.read ?? ''}${o.read ? ` <span class="muted small">(đủ ${o.complete ?? o.read}${o.cached ? ` · ${o.cached} từ bộ nhớ` : ''})</span>` : ''}</td><td>${hEsc(o.note || '')}</td></tr>`;
+  }).join('')}</tbody></table>`;
+}
+async function loadHistory() { renderHistory(await send('HISTORY_STATUS')); }
+$('hStart').addEventListener('click', async () => {
+  const r = await send('HISTORY_CONFIGURE', { province: $('hProvince').value, field: $('hField').value, months: Number($('hMonths').value), perJob: Number($('hPerJob').value),
+    schedule: $('hSchedule').value, includeWatched: $('hWatched').checked });
+  if (!r?.ok) { hNotice(r?.message || 'Chưa lập được kế hoạch.', 'error'); return; }
+  renderHistory(r);
+});
+$('hPause').addEventListener('click', async () => { const r = await send('HISTORY_PAUSE', { paused: $('hPause').textContent === 'Tạm dừng' }); if (r?.ok) renderHistory(r); else hNotice(r?.message, 'error'); });
+$('hTick').addEventListener('click', async () => { renderHistory(await send('HISTORY_TICK')); });
+$('hClear').addEventListener('click', async () => { if (!confirm('Xoá kế hoạch nạp? Dữ liệu đã nạp vào kho vẫn giữ nguyên.')) return; const r = await send('HISTORY_CLEAR'); if (r?.ok) renderHistory(r); else hNotice(r?.message, 'error'); });
 
 loadStore();

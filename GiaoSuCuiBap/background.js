@@ -28,6 +28,7 @@ import { openingFingerprint, restoreOpening, cacheOpening, trimOpeningCache } fr
 import { validateCriteria, safeSavedSearches, matchesAdditionalKeyword, matchesLocalFilters, splitProvinceNames } from './lib/workspace.js';
 import { safeHunts, validateHunt, huntAlarmName, parseHuntAlarm, MAX_HUNTS_ALLOWED, safeWatches } from './lib/hunts.js';
 import { wakeTimes } from './lib/station.js';
+import { createHistoryRuntime } from './lib/runtime-history.js';
 import { touchLifecycle, inferLifecycleEvent, shouldRemindDeadline, investorWatchHit, schemaHealthOf, findPriorTenderVersion, newTenderChanges, deadlineReminderState } from './lib/lifecycle.js';
 import { normalizeCapability, checklistProgress, emptyChecklist, checklistItemsFor } from './lib/capability.js';
 import { safeHttpsWebhook, safeEmail, safeChatId, channelPayload } from './lib/channels.js';
@@ -749,6 +750,7 @@ async function ensureDailyAlarm(){
   await chrome.alarms.create(DEADLINE_ALARM,{periodInMinutes:30});
   await ensureHuntAlarms(s.hunts);
   await ensureBulletinAlarm(s);
+  await historyRuntime.resume().catch(()=>{});
 }
 
 async function ensureHuntAlarms(...args){return huntRuntime.ensureHuntAlarms(...args);}
@@ -1365,12 +1367,14 @@ async function startBidOpenScan(payload={}){
   // opening years. Owner searches read their full history; broad provincial
   // searches have an independent 2,000-row budget and explicit partial scope.
   const queryBatch=lookupBatch(scope,investorScopes(scope).map(buildBbmtQuery),'bbmt-list',scope.investor||scope.keyword?0:40);
+  // Lượt do Kho lịch sử chạy được ghi nhãn, để trang Mở thầu không bị hiểu nhầm là lượt người dùng bấm.
+  const historyLabel=String(payload.historyLabel||'').replace(/[<>]/g,'').slice(0,60);
   const scan={
-    id,status:'LISTING',queryBatch,qi:0,
+    id,status:'LISTING',queryBatch,qi:0,origin:historyLabel?'history':'',historyLabel,
     contractorQuery:raw,focusTaxCode:taxCode,
     contractorName:String(payload.contractorName||'').trim(),
     scope,maxPackages,mode:lossMode?'loss':'pending',
-    message:lossMode
+    message:historyLabel?`Kho lịch sử · ${historyLabel}: đang lấy danh sách gói đã có kết quả...`:lossMode
       ?'Đang lấy danh sách gói ĐÃ CÓ KẾT QUẢ để dò gói bạn dự mà không trúng...'
       :'Đang lấy danh sách gói đã mở thầu nhưng chưa có kết quả...',
     startedAt:new Date().toISOString(),finishedAt:null,
@@ -3809,6 +3813,13 @@ const liveCanaryRuntime=createLiveCanaryRuntime({getState,save,runProbe:(...args
 const ingestRuntime=createIngestRuntime({getState:(...args)=>getState(...args),save:(...args)=>save(...args),scoredWithGate:(...args)=>scoredWithGate(...args),publicFilterCriteria:(...args)=>publicFilterCriteria(...args),KEYS,withLock});
 const huntRuntime=createHuntRuntime({getState:(...args)=>getState(...args),save:(...args)=>save(...args),escapeHtml:(...args)=>escapeHtml(...args),sendTelegram:(...args)=>sendTelegram(...args),nextDailyTime:(...args)=>nextDailyTime(...args),startPlanLookup:(...args)=>startPlanLookup(...args),startTbmtSearch:(...args)=>startTbmtSearch(...args),KEYS,HUNT_RETRY_PREFIX,withLock,chrome});
 const searchStateRuntime=createSearchStateRuntime({storage:appStorage});
+/* Kho lịch sử (4.19.0): hàng đợi nạp biên bản mở thầu đã có kết quả — từng tháng của
+   tỉnh + lĩnh vực, rồi toàn bộ lịch sử chủ đầu tư đang theo dõi. Dùng đúng luồng
+   startBidOpenScan đã kiểm thử; luôn nhường người dùng, bộ săn và canary. */
+const historyRuntime=createHistoryRuntime({storage:chrome.storage.local,alarms:chrome.alarms,
+  readJobs:async()=>{const s=await getState();return {bidOpenScan:await getBidScan(),activeJob:activeListJob(await readQueryControlState(chrome.storage.local))||(bbmtWaiter?{kind:'bbmt'}:null),
+    canaryNextRunAt:s.liveCanary?.nextRunAt||null,hunts:s.hunts,readOnly:Boolean(s.settings.readOnlyMode),schemaRed:schemaIsRed(s)};},
+  startScan:payload=>startBidOpenScan(payload),readObservations:async()=>(await getState()).observations||[]});
 const exportRuntime=createExportRuntime({readSearchState:(...args)=>searchStateRuntime.read(...args),getState:(...args)=>getState(...args),downloadData:(...args)=>downloadData(...args),downloadXlsx:(...args)=>downloadXlsx(...args),mobileHtml:(...args)=>mobileHtml(...args),getContractorProfile:(...args)=>getContractorProfile(...args),priceRow:(...args)=>priceRow(...args),sanitizedTemplateState:(...args)=>sanitizedTemplateState(...args),stamp,numOrNull,chrome});
 
 void liveCanaryRuntime.hydrate().catch(()=>{});
@@ -3861,6 +3872,7 @@ chrome.runtime.onStartup.addListener(async()=>{
 });
 chrome.alarms.onAlarm.addListener(async alarm=>{
   if(await liveCanaryRuntime.onAlarm(alarm))return;
+  if(await historyRuntime.onAlarm(alarm))return;
   if((await getState()).settings.readOnlyMode&&!alarm.name.startsWith(TIMEOUT_PREFIX))return;
   if(alarm.name===DAILY_ALARM)await startScan('scheduled');
   else if(alarm.name===DEADLINE_ALARM){await huntRuntime.heartbeat().catch(()=>{});await reviewDeadlines();}
@@ -3972,6 +3984,11 @@ chrome.runtime.onMessage.addListener((message,sender,sendResponse)=>{
         sendResponse({ok:true,red:schemaIsRed(s),canaryStatus:canary?.status||'UNKNOWN',canaryReason:String(canary?.reason||'').slice(0,200),checkedAt:canary?.checkedAt||null,failingHunts});
         break;
       }
+      case 'HISTORY_STATUS': sendResponse(await historyRuntime.status());break;
+      case 'HISTORY_CONFIGURE': sendResponse(await historyRuntime.configure(message.payload||{},{watchedInvestors:(await getState()).watchedInvestors}));break;
+      case 'HISTORY_PAUSE': sendResponse(await historyRuntime.setPaused(message.payload?.paused!==false));break;
+      case 'HISTORY_CLEAR': sendResponse(await historyRuntime.clear());break;
+      case 'HISTORY_TICK': {await historyRuntime.tick();sendResponse(await historyRuntime.status());break;}
       case 'STATION_STATUS': {
         const s=await getState();
         sendResponse({ok:true,station:await huntRuntime.stationStatus(),huntTimes:wakeTimes(s.hunts,0),wakeTimes:wakeTimes(s.hunts,3),readOnly:Boolean(s.settings.readOnlyMode)});

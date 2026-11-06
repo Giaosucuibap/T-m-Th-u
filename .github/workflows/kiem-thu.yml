@@ -236,6 +236,16 @@ jobs:
           MOCK_CHAOS=autoload node tools/test/mock-egp.mjs >> "$MOCK_LOG" 2>&1 &
           for i in $(seq 1 30); do curl -sk --max-time 2 https://127.0.0.1:9443/ -o /dev/null && break; sleep 1; done
           xvfb-run -a node tools/test/self-check.mjs "$PWD/GiaoSuCuiBap"
+      - name: Kho lịch sử 4.19.0 — nạp từng tháng bằng luồng đọc biên bản thật, nhường lượt của người dùng
+        env:
+          MOCK_PORT: '9443'
+          MOCK_LOG: ${{ runner.temp }}/mock.log
+        run: |
+          pkill -f "node tools/test/mock-egp.mjs" || true; sleep 1
+          : > "$MOCK_LOG"
+          MOCK_CHAOS=autoload node tools/test/mock-egp.mjs >> "$MOCK_LOG" 2>&1 &
+          for i in $(seq 1 30); do curl -sk --max-time 2 https://127.0.0.1:9443/ -o /dev/null && break; sleep 1; done
+          xvfb-run -a node tools/test/history.mjs "$PWD/GiaoSuCuiBap"
       - name: Nhật ký máy chủ giả lập khi hỏng
         if: failure()
         run: tail -200 "${{ runner.temp }}/mock.log" || true

@@ -60,6 +60,7 @@
       <button class="tab on" data-t="profile">Hồ sơ nhà thầu</button>
       <button class="tab" data-t="discount">Chân dung giảm giá</button>
       <button class="tab" data-t="relations">Quan hệ CĐT – Nhà thầu</button>
+      <button class="tab" data-t="history">Kho lịch sử</button>
     </div>
 
     <!-- ============ TAB 1 ============ -->
@@ -106,6 +107,35 @@
         </div>
       </div>
       <div id="relOut"></div>
+    </section>
+
+    <!-- ============ TAB 4 — KHO LỊCH SỬ (4.19.0) ============ -->
+    <section id="p-history" class="hidden" aria-labelledby="h-title">
+      <div class="card">
+        <h2 id="h-title">Kho lịch sử biên bản mở thầu — nạp dần</h2>
+        <p>Tự đọc biên bản mở thầu của các gói <b>đã có kết quả</b>: từng tháng của tỉnh + lĩnh vực anh chọn, rồi toàn bộ lịch sử của các <a href="hunts.html">chủ đầu tư đang theo dõi</a>. Mỗi biên bản cho biết ai dự, giá dự thầu và mức giảm giá — dữ liệu cho các phân tích ở ba thẻ bên cạnh.</p>
+        <div id="h-archive" class="notice" role="status">Đang đọc kho…</div>
+        <div class="fx" style="margin-top:12px">
+          <div><label for="hProvince">Tỉnh</label><input id="hProvince" value="Lâm Đồng" maxlength="80"></div>
+          <div><label for="hField">Lĩnh vực</label><select id="hField"><option value="XL">Xây lắp</option><option value="TV">Tư vấn</option><option value="HH">Hàng hóa</option><option value="PTV">Phi tư vấn</option><option value="HON_HOP">Hỗn hợp</option><option value="">Tất cả</option></select></div>
+          <div><label for="hMonths">Số tháng lùi về</label><input id="hMonths" type="number" min="1" max="36" value="12"></div>
+          <div><label for="hPerJob">Tối đa biên bản mỗi lượt</label><input id="hPerJob" type="number" min="20" max="300" value="120"></div>
+          <div><label for="hSchedule">Khi nào chạy</label><select id="hSchedule"><option value="night">Ban đêm 23:00–06:00 (khuyên dùng)</option><option value="now">Ngay khi e-GP rảnh</option></select></div>
+          <div style="display:flex;align-items:flex-end"><label style="display:flex;gap:8px;align-items:center"><input id="hWatched" type="checkbox" checked> Kèm chủ đầu tư đang theo dõi (đủ lịch sử)</label></div>
+        </div>
+        <div class="row" style="margin-top:12px;gap:8px;flex-wrap:wrap">
+          <button id="hStart" class="btn" type="button">Lập kế hoạch và bắt đầu</button>
+          <button id="hPause" class="btn light" type="button">Tạm dừng</button>
+          <button id="hTick" class="btn light" type="button">Chạy lượt kế tiếp ngay</button>
+          <button id="hClear" class="btn light" type="button">Xoá kế hoạch</button>
+        </div>
+        <div id="h-status" class="notice hidden" role="status" style="margin-top:12px"></div>
+        <div id="h-table" style="margin-top:12px;overflow-x:auto"></div>
+        <details class="help-more"><summary>Giới hạn cần biết</summary>
+          <p>Tra theo <b>tỉnh</b>: e-GP không lọc ngày ở máy chủ cho loại tra cứu này, nên tiện ích đọc tối đa 2.000 dòng mới nhất rồi lọc ngày trên máy — tháng càng xa càng dễ thiếu gói; bảng ghi rõ tháng nào chạm giới hạn. Tra theo <b>chủ đầu tư</b>: đọc được toàn bộ lịch sử của đơn vị.</p>
+          <p>Kho chỉ chạy khi Chrome đang chạy (bật chạy nền ở trang Bộ săn). Luôn nhường lượt tra cứu của anh, giờ bộ săn và giờ kiểm tra cấu trúc e-GP. Biên bản đã đọc nằm trong bộ nhớ đệm — chạy lại không hỏi lại e-GP.</p>
+        </details>
+      </div>
     </section>
   </main>
 

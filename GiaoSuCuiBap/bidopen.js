@@ -68,7 +68,8 @@ async function refresh(){
       $('days').value=c.fromDate||c.toDate?'custom':String(c.days||30);
       $('fromDate').value=c.fromDate||'';$('toDate').value=c.toDate||'';syncDateRange();
     }
-    $('progress-text').textContent=SCAN.message||'Đang đọc…';
+    // 4.19.0: lượt do Kho lịch sử chạy ban đêm — ghi rõ để không hiểu nhầm là lượt anh bấm.
+    $('progress-text').textContent=(SCAN.origin==='history'?`[Kho lịch sử · ${SCAN.historyLabel||''}] `:'')+(SCAN.message||'Đang đọc…');
     const pkgs=SCAN.packages||[];
     const attempted=pkgs.filter(p=>['OK','EMPTY','PARTIAL','TIMEOUT'].includes(bbmtReadStateOf(p))).length;
     $('barfill').style.width=`${pkgs.length?Math.max(2,attempted/pkgs.length*100):2}%`;
@@ -143,7 +144,7 @@ function render(){
      — người dùng đã chụp đúng cảnh đó gửi về. Dòng trạng thái chỉ giữ thông
      điệp khi lượt chạy xong bình thường. */
   const daBaoLoi=['ERROR','PARTIAL'].includes(SCAN.status);
-  $('result-status').textContent=running()?`Đang cập nhật từng gói · ${complete}/${packages.length} bảng đã đọc đủ`:daBaoLoi?'':SCAN.message||'';
+  $('result-status').textContent=(SCAN.origin==='history'?`Lượt do Kho lịch sử chạy (${SCAN.historyLabel||''}) · `:'')+(running()?`Đang cập nhật từng gói · ${complete}/${packages.length} bảng đã đọc đủ`:daBaoLoi?'':SCAN.message||'');
   const only=watching&&$('only').checked;
   const cards=packages.flatMap(p=>{const me=watching?findBidder(p.bidders,SCAN.focusTaxCode,SCAN.contractorQuery):null;return only&&!me?[]:[packageCard(p,me)];});
   const html=cards.join('')||(packages.length?'<div class="notice">Chưa thấy nhà thầu theo dõi trong các bảng đã đọc. Bỏ chọn bộ lọc để xem tiến độ của toàn bộ gói.</div>':'');

@@ -38,7 +38,9 @@ export function extractExe(log) {
 if (import.meta.url === `file://${process.argv[1]}`) {
   const [sha, outDir] = process.argv.slice(2);
   if (!/^[0-9a-f]{7,40}$/.test(sha || '') || !outDir) { console.error('Cách dùng: node tools/release/lay-cau-noi-tu-ci.mjs <mã-commit> <thư-mục-ra>'); process.exit(2); }
-  const runs = JSON.parse(gh(`repos/${REPO}/actions/runs?head_sha=${sha}&per_page=20`)).workflow_runs || [];
+  // GitHub chỉ lọc theo mã commit ĐẦY ĐỦ 40 ký tự; mã ngắn thì hỏi git trên máy.
+  const full = sha.length === 40 ? sha : execFileSync('git', ['rev-parse', sha], { encoding: 'utf8' }).trim();
+  const runs = JSON.parse(gh(`repos/${REPO}/actions/runs?head_sha=${full}&per_page=20`)).workflow_runs || [];
   let found = null;
   for (const run of runs) {
     const jobs = JSON.parse(gh(`repos/${REPO}/actions/runs/${run.id}/jobs`)).jobs || [];
