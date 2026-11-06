@@ -2,6 +2,49 @@
 
 Tài liệu này ghi lại các thay đổi quan trọng của Giáo Sư Cùi Bắp. Cấu trúc tham khảo [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) và phiên bản tuân theo cách đánh số ngữ nghĩa ở mức sản phẩm.
 
+## [4.19.0] — 2026-11-06
+
+Khắc phục các điểm yếu nêu trong báo cáo thẩm định 4.18.0. Báo cáo mới: `BAO-CAO-THAM-DINH-4.19.0.md`.
+
+### Trạm săn — chạy cả khi đóng Chrome, lượt lỡ giờ được chạy bù
+- **Sửa lỗi thật:** trang Bộ săn ghi "máy tắt thì chạy bù khi mở lại", nhưng mỗi lần Chrome khởi động
+  `ensureHuntAlarms()` xoá báo thức và đặt lại vào lần tới — lượt 06:05 lỡ khi máy tắt mất hẳn. Nay
+  lượt lỡ giờ được chạy bù khoảng 2 phút sau khi Chrome chạy lại (mỗi bộ cách nhau 1 phút), không chạy
+  bù cho giờ chưa từng hẹn (bộ săn mới tạo / vừa bật lại / vừa đổi giờ), không chạy trùng khi lượt đúng
+  giờ đã chạy (`lib/station.js`, kiểm thử ở 4 múi giờ).
+- Nhịp tim 30 phút ghi các khoảng máy/Chrome không chạy; Telegram báo "máy tắt từ … đến …, đang chạy bù
+  bộ săn …" đúng một lần.
+- Quyền `background` là **tuỳ chọn**: người dùng tự bật ở trang Bộ săn để Chrome chạy tiếp khi đóng cửa sổ.
+- `native-agent/BAT-TRAM-SAN.bat` + `tram-san.ps1`: tác vụ Task Scheduler cho tài khoản đang dùng — mở
+  Chrome chạy nền khi đăng nhập Windows và đánh thức máy (WakeToRun) trước giờ săn 3 phút. Đăng ký/gỡ thật
+  trên Windows trong CI.
+
+### Không để hỏng âm thầm (phụ thuộc giao diện e-GP)
+- Bộ săn lỗi → Telegram ngay lần đầu; hồi phục → Telegram; không nhắn lặp.
+- Dải cảnh báo trên các trang tra cứu khi tiện ích đã tự dừng vì e-GP đổi cấu trúc, hoặc bộ săn đang lỗi.
+- **Chẩn đoán › Kiểm chứng toàn trình trên e-GP thật** (một chạm, chạy trên máy người dùng): Tìm gói →
+  Kế hoạch (danh sách + trang chi tiết) → Mở thầu (đọc biên bản) → kiểm tra cấu trúc 25 mã; xuất tệp
+  bằng chứng có SHA-256, không chứa tên gói/nhà thầu/giá. Chỉ ĐẠT khi dữ liệu về thật.
+
+### Kho lịch sử biên bản mở thầu
+- Phân tích › **Kho lịch sử**: nạp dần biên bản của các gói đã có kết quả — từng tháng của tỉnh + lĩnh
+  vực, rồi toàn bộ lịch sử 4 năm của các chủ đầu tư đang theo dõi. Chạy ban đêm, tiếp tục được khi tắt
+  máy, luôn nhường lượt tra cứu của người dùng, giờ bộ săn và giờ canary. Bảng độ phủ ghi rõ biên bản đọc
+  đủ / thiếu / chưa đọc được và tháng chạm giới hạn 2.000 dòng của e-GP.
+
+### Gói cài có lại cầu nối E-HSMT
+- CI Windows biên dịch `NativeHost.cs`, chạy bộ kiểm thử trên đúng tệp đó, rồi giữ tệp (artifact + nhật ký
+  base64 kèm SHA-256). `tools/release/lay-cau-noi-tu-ci.mjs` chỉ nhận tệp khớp mã băm, độ dài, chữ ký MZ.
+
+### Kiến trúc
+- `lib/runtime-telegram.js` (gửi tin, dò Chat ID, đẩy gói mới) tách khỏi `background.js`.
+- `lib/message-registry.js` — mỗi lệnh đúng một chủ; `lib/handlers/` (tự động hoá 15 lệnh, điều hướng 13,
+  tra cứu kho 4). `background.js` 4.394 → 4.120 dòng; khối switch 126 → 94 nhánh.
+
+### Kiểm thử
+- 832 bài đơn vị (821 đạt trên Linux, 11 chỉ chạy trên Windows), 4 múi giờ; CI Chromium thêm 3 kịch bản
+  (trạm săn, nút kiểm chứng, kho lịch sử).
+
 ## [4.18.0] — 2026-11-06
 
 ### Giao diện mới — đo được, không cảm tính

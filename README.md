@@ -1,4 +1,10 @@
-# Giáo Sư Cùi Bắp 4.16.0
+# Giáo Sư Cùi Bắp 4.19.0
+
+Bản 4.19.0 khắc phục các điểm yếu trong báo cáo thẩm định 4.18.0: **trạm săn** (chạy bù lượt lỡ giờ, Chrome chạy nền tuỳ chọn, Task Scheduler đánh thức máy), **kiểm chứng toàn trình trên e-GP thật** một chạm ở trang Chẩn đoán, **kho lịch sử** biên bản mở thầu nạp dần, cảnh báo khi bộ săn hỏng, gói cài có lại cầu nối E-HSMT dựng và kiểm thử trên Windows CI, và bước đầu tách `background.js`. Đọc `HUONG-DAN-4.19.0.md` trước khi cập nhật; đánh giá chi tiết ở `BAO-CAO-THAM-DINH-4.19.0.md`.
+
+## Ghi chú các bản trước
+
+### 4.16.0
 
 Sửa lọc ngày phê duyệt KHLCNT tại máy chủ theo trường chỉ mục thực tế đã kiểm chứng, xếp ngày phê duyệt mới nhất trước và đọc bảng chi tiết để gắn đúng tên–lĩnh vực–giá từng gói. Bản lưu cũ không được dùng giá từ mảng tổng hợp chưa đối chiếu. Tiến độ không đọc cả kho; khoảng thời gian được cố định đến lúc xuất Excel. Giới hạn ACK, chống gửi trùng, Dừng và phục hồi sau khi worker khởi động lại được kiểm thử. Đọc `HUONG-DAN-4.16.0.md` ở thư mục gốc trước khi cập nhật; hướng dẫn này bổ sung cách thay thư mục và giới hạn thử lại.
 
