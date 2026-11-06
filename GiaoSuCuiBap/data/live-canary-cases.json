@@ -1,0 +1,177 @@
+{
+  "version": 1,
+  "registryCreatedAt": "2026-09-14T05:29:13.395Z",
+  "province": {
+    "code": "703",
+    "name": "Lâm Đồng"
+  },
+  "cases": [
+    {
+      "id": "IB2600534292",
+      "type": "IB",
+      "expectedField": "HH",
+      "observedAt": "2026-09-14T05:29:13.395Z",
+      "source": "e-GP native smart/search, verified 4.10.1 live run"
+    },
+    {
+      "id": "IB2600533026",
+      "type": "IB",
+      "expectedField": "HH",
+      "observedAt": "2026-09-14T05:29:13.395Z",
+      "source": "e-GP native smart/search, verified 4.10.1 live run"
+    },
+    {
+      "id": "IB2600533003",
+      "type": "IB",
+      "expectedField": "HH",
+      "observedAt": "2026-09-14T05:29:13.395Z",
+      "source": "e-GP native smart/search, verified 4.10.1 live run"
+    },
+    {
+      "id": "IB2600526086",
+      "type": "IB",
+      "expectedField": "PTV",
+      "observedAt": "2026-09-14T05:29:13.395Z",
+      "source": "e-GP native smart/search, verified 4.10.1 live run"
+    },
+    {
+      "id": "IB2600464701",
+      "type": "IB",
+      "expectedField": "PTV",
+      "observedAt": "2026-09-14T05:29:13.395Z",
+      "source": "e-GP native smart/search, verified 4.10.1 live run"
+    },
+    {
+      "id": "IB2600532994",
+      "type": "IB",
+      "expectedField": "XL",
+      "observedAt": "2026-09-14T05:29:13.395Z",
+      "source": "e-GP native smart/search, verified 4.10.1 live run"
+    },
+    {
+      "id": "IB2600509787",
+      "type": "IB",
+      "expectedField": "XL",
+      "observedAt": "2026-09-14T05:29:13.395Z",
+      "source": "e-GP native smart/search, verified 4.10.1 live run"
+    },
+    {
+      "id": "IB2600505487",
+      "type": "IB",
+      "expectedField": "XL",
+      "observedAt": "2026-09-14T05:29:13.395Z",
+      "source": "e-GP native smart/search, verified 4.10.1 live run"
+    },
+    {
+      "id": "IB2600512827",
+      "type": "IB",
+      "expectedField": "TV",
+      "observedAt": "2026-09-14T05:29:13.395Z",
+      "source": "e-GP native smart/search, verified 4.10.1 live run"
+    },
+    {
+      "id": "IB2600533889",
+      "type": "IB",
+      "expectedField": "TV",
+      "observedAt": "2026-09-14T05:29:13.395Z",
+      "source": "e-GP native smart/search, verified 4.10.1 live run"
+    },
+    {
+      "id": "IB2600488067",
+      "type": "IB",
+      "expectedField": "TV",
+      "observedAt": "2026-09-14T05:29:13.395Z",
+      "source": "e-GP native smart/search, verified 4.10.1 live run"
+    },
+    {
+      "id": "IB2600527107",
+      "type": "IB",
+      "expectedField": "TV",
+      "observedAt": "2026-09-14T05:29:13.395Z",
+      "source": "e-GP native smart/search, verified 4.10.1 live run"
+    },
+    {
+      "id": "PL2600085770",
+      "type": "PL",
+      "observedAt": "2026-09-14T05:29:13.395Z",
+      "source": "e-GP native plan response"
+    },
+    {
+      "id": "PL2600303921",
+      "type": "PL",
+      "observedAt": "2026-09-14T05:29:13.395Z",
+      "source": "Plan reference in e-GP native notice response"
+    },
+    {
+      "id": "PL2600299722",
+      "type": "PL",
+      "observedAt": "2026-09-14T05:29:13.395Z",
+      "source": "Plan reference in e-GP native notice response"
+    },
+    {
+      "id": "PL2600281575",
+      "type": "PL",
+      "observedAt": "2026-09-14T05:29:13.395Z",
+      "source": "Plan reference in e-GP native notice response"
+    },
+    {
+      "id": "PL2600283339",
+      "type": "PL",
+      "observedAt": "2026-09-14T05:29:13.395Z",
+      "source": "Plan reference in e-GP native notice response"
+    },
+    {
+      "id": "PL2600272424",
+      "type": "PL",
+      "observedAt": "2026-09-14T05:29:13.395Z",
+      "source": "Plan reference in e-GP native notice response"
+    },
+    {
+      "id": "PL2600302284",
+      "type": "PL",
+      "observedAt": "2026-09-14T05:29:13.395Z",
+      "source": "Plan reference in e-GP native notice response"
+    },
+    {
+      "id": "PL2600258444",
+      "type": "PL",
+      "observedAt": "2026-09-14T05:29:13.395Z",
+      "source": "Plan reference in e-GP native notice response"
+    },
+    {
+      "id": "IB2600508421",
+      "type": "BBMT",
+      "expectedField": "XL",
+      "observedAt": "2026-09-14T05:29:13.395Z",
+      "source": "e-GP native public pending-opening list"
+    },
+    {
+      "id": "IB2600501477",
+      "type": "BBMT",
+      "expectedField": "XL",
+      "observedAt": "2026-09-14T05:29:13.395Z",
+      "source": "e-GP native public pending-opening list"
+    },
+    {
+      "id": "IB2600483356",
+      "type": "BBMT",
+      "expectedField": "XL",
+      "observedAt": "2026-09-14T05:29:13.395Z",
+      "source": "e-GP native public pending-opening list"
+    },
+    {
+      "id": "IB2600499453",
+      "type": "BBMT",
+      "expectedField": "XL",
+      "observedAt": "2026-09-14T05:29:13.395Z",
+      "source": "e-GP native public pending-opening list"
+    },
+    {
+      "id": "IB2600499676",
+      "type": "BBMT",
+      "expectedField": "XL",
+      "observedAt": "2026-09-14T05:29:13.395Z",
+      "source": "e-GP native public pending-opening list"
+    }
+  ]
+}

@@ -1,0 +1,356 @@
+/* ============================================================================
+ *  GIÁO SƯ CÙI BẮP — HỆ THỐNG THIẾT KẾ 4.18.0
+ *
+ *  Nạp SAU app.css / workspace.css trên mọi trang, nên mọi quy tắc ở đây là
+ *  lớp trên cùng. Ba mục tiêu, đo được bằng tools/test/ui-shots.mjs:
+ *    1. Đọc rõ: không chữ nào dưới 12px; chữ thân 15px; tương phản chữ/nền
+ *       đạt chuẩn WCAG 2.1 AA (≥ 4,5:1).
+ *    2. Một bố cục cho mọi trang: thanh điều hướng trái cố định, nhóm theo
+ *       công việc (Tra cứu · Theo dõi · Phân tích · Năng lực · Hệ thống).
+ *    3. Thứ bậc rõ: tiêu đề — số liệu — nội dung — ghi chú, mỗi tầng một cỡ
+ *       và một độ đậm; số tiền canh cột (tabular-nums).
+ *  Phông: Be Vietnam Pro (SIL OFL 1.1), đủ 4 độ đậm, tách theo bảng mã để
+ *  trình duyệt chỉ tải phần cần — tiếng Việt có dấu nằm trong bảng
+ *  "vietnamese".
+ * ========================================================================== */
+
+@font-face{font-family:'Be Vietnam Pro';font-style:normal;font-weight:400;font-display:swap;src:url('fonts/be-vietnam-pro-vietnamese-400.woff2') format('woff2');unicode-range:U+0102-0103,U+0110-0111,U+0128-0129,U+0168-0169,U+01A0-01A1,U+01AF-01B0,U+0300-0301,U+0303-0304,U+0308-0309,U+0323,U+0329,U+1EA0-1EF9,U+20AB}
+@font-face{font-family:'Be Vietnam Pro';font-style:normal;font-weight:400;font-display:swap;src:url('fonts/be-vietnam-pro-latin-ext-400.woff2') format('woff2');unicode-range:U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF}
+@font-face{font-family:'Be Vietnam Pro';font-style:normal;font-weight:400;font-display:swap;src:url('fonts/be-vietnam-pro-latin-400.woff2') format('woff2');unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}
+@font-face{font-family:'Be Vietnam Pro';font-style:normal;font-weight:500;font-display:swap;src:url('fonts/be-vietnam-pro-vietnamese-500.woff2') format('woff2');unicode-range:U+0102-0103,U+0110-0111,U+0128-0129,U+0168-0169,U+01A0-01A1,U+01AF-01B0,U+0300-0301,U+0303-0304,U+0308-0309,U+0323,U+0329,U+1EA0-1EF9,U+20AB}
+@font-face{font-family:'Be Vietnam Pro';font-style:normal;font-weight:500;font-display:swap;src:url('fonts/be-vietnam-pro-latin-ext-500.woff2') format('woff2');unicode-range:U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF}
+@font-face{font-family:'Be Vietnam Pro';font-style:normal;font-weight:500;font-display:swap;src:url('fonts/be-vietnam-pro-latin-500.woff2') format('woff2');unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}
+@font-face{font-family:'Be Vietnam Pro';font-style:normal;font-weight:600;font-display:swap;src:url('fonts/be-vietnam-pro-vietnamese-600.woff2') format('woff2');unicode-range:U+0102-0103,U+0110-0111,U+0128-0129,U+0168-0169,U+01A0-01A1,U+01AF-01B0,U+0300-0301,U+0303-0304,U+0308-0309,U+0323,U+0329,U+1EA0-1EF9,U+20AB}
+@font-face{font-family:'Be Vietnam Pro';font-style:normal;font-weight:600;font-display:swap;src:url('fonts/be-vietnam-pro-latin-ext-600.woff2') format('woff2');unicode-range:U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF}
+@font-face{font-family:'Be Vietnam Pro';font-style:normal;font-weight:600;font-display:swap;src:url('fonts/be-vietnam-pro-latin-600.woff2') format('woff2');unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}
+@font-face{font-family:'Be Vietnam Pro';font-style:normal;font-weight:700 900;font-display:swap;src:url('fonts/be-vietnam-pro-vietnamese-700.woff2') format('woff2');unicode-range:U+0102-0103,U+0110-0111,U+0128-0129,U+0168-0169,U+01A0-01A1,U+01AF-01B0,U+0300-0301,U+0303-0304,U+0308-0309,U+0323,U+0329,U+1EA0-1EF9,U+20AB}
+@font-face{font-family:'Be Vietnam Pro';font-style:normal;font-weight:700 900;font-display:swap;src:url('fonts/be-vietnam-pro-latin-ext-700.woff2') format('woff2');unicode-range:U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF}
+@font-face{font-family:'Be Vietnam Pro';font-style:normal;font-weight:700 900;font-display:swap;src:url('fonts/be-vietnam-pro-latin-700.woff2') format('woff2');unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}
+
+/* ---------------------------------------------------------------- TOKEN --- */
+:root{
+  --font:'Be Vietnam Pro','Segoe UI',system-ui,-apple-system,sans-serif;
+  --sidebar-w:256px;
+  /* Thương hiệu: xanh ngọc đậm — tin cậy, gần với màu nước/thủy lợi. */
+  --brand-950:#05211e;--brand-900:#0a2f2b;--brand-800:#0c4039;--brand-700:#0f766e;--brand-650:#0d6b64;
+  --brand-600:#11867c;--brand-300:#5eead4;--brand-100:#ccefe8;--brand-50:#ebf7f4;
+  /* Chữ: 4 tầng, tầng nhạt nhất vẫn ≥ 4,5:1 trên nền trắng. */
+  --ink:#0b1626;--text:#1e293b;--text-2:#334155;--muted:#475569;--subtle:#5b6b7f;
+  /* Nền và đường kẻ. */
+  --bg:#f3f5f8;--surface:#ffffff;--surface-2:#f8fafc;--surface-3:#eef2f6;
+  --line:#e2e8f0;--line-strong:#cbd5e1;
+  /* Trạng thái — chữ đậm trên nền nhạt cùng tông. */
+  --ok:#166534;--ok-bg:#dcfce7;--ok-line:#86efac;
+  --warn:#92400e;--warn-bg:#fef3c7;--warn-line:#fcd34d;
+  --bad:#b42318;--bad-bg:#fee4e2;--bad-line:#fca5a5;
+  --info:#1e40af;--info-bg:#e0ecff;--info-line:#a5c4fd;
+  --gold:#a16207;
+  --radius-sm:8px;--radius:12px;--radius-lg:16px;
+  --shadow-sm:0 1px 2px rgba(15,23,42,.06);
+  --shadow:0 1px 2px rgba(15,23,42,.05),0 6px 18px rgba(15,23,42,.06);
+  --shadow-lg:0 24px 64px rgba(15,23,42,.18);
+  --focus:0 0 0 3px rgba(17,134,124,.32);
+  /* Cỡ chữ. */
+  --fs-xs:12.5px;--fs-sm:13.5px;--fs-base:15px;--fs-md:16px;--fs-lg:18px;--fs-xl:22px;--fs-2xl:28px;
+  /* Ánh xạ tên biến cũ của app.css / workspace.css sang hệ mới. */
+  --accent:var(--brand-700);--accent-2:var(--brand-600);--accent-soft:var(--brand-50);
+  --card:var(--surface);--card-soft:var(--surface-2);--nav:var(--brand-900);--nav-2:var(--brand-800);
+  --danger:var(--bad);--success:var(--ok);--gold-soft:var(--warn-bg);
+}
+
+/* ------------------------------------------------------------- NỀN TẢNG --- */
+html{-webkit-text-size-adjust:100%}
+body{font-family:var(--font);font-size:var(--fs-base);line-height:1.6;letter-spacing:0;color:var(--text);background:var(--bg);-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+body::before{opacity:0!important}
+button,input,select,textarea{font-family:inherit}
+h1,h2,h3,h4{color:var(--ink);font-family:var(--font);letter-spacing:-.015em;line-height:1.3}
+h1{font-size:var(--fs-2xl);font-weight:700}
+h2{font-size:var(--fs-xl);font-weight:700}
+h3{font-size:var(--fs-lg);font-weight:600}
+a{color:var(--brand-700)}
+a:hover{color:var(--brand-650)}
+b,strong{font-weight:600}
+.muted{color:var(--muted)!important}
+.small{font-size:var(--fs-sm)}
+.num,.money,.metric,.value,td,th{font-variant-numeric:tabular-nums}
+::selection{background:var(--brand-100)}
+:focus-visible{outline:2px solid var(--brand-600);outline-offset:2px}
+.skip-link{position:fixed;top:10px;left:14px;z-index:300;transform:translateY(-200%);padding:10px 16px;border-radius:8px;background:#fff;color:var(--brand-700);box-shadow:var(--shadow-lg);font-weight:600;text-decoration:none}
+.skip-link:focus{transform:translateY(0)}
+
+/* --------------------------------------------------- KHUNG: THANH TRÁI --- */
+body.workspace{display:block;min-height:100vh;padding-left:var(--sidebar-w)}
+.workflow-strip{display:none!important}
+.ws-sidebar{position:fixed;top:0;left:0;bottom:0;width:var(--sidebar-w);height:100vh;display:flex;flex-direction:column;
+  padding:16px 14px 10px;background-color:var(--brand-900);background-image:linear-gradient(180deg,var(--brand-900) 0%,var(--brand-950) 100%);border-right:0;color:#d4e4e0;z-index:60;overflow:hidden}
+.ws-brand{display:flex;align-items:center;gap:11px;padding:2px 6px 14px;color:#fff;font-size:16px;font-weight:700;letter-spacing:-.01em;text-decoration:none;white-space:normal}
+.ws-brand:hover{color:#fff}
+.ws-brand img{width:40px;height:40px;border-radius:11px;flex:none;background:#fff1}
+.ws-brand small{display:block;margin-top:3px;color:#9dd3c9;font-size:12px;font-weight:600;letter-spacing:.08em}
+.ws-quick{display:flex;align-items:center;gap:10px;width:100%;min-height:40px;margin:0 0 6px;padding:8px 10px 8px 12px;border:1px solid #ffffff24;border-radius:10px;
+  background:#ffffff12;color:#dbe9e6;font:inherit;font-size:var(--fs-sm);text-align:left;cursor:pointer}
+.ws-quick:hover{background:#ffffff1f;border-color:#ffffff40}
+.ws-quick:focus-visible{outline:2px solid var(--brand-300);outline-offset:2px}
+.ws-quick span{flex:1}
+.ws-quick kbd{font:inherit;font-size:12px;font-weight:600;color:#bfe3dc;padding:1px 6px;border:1px solid #ffffff33;border-radius:6px}
+.ws-nav{flex:1;min-height:0;overflow-y:auto;margin:0 -8px;padding:0 8px 8px;scrollbar-width:thin;scrollbar-color:#ffffff33 transparent}
+.ws-sidebar .nav-caption,.ws-sidebar .nav-group>summary{display:flex;align-items:center;gap:6px;margin:12px 10px 4px;padding:0;color:#94c9bf;font-size:12px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;list-style:none}
+.ws-sidebar .nav-group>summary{cursor:pointer;border-radius:6px;border:0}
+/* Trang có kiểu riêng cho mọi <details> (vd. phân tích thị trường): không để lọt vào thanh trái. */
+.ws-sidebar details.nav-group{margin:0;padding:0;border:0;border-radius:0;background:transparent;box-shadow:none}
+.ws-sidebar details.nav-group[open]>summary{border-bottom:0}
+.ws-sidebar .nav-group>summary::-webkit-details-marker{display:none}
+.ws-sidebar .nav-group>summary::after{content:"";width:7px;height:7px;margin-left:auto;margin-right:4px;border-right:2px solid currentColor;border-bottom:2px solid currentColor;transform:rotate(-45deg);transition:transform .15s}
+.ws-sidebar .nav-group[open]>summary::after{transform:rotate(45deg)}
+.ws-sidebar .nav-group>summary:hover{color:#c9ece5}
+.ws-sidebar nav{display:block}
+.ws-sidebar nav a{display:flex;align-items:center;gap:11px;margin:1px 0;padding:7px 11px;border:0;border-radius:9px;color:#d4e4e0;font-size:14px;font-weight:500;line-height:1.35;text-decoration:none;box-shadow:none}
+.ws-sidebar nav a .ico{flex:none;color:#86cfc2}
+.ws-sidebar nav a:hover{background:#ffffff14;color:#fff}
+.ws-sidebar nav a[aria-current]{background:#2dd4bf26;color:#fff;font-weight:600;box-shadow:inset 3px 0 0 var(--brand-300)}
+.ws-sidebar nav a[aria-current] .ico{color:var(--brand-300)}
+.ws-sidebar nav a i{display:none}
+.ws-sidebar nav a:last-child{margin-top:1px;border-top:0;padding-top:8px;border-radius:9px}
+.ws-side-bottom{margin-top:4px;padding:10px 8px 2px;display:flex;gap:10px;align-items:flex-start;border-top:1px solid #ffffff1a;color:#cfe1dd;font-size:13px;line-height:1.45}
+.ws-side-bottom .ico{color:#86cfc2;flex:none;margin-top:1px}
+.ws-side-bottom small{display:block;color:#a9cbc4;font-size:12px}
+.ws-version{display:flex;justify-content:space-between;padding:6px 8px 0;color:#94c9bf;font-size:12px;font-weight:600;letter-spacing:.05em}
+.ws-menu-btn{display:none}
+
+/* ---------------------------------------------- KHUNG: ĐẦU TRANG, NỘI DUNG --- */
+.workspace main{width:100%;max-width:1320px;margin:0 auto;padding:0 36px 80px}
+body.workspace>main{max-width:1320px}
+.ws-topbar{display:flex;align-items:center;gap:16px;min-height:60px;padding:14px 0 6px;border:0}
+.breadcrumb{display:flex;align-items:center;gap:6px;color:var(--subtle);font-size:var(--fs-sm)}
+.breadcrumb b{color:var(--text-2);font-weight:600}
+.source-link{margin-left:auto;display:inline-flex;align-items:center;gap:7px;color:var(--muted);font-size:var(--fs-sm);text-decoration:none}
+.source-link:hover{color:var(--brand-700)}
+.source-link i{width:8px;height:8px;border-radius:50%;background:#22c55e;box-shadow:0 0 0 3px #22c55e33}
+.ws-intro{display:flex;align-items:center;justify-content:space-between;gap:24px;padding:10px 0 20px}
+.ws-intro h1{margin:6px 0 6px;font-size:30px;line-height:1.2;font-weight:700;letter-spacing:-.02em}
+.ws-intro h1 br{display:none}
+.ws-intro h1 em{font-style:normal;color:var(--brand-700)}
+.ws-intro h1 em::before{content:" "}
+.ws-intro p{margin:0;max-width:72ch;color:var(--muted);font-size:var(--fs-base);line-height:1.6}
+.ws-intro p br{display:none}
+.ws-kicker{display:flex;align-items:center;gap:8px;color:var(--brand-700);font-size:12px;font-weight:700;letter-spacing:.09em}
+.ws-kicker i{width:18px;height:2px;background:currentColor}
+.ws-intro-art{width:88px;height:auto;opacity:.95}
+html[data-density="compact"] .ws-intro{padding:6px 0 16px}
+html[data-density="compact"] .ws-intro h1{font-size:26px}
+html[data-density="compact"] .ws-intro-art{width:72px;height:auto}
+
+/* Trang cũ (đầu trang tối) được shell.js chuyển vào khung chung: đầu trang
+   thành thanh tiêu đề sáng, dính trên cùng khi cuộn. */
+body.workspace>header{position:sticky;top:0;z-index:40;display:flex;align-items:center;gap:12px;min-height:64px;margin:0;padding:12px 36px;
+  background:#f3f5f8ec;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border-bottom:1px solid var(--line);box-shadow:none;color:var(--ink)}
+body.workspace>header>b,body.workspace>header .ws-pagetitle{display:flex;align-items:center;gap:11px;min-width:0;margin-right:auto;color:var(--ink);font-size:21px;font-weight:700;letter-spacing:-.015em;line-height:1.3}
+body.workspace>header .ws-pagetitle .ico{color:var(--brand-700);flex:none}
+body.workspace>header .brand-icon{display:none}
+body.workspace>header .version-chip{display:none}
+body.workspace>header .ws-crumb{display:block;color:var(--subtle);font-size:12.5px;font-weight:600;letter-spacing:.06em;text-transform:uppercase}
+body.workspace>header .legacy-advanced{display:none}
+body.workspace>main{padding-top:24px}
+
+/* Nền đặc phía sau nền chuyển màu: trình đọc tương phản (và máy in) thấy đúng màu nền. */
+.hero,.dashboard-page .hero{background-color:#102f2b}
+/* Nút Gọn/Thoáng. */
+.density-toggle{display:inline-flex;align-items:center;gap:7px;min-height:36px;padding:6px 12px;border:1px solid var(--line-strong);border-radius:9px;background:#fff;color:var(--text-2);font:inherit;font-size:var(--fs-sm);font-weight:600;cursor:pointer;box-shadow:none}
+.density-toggle:hover{border-color:#94a3b8;background:var(--surface-2)}
+.ws-topbar .density-toggle{margin-left:4px}
+body.workspace>header .density-toggle{background:#fff;color:var(--text-2);border-color:var(--line-strong)}
+body.workspace>header .density-toggle:hover{background:var(--surface-2);border-color:#94a3b8}
+.density-toggle[aria-pressed="true"],body.workspace>header .density-toggle[aria-pressed="true"]{color:var(--brand-800);background:var(--brand-50);border-color:var(--brand-100)}
+
+/* ----------------------------------------------------------- THÀNH PHẦN --- */
+.card,.workspace .card{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow-sm);padding:22px}
+.card::after,.workspace .card::after{display:none}
+html[data-density="compact"] .workspace .card{padding:18px}
+.section-label{display:flex;align-items:center;gap:10px;margin-bottom:14px}
+.section-label h2,.section-title{margin:0;color:var(--ink);font-size:var(--fs-lg);font-weight:700;letter-spacing:-.01em}
+.section-label .label-icon{width:34px;height:34px;display:grid;place-items:center;border-radius:9px;background:var(--brand-50);color:var(--brand-700)}
+.section-label .right{margin-left:auto;color:var(--subtle);font-size:var(--fs-sm)}
+.eyebrow{color:var(--brand-700);font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase}
+
+/* Nút bấm. */
+.btn{min-height:42px;padding:9px 16px;border:1px solid var(--brand-700);border-radius:10px;background:var(--brand-700);color:#fff;
+  font:inherit;font-size:14.5px;font-weight:600;line-height:1.2;letter-spacing:0;box-shadow:none;transform:none;gap:8px;text-decoration:none}
+.btn:hover{background:var(--brand-650);border-color:var(--brand-650);color:#fff;filter:none;transform:none;box-shadow:0 4px 12px rgba(15,118,110,.22)}
+.btn:active{transform:translateY(1px)}
+.btn:focus-visible{outline:none;box-shadow:var(--focus)}
+.btn[disabled]{opacity:.5;box-shadow:none}
+.btn.light,.workspace .btn.light{background:#fff;color:var(--text);border-color:var(--line-strong)}
+.btn.light:hover,.workspace .btn.light:hover{background:var(--surface-2);border-color:#94a3b8;color:var(--ink);box-shadow:none}
+.btn.ghost,.workspace .btn.ghost{background:transparent;color:var(--brand-700);border-color:transparent}
+.btn.ghost:hover{background:var(--brand-50);color:var(--brand-650);box-shadow:none}
+.btn.secondary{background:#1e293b;border-color:#1e293b}
+.btn.warn,.workspace .btn.warn{background:#b45309;border-color:#b45309;color:#fff}
+.btn.warn:hover{background:#92400e;border-color:#92400e}
+.btn.danger,.workspace .btn.danger{background:var(--bad);border-color:var(--bad);color:#fff}
+.btn.sm,.btn.small{min-height:34px;padding:6px 12px;font-size:var(--fs-sm)}
+.btn .ico{flex:none}
+
+/* Ô nhập. */
+label{color:var(--text-2);font-size:var(--fs-sm);font-weight:600;letter-spacing:0}
+input,select,textarea{min-height:44px;padding:9px 12px;border:1px solid var(--line-strong);border-radius:10px;background:#fff;color:var(--ink);font:inherit;font-size:var(--fs-base);line-height:1.4}
+input[type=checkbox],input[type=radio]{min-height:0;width:auto;padding:0;accent-color:var(--brand-700)}
+textarea{min-height:112px;resize:vertical}
+input::placeholder,textarea::placeholder{color:#64748b;opacity:1}
+input:hover,select:hover,textarea:hover{border-color:#94a3b8}
+input:focus,select:focus,textarea:focus{border-color:var(--brand-600);box-shadow:var(--focus);outline:none}
+select{cursor:pointer}
+
+/* Thông báo. */
+.notice{margin:14px 0;padding:12px 16px;border:1px solid var(--info-line);border-left:4px solid var(--info);border-radius:10px;background:var(--info-bg);color:#14306d;font-size:14.5px;line-height:1.6}
+.notice.error,.notice.err{border-color:var(--bad-line);border-left-color:var(--bad);background:var(--bad-bg);color:#7a1d14}
+.notice.ok{border-color:var(--ok-line);border-left-color:var(--ok);background:#effcf3;color:#14532d}
+.notice.warn{border-color:var(--warn-line);border-left-color:#b45309;background:#fffbeb;color:#713f12}
+.run-strip{border-color:var(--line);background:#fff;color:var(--text-2);font-size:14.5px}
+.run-strip .run-date{color:var(--subtle)}
+.run-strip.warn{background:#fffbeb;border-color:var(--warn-line);color:#713f12}
+
+/* Nhãn, thẻ. */
+.pill{padding:3px 10px;border:1px solid var(--line);border-radius:999px;background:var(--surface-3);color:var(--text-2);font-size:var(--fs-xs);font-weight:600;line-height:1.5}
+.tag{padding:3px 9px;border-radius:999px;background:var(--surface-3);color:var(--text-2);font-size:var(--fs-xs);font-weight:600}
+.tag.good{background:var(--ok-bg);color:var(--ok)}
+.tag.warn{background:var(--warn-bg);color:var(--warn)}
+.tag.danger{background:var(--bad-bg);color:var(--bad)}
+.tag.info{background:var(--brand-50);color:var(--brand-800)}
+.reason-chip{padding:3px 9px;border:1px solid transparent;border-radius:999px;background:var(--surface-3);color:var(--text-2);font-size:var(--fs-xs);font-weight:500;line-height:1.5}
+.reason-chip.warn{background:var(--warn-bg);color:var(--warn)}
+.ws-result .reason-chip{color:var(--text-2)}
+.ws-result .reason-chip.warn{color:var(--warn)}
+.count-pill{padding:2px 9px;border-radius:999px;background:var(--brand-50);color:var(--brand-800);font-size:var(--fs-sm);font-weight:700}
+
+/* Ô chỉ số. */
+.metric{color:var(--ink);font-weight:700;letter-spacing:-.02em}
+.ws-metric{background:#fff;border:1px solid var(--line);border-radius:var(--radius);padding:18px 20px;box-shadow:var(--shadow-sm)}
+.ws-metric small{color:var(--muted);font-size:12.5px;font-weight:700;letter-spacing:.05em}
+.ws-metric .value{color:var(--ink);font-size:30px;font-weight:700;letter-spacing:-.02em}
+.ws-metric .value.money{font-size:19px;white-space:nowrap}
+.ws-metric .sub{color:var(--muted);font-size:var(--fs-sm);line-height:1.55}
+.ws-metric.accent{background:linear-gradient(135deg,var(--brand-50),#fff);border-color:var(--brand-100)}
+.ws-metric.accent .value{color:var(--brand-700)}
+
+/* Thẻ kết quả gói thầu. */
+.ws-result{border:1px solid var(--line);border-radius:var(--radius);background:#fff;box-shadow:var(--shadow-sm);padding:20px 22px;transition:border-color .15s,box-shadow .15s}
+.ws-result:hover{border-color:#9fd5cb;box-shadow:var(--shadow)}
+.ws-result.closed{background:#fbfcfd}
+.ws-result-top{font-size:var(--fs-sm)}
+.ws-result-top .code{color:var(--muted);font-weight:600;letter-spacing:.02em}
+.ws-result h3{margin:0 0 12px;font-size:17.5px;line-height:1.5;font-weight:600;max-width:880px;letter-spacing:-.005em}
+.ws-result h3 a{color:var(--ink)}
+.ws-result h3 a:hover{color:var(--brand-700)}
+.ws-result-meta{color:var(--muted);font-size:14.5px}
+.ws-result-meta strong{color:var(--ink);font-size:15px;font-weight:600}
+.ws-result-meta .ico{color:var(--subtle)}
+.ws-result-meta .danger{color:var(--bad)}
+.ws-result-bottom{border-top:1px solid var(--line)}
+.ws-result .fresh-stamp,.ws-score small,.ws-footer{color:var(--muted)}
+.ws-intro p,.ws-result-meta,.search-hint,.view-help,.results-meta,.fresh-stamp,.explain{color:var(--muted)}
+
+/* Ô tìm kiếm chính của trang Tìm gói thầu. */
+.search-grid label,.price-row label,.search-grid.has-category label[for="category"]{text-transform:none;letter-spacing:0}
+.price>span{color:var(--subtle)}
+.presets-row>span{color:var(--muted)}
+.search-panel{padding:24px}
+.search-field-main input{min-height:52px;font-size:17px;border-radius:12px;padding:12px 16px}
+.search-hint{border-top:1px solid var(--line);color:var(--muted);font-size:var(--fs-sm);line-height:1.7}
+.search-hint b{color:var(--text-2);font-weight:600}
+.search-details summary{color:var(--brand-700);font-weight:600;font-size:var(--fs-sm);cursor:pointer}
+.quick button,.chips button,.chip{border:1px solid var(--line-strong);border-radius:999px;background:#fff;color:var(--text-2);font-size:var(--fs-sm);font-weight:500;padding:5px 12px;cursor:pointer}
+.quick button:hover,.chips button:hover,.chip:hover{border-color:var(--brand-600);color:var(--brand-700);background:var(--brand-50)}
+
+/* Bảng. */
+table{border-collapse:separate;border-spacing:0;font-size:14.5px;color:var(--text)}
+th{background:var(--surface-2);color:var(--text-2);font-size:13.5px;font-weight:700;text-align:left;text-transform:none;letter-spacing:0;border-bottom:1px solid var(--line-strong)}
+td{border-bottom:1px solid var(--line)}
+th,td{padding:10px 12px;line-height:1.5}
+tbody tr:hover>td{background:#f6faf9}
+
+/* Thẻ chuyển tab trong trang. */
+.tabs{display:flex;flex-wrap:wrap;gap:6px;border-bottom:1px solid var(--line);padding-bottom:0}
+.tabs button,.tab{border:0;border-bottom:2px solid transparent;border-radius:0;background:transparent;color:var(--muted);font:inherit;font-size:14.5px;font-weight:600;padding:9px 12px;cursor:pointer}
+.tabs button.on,.tab.on{color:var(--brand-700);border-bottom-color:var(--brand-700)}
+button.tab,button.tab.on,.tabs button.on{background:transparent}
+.tabs button:hover,.tab:hover{color:var(--ink)}
+
+/* Khối giải thích dài: thu gọn, chữ dễ đọc, dòng không quá dài. */
+.help-more{margin-top:12px;color:var(--muted);font-size:var(--fs-sm)}
+.help-more>summary{display:inline-flex;align-items:center;gap:6px;color:var(--brand-700);font-weight:600;cursor:pointer;list-style:none}
+.help-more>summary::-webkit-details-marker{display:none}
+.help-more>summary::before{content:"";width:6px;height:6px;border-right:2px solid currentColor;border-bottom:2px solid currentColor;transform:rotate(-45deg);transition:transform .15s}
+.help-more[open]>summary::before{transform:rotate(45deg)}
+.help-more>div,.help-more>p{max-width:110ch;margin:8px 0 0;line-height:1.75}
+
+/* ------------------------------------------------- TÌM NHANH (Ctrl K) --- */
+.qf-backdrop{position:fixed;inset:0;z-index:400;display:flex;align-items:flex-start;justify-content:center;padding:12vh 16px 16px;background:rgba(5,22,20,.42);backdrop-filter:blur(3px)}
+.qf-panel{width:min(720px,100%);max-height:72vh;display:flex;flex-direction:column;overflow:hidden;border-radius:16px;background:#fff;box-shadow:var(--shadow-lg);border:1px solid var(--line)}
+.qf-input-row{display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid var(--line)}
+.qf-input-row .ico{color:var(--brand-700);flex:none}
+.qf-input-row input{flex:1;min-height:40px;border:0;box-shadow:none;padding:4px 2px;font-size:18px}
+.qf-input-row input:focus{box-shadow:none}
+.qf-input-row kbd{font:inherit;font-size:12px;color:var(--subtle);border:1px solid var(--line-strong);border-radius:6px;padding:1px 6px}
+.qf-list{overflow-y:auto;padding:6px}
+.qf-group{padding:10px 12px 4px;color:var(--subtle);font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase}
+.qf-item{display:flex;align-items:center;gap:12px;width:100%;padding:10px 12px;border:0;border-radius:10px;background:transparent;color:var(--text);font:inherit;font-size:var(--fs-base);text-align:left;cursor:pointer}
+.qf-item .ico{color:var(--brand-700);flex:none}
+.qf-item .qf-main{flex:1;min-width:0}
+.qf-item .qf-title{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600;color:var(--ink)}
+.qf-item .qf-sub{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--muted);font-size:var(--fs-sm)}
+.qf-item .qf-hint{flex:none;color:var(--subtle);font-size:12.5px;font-weight:600}
+.qf-item[aria-selected="true"],.qf-item:hover{background:var(--brand-50)}
+.qf-empty{padding:18px 14px;color:var(--muted);font-size:var(--fs-sm)}
+.qf-foot{display:flex;flex-wrap:wrap;gap:14px;padding:10px 16px;border-top:1px solid var(--line);background:var(--surface-2);color:var(--subtle);font-size:12.5px}
+
+/* --------------------------------------------- KẾT QUẢ TỨC THÌ TỪ KHO --- */
+.instant-strip{display:flex;align-items:flex-start;gap:12px;margin:0 0 14px;padding:12px 16px;border:1px solid var(--info-line);border-left:4px solid var(--info);border-radius:10px;background:var(--info-bg);color:#14306d;font-size:14.5px;line-height:1.6}
+.instant-strip b{color:#0f2a63}
+.instant-strip .ico{color:var(--info);flex:none;margin-top:2px}
+.ws-result.from-store{border-style:dashed}
+.pill.store{background:var(--info-bg);border-color:var(--info-line);color:#14306d}
+
+/* Bộ từ khóa ngành. */
+.domain-presets{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:10px 0 0}
+.domain-presets>span{color:var(--muted);font-size:var(--fs-sm);font-weight:600}
+
+/* Cửa sổ bật lên 420px: giữ bố cục riêng, chỉ làm đậm chữ phụ cho đủ tương phản. */
+html body:has(.popup-launch){--muted:#4a5d52;--chip-ink:#2f4a3a;color:#1f3a2f}
+body:has(.popup-launch) .ico{vertical-align:-2px}
+
+/* --------------------------------------------------------- MÀN HÌNH HẸP --- */
+/* Số tiền đầy đủ (vd. 4.470.000.000.000 đ) không được bẻ dòng giữa số; ô quá hẹp
+   thì xếp 4 ô số liệu thành 2 hàng thay vì để tràn ngang. */
+@media (max-width:1180px){
+  .ws-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media (max-width:1150px){
+  :root{--sidebar-w:228px}
+  .workspace main{padding:0 24px 72px}
+  body.workspace>header{padding:12px 24px}
+}
+@media (max-width:900px){
+  body.workspace{padding-left:0}
+  .ws-sidebar{transform:translateX(-102%);transition:transform .2s ease;box-shadow:none;width:280px}
+  body.nav-open .ws-sidebar{transform:none;box-shadow:var(--shadow-lg)}
+  body.nav-open::after{content:"";position:fixed;inset:0;z-index:55;background:rgba(5,22,20,.4)}
+  .ws-menu-btn{display:inline-flex;align-items:center;justify-content:center;width:40px;height:40px;flex:none;border:1px solid var(--line-strong);border-radius:10px;background:#fff;color:var(--ink);cursor:pointer}
+  .ws-topbar{padding-left:0}
+  body.workspace>header{padding:10px 16px}
+  .workspace main{padding:0 16px 64px}
+  .ws-intro-art{display:none}
+}
+@media print{
+  body.workspace{padding-left:0}
+  .ws-sidebar,.ws-quick,.density-toggle,.ws-menu-btn,.qf-backdrop{display:none!important}
+  body.workspace>header{position:static;background:#fff}
+}
+@media (prefers-reduced-motion:reduce){
+  .ws-sidebar,.btn,.ws-result{transition:none}
+}
+
+/* ---- Trạm săn (4.19.0) ---- */
+.station-steps{margin:14px 0 8px;padding-left:22px;display:grid;gap:14px;color:var(--text)}
+.station-steps li{line-height:1.55}
+.wake-line{display:inline-block;padding:6px 12px;border:1px solid var(--line-strong);border-radius:var(--radius-sm);background:var(--surface-2);color:var(--ink);font-size:var(--fs-md);font-weight:600;letter-spacing:.02em}
+.station table{margin-top:8px}
