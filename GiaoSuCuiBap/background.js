@@ -29,6 +29,11 @@ import { validateCriteria, safeSavedSearches, matchesAdditionalKeyword, matchesL
 import { safeHunts, validateHunt, huntAlarmName, parseHuntAlarm, MAX_HUNTS_ALLOWED, safeWatches } from './lib/hunts.js';
 import { wakeTimes } from './lib/station.js';
 import { createHistoryRuntime } from './lib/runtime-history.js';
+import { createTelegramRuntime } from './lib/runtime-telegram.js';
+import { createMessageRegistry } from './lib/message-registry.js';
+import { automationHandlers } from './lib/handlers/automation.js';
+import { navigationHandlers } from './lib/handlers/navigation.js';
+import { searchStoreHandlers } from './lib/handlers/search-store.js';
 import { touchLifecycle, inferLifecycleEvent, shouldRemindDeadline, investorWatchHit, schemaHealthOf, findPriorTenderVersion, newTenderChanges, deadlineReminderState } from './lib/lifecycle.js';
 import { normalizeCapability, checklistProgress, emptyChecklist, checklistItemsFor } from './lib/capability.js';
 import { safeHttpsWebhook, safeEmail, safeChatId, channelPayload } from './lib/channels.js';
@@ -58,7 +63,6 @@ import {buildProfile360,PROFILE_COMPLETE_NOTE,PROFILE_PARTIAL_NOTE,PROFILE_USE_N
 import {buildInvestorDiscoveryQuery,buildInvestorProfileQuery,discoverInvestors,summarizeInvestor,INVESTOR_COMPLETE_NOTE,INVESTOR_JOIN_NOTE,INVESTOR_PARTIAL_NOTE,INVESTOR_DISCLAIMER} from './lib/investor.js';
 import {observationsFromBidOpen,observationsFromWinner,mergeObservations,contractorProfile,discountProfile,winThreshold,investorMatrix,competitionStats} from './lib/analytics.js';
 import {BRAND} from './lib/brand.js';
-import {quickFindPackages} from './lib/quick-find-core.js';
 import {DECISION_STATE_LABEL,normalizeDecisionState,statusOf} from './lib/decision.js';
 
 const KEYS={settings:'settings',tenders:'tenders',runs:'runs',template:'searchTemplate',templates:'searchTemplates',lastTemplate:'lastObservedTemplate',activeRun:'activeRun',participations:'participations',winnerLookup:'winnerLookup',winnerCache:'winnerCache',bidOpenScan:'bidOpenScan',planLookup:'planLookup',telegramLog:'telegramLog',observations:'observations',areas:'areas',areaScan:'areaScan',attachments:'attachments',investorScan:'investorScan',endpointMap:'endpointMap',hunts:'hunts',watchedInvestors:'watchedInvestors',deadlineAlerts:'deadlineAlerts',schemaHealth:'schemaHealth',checklists:'checklists',pastContracts:'pastContracts',amendmentLog:'amendmentLog',domRegression:'domRegression',auditLog:'auditLog',domSnapshots:'domSnapshots'};
@@ -369,182 +373,13 @@ async function notifyHighScore(alerts){
     chrome.notifications.create(nid,{type:'basic',iconUrl:'icons/icon128.png',title:t.alertKind==='amendment'?`✏️ Điều chỉnh · ${t.notifyNo}`:`⭐ ${t.score}đ · ${t.notifyNo}`,message:(t.bidName||'').slice(0,150),buttons:[{title:'Mở gói thầu trên e-GP'}]}).catch(()=>{});
   }
 }
-/* ==========================================================================
- *  TELEGRAM — đẩy gói thầu mới về điện thoại
- *
- *  Đã đối chiếu trực tiếp với API Telegram:
- *    • Token sai   -> HTTP 401 {"ok":false,"error_code":401,"description":"Unauthorized"}
- *    • Dấu ":" trong token mã hoá thành %3A vẫn được Telegram chấp nhận.
- *    • Một tin nhắn tối đa 4096 ký tự — vượt quá là lỗi 400, nên phải cắt khúc.
- * ======================================================================== */
-
-const TELEGRAM_LIMIT=3800;          // chừa biên an toàn dưới mức 4096 của Telegram
-const TELEGRAM_LOG_MAX=20;
-
-/** Dịch lỗi Telegram sang tiếng Việt kèm hướng khắc phục. */
-function telegramError(status,description){
-  const d=String(description||'');
-  if(status===401||/unauthorized/i.test(d))
-    return 'Bot Token sai hoặc đã bị thu hồi. Mở @BotFather → /mytoken để lấy lại.';
-  if(/chat not found/i.test(d))
-    return 'Chat ID sai, hoặc bạn chưa bấm Start với bot. Mở Telegram, tìm bot của bạn và bấm START trước.';
-  if(/bot was blocked/i.test(d))
-    return 'Bạn đã chặn bot này trong Telegram. Bỏ chặn rồi thử lại.';
-  if(/too many requests/i.test(d))
-    return 'Telegram đang chặn tạm vì gửi quá nhiều. Chờ vài phút rồi thử lại.';
-  if(/can.t parse entities/i.test(d))
-    return 'Nội dung tin nhắn có ký tự làm Telegram hiểu nhầm định dạng. Đã ghi nhận để sửa.';
-  return d||(status?`Telegram trả lỗi HTTP ${status}.`:'Không gọi được Telegram.');
-}
-
-/** Ghi nhật ký gửi để người dùng biết hệ thống có chạy hay không. */
-async function logTelegram(entry){
-  return withLock(async()=>{
-    const s=await getState();
-    const log=[{at:new Date().toISOString(),...entry},...(s.telegramLog||[])].slice(0,TELEGRAM_LOG_MAX);
-    await save({[KEYS.telegramLog]:log});
-  });
-}
-
-/** Cắt văn bản thành nhiều khúc, không cắt giữa dòng. */
-function chunkForTelegram(text,limit=TELEGRAM_LIMIT){
-  const lines=String(text||'').split('\n');
-  const out=[];let cur='';
-  for(const line of lines){
-    const piece=line.length>limit?line.slice(0,limit):line;
-    if((cur+'\n'+piece).length>limit&&cur){out.push(cur);cur=piece;}
-    else cur=cur?`${cur}\n${piece}`:piece;
-  }
-  if(cur)out.push(cur);
-  return out.length?out:[''];
-}
-
-async function callTelegram(token,method,payload){
-  const res=await fetch(`https://api.telegram.org/bot${encodeURIComponent(String(token||'').trim())}/${method}`,
-    {method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(payload||{})});
-  const data=await res.json().catch(()=>({}));
-  return {httpOk:res.ok,status:res.status,data};
-}
-
-async function sendTelegram(settings,text,opts={}){
-  if(!opts.force&&!settings.telegramEnabled)return {ok:false,message:'Chưa bật gửi Telegram trong Cấu hình.'};
-  const token=String(settings.telegramBotToken||'').trim();
-  const chatId=String(opts.chatId||settings.telegramChatId||'').trim();
-  if(!token||!chatId)return {ok:false,message:'Thiếu Bot Token hoặc Chat ID.'};
-
-  const parts=chunkForTelegram(text);
-  try{
-    for(let i=0;i<parts.length;i++){
-      const {httpOk,status,data}=await callTelegram(token,'sendMessage',{
-        chat_id:chatId,text:parts[i],parse_mode:'HTML',disable_web_page_preview:true
-      });
-      if(!httpOk||data.ok===false){
-        const message=telegramError(status,data.description);
-        await logTelegram({ok:false,message,kind:opts.kind||'send'});
-        return {ok:false,message};
-      }
-      if(i+1<parts.length)await new Promise(r=>setTimeout(r,400));
-    }
-    const message=parts.length>1?`Đã gửi (${parts.length} tin nhắn).`:'Đã gửi.';
-    await logTelegram({ok:true,message,kind:opts.kind||'send'});
-    return {ok:true,message};
-  }catch(e){
-    const message=`Không kết nối được Telegram: ${String(e?.message||e)}`;
-    await logTelegram({ok:false,message,kind:opts.kind||'send'});
-    return {ok:false,message};
-  }
-}
-
-/**
- * Dò Chat ID tự động: đọc các tin nhắn gần đây mà bot nhận được.
- * Người dùng chỉ cần nhắn một câu bất kỳ cho bot rồi bấm nút — đỡ phải đi
- * tìm @userinfobot và chép tay con số.
- */
-async function telegramDetectChatId(token){
-  const t=String(token||'').trim();
-  if(!t)return {ok:false,message:'Nhập Bot Token trước đã.'};
-  try{
-    const me=await callTelegram(t,'getMe',{});
-    if(!me.httpOk||me.data.ok===false)return {ok:false,message:telegramError(me.status,me.data.description)};
-    const botName=me.data.result&&me.data.result.username?`@${me.data.result.username}`:'bot của bạn';
-
-    const upd=await callTelegram(t,'getUpdates',{limit:50});
-    if(!upd.httpOk||upd.data.ok===false)return {ok:false,message:telegramError(upd.status,upd.data.description)};
-
-    const seen=new Map();
-    for(const u of (upd.data.result||[])){
-      const msg=u.message||u.channel_post||u.edited_message;
-      const chat=msg&&msg.chat;
-      if(!chat||seen.has(String(chat.id)))continue;
-      seen.set(String(chat.id),{
-        id:String(chat.id),
-        name:[chat.title,chat.first_name,chat.last_name].filter(Boolean).join(' ')||chat.username||'(không tên)',
-        type:chat.type
-      });
-    }
-    const chats=[...seen.values()];
-    if(!chats.length){
-      return {ok:false,botName,
-        message:`Chưa thấy tin nhắn nào. Mở Telegram, tìm ${botName}, bấm START và nhắn một câu bất kỳ, rồi bấm lại nút này.`};
-    }
-    return {ok:true,botName,chats};
-  }catch(e){
-    return {ok:false,message:`Không kết nối được Telegram: ${String(e?.message||e)}`};
-  }
-}
-
-/** Một dòng mô tả gói thầu trong tin nhắn Telegram. */
-function telegramTenderLine(t){
-  const code=t.displayCode||t.notifyNo||t.bidNo||'';
-  const label=t.codeLabel||'Mã TBMT';
-  const status=t.statusLabel?` · ${t.statusLabel}`:'';
-  const days=(t.status==='OPEN'&&Number.isFinite(t.daysLeft))?` (còn ${t.daysLeft} ngày)`:'';
-  const url=t.detailUrl||t.sourcePageUrl||'';
-  const name=escapeHtml(t.bidName||code);
-  return `• <b>${t.score}đ</b> — ${url?`<a href="${escapeHtml(url)}">${name}</a>`:name}\n`
-    +`  ${escapeHtml(label)}: ${escapeHtml(code)}${status}${days}\n`
-    +`  💰 ${escapeHtml(formatMoney(t.price))} · 📍 ${escapeHtml(t.location||'Chưa rõ địa điểm')}`
-    +(t.investorName?`\n  🏛 ${escapeHtml(t.investorName)}`:'');
-}
-
-async function dispatchOutbound(settings,text,opts={}){
-  // External webhook delivery is not enabled in this release: arbitrary hosts
-  // need separate permission and a verified receiving service. Keep the
-  // existing user-configured Telegram channel; JSON signing stays local.
-  if((await getState()).settings.readOnlyMode)return {ok:false,message:'Đang khóa chỉnh sửa và tự động hóa.'};
-  return sendTelegram(settings,text,opts);
-}
-
-async function pushTelegramMatches(settings,matches,run){
-  if(!settings.telegramEnabled||settings.readOnlyMode)return;
-  const list=matches||[];
-  const partial=run?.status==='PARTIAL'||Boolean(run?.partial);
-  const scopeNote=partial?'\n⚠️ <b>DỮ LIỆU CHƯA ĐẦY ĐỦ</b>: lượt quét bị giới hạn hoặc gián đoạn.':' ';
-
-  // Không có gói mới: chỉ nhắn khi người dùng bật "báo cả khi không có gì mới",
-  // để biết hệ thống vẫn sống chứ không phải đã chết âm thầm.
-  const hunt=(run?.huntId?((await getState()).hunts||[]).find(h=>h.id===run.huntId):null);
-  if(hunt&&!hunt.telegram)return;
-  const chatId=safeChatId(hunt?.telegramChatId);
-  if(!list.length){
-    if(!settings.telegramDailySummary)return;
-    await dispatchOutbound(settings,
-      `📡 <b>Giáo Sư Cùi Bắp</b> — ${new Date().toLocaleString('vi-VN')}\n`
-      +`${partial?'Đã quét một phần':'Đã quét xong'}, <b>không có gói mới</b> đạt ngưỡng.${scopeNote}\n`
-      +`Tổng cộng đã nhận ${Number(run?.captured||0)} bản ghi từ e-GP.`,
-      {kind:'summary',chatId});
-    return;
-  }
-
-  const amended=list.filter(t=>t.alertKind==='amendment').length;
-  const head=`📡 <b>Giáo Sư Cùi Bắp</b>: ${list.length} gói mới đạt ngưỡng`
-    +(amended?` · ${amended} gói theo dõi vừa điều chỉnh/gia hạn`:'')
-    +`\n<i>${new Date().toLocaleString('vi-VN')}</i>${scopeNote}`;
-  const body=[...list].sort((a,b)=>Number(b.score||0)-Number(a.score||0))
-    .slice(0,25).map(t=> (t.alertKind==='amendment'?'✏️ <b>Điều chỉnh / gia hạn</b>\n':'')+telegramTenderLine(t)).join('\n\n');
-  const tail=list.length>25?`\n\n… và ${list.length-25} gói nữa, xem trong tiện ích.`:'';
-  await dispatchOutbound(settings,`${head}\n\n${body}${tail}`,{kind:'matches',chatId});
-}
+/* TELEGRAM — đã tách sang lib/runtime-telegram.js (4.19.0). Các hàm dưới đây chỉ
+   chuyển tiếp để mọi chỗ gọi cũ giữ nguyên. */
+const telegramRuntime=createTelegramRuntime({getState:(...a)=>getState(...a),save:(...a)=>save(...a),withLock:(...a)=>withLock(...a),KEYS});
+async function sendTelegram(...a){return telegramRuntime.sendTelegram(...a);}
+async function telegramDetectChatId(...a){return telegramRuntime.telegramDetectChatId(...a);}
+async function dispatchOutbound(...a){return telegramRuntime.dispatchOutbound(...a);}
+async function pushTelegramMatches(...a){return telegramRuntime.pushTelegramMatches(...a);}
 
 function makeTemplateId(){return 't'+Date.now().toString(36)+Math.random().toString(36).slice(2,6);}
 function templateName(tpl){try{const u=new URL(tpl.sourcePageUrl||tpl.url);const seg=u.pathname.split('/').filter(Boolean).pop()||'e-GP';return `${seg} · ${new Date(tpl.capturedAt||Date.now()).toLocaleDateString('vi-VN')}`;}catch{return 'Bộ lọc '+new Date().toLocaleDateString('vi-VN');}}
@@ -3820,6 +3655,13 @@ const historyRuntime=createHistoryRuntime({storage:chrome.storage.local,alarms:c
   readJobs:async()=>{const s=await getState();return {bidOpenScan:await getBidScan(),activeJob:activeListJob(await readQueryControlState(chrome.storage.local))||(bbmtWaiter?{kind:'bbmt'}:null),
     canaryNextRunAt:s.liveCanary?.nextRunAt||null,hunts:s.hunts,readOnly:Boolean(s.settings.readOnlyMode),schemaRed:schemaIsRed(s)};},
   startScan:payload=>startBidOpenScan(payload),readObservations:async()=>(await getState()).observations||[]});
+/* SỔ ĐĂNG KÝ LỆNH (4.19.0): các mảng đã tách khỏi khối switch bên dưới. */
+const messageRegistry=createMessageRegistry()
+  .register('tu-dong-hoa',automationHandlers({getState:(...a)=>getState(...a),save:(...a)=>save(...a),withLock:(...a)=>withLock(...a),KEYS,validateHunt,maxHunts:MAX_HUNTS_ALLOWED,
+    ensureHuntAlarms:(...a)=>ensureHuntAlarms(...a),runHuntById:(...a)=>runHuntById(...a),huntRuntime,liveCanaryRuntime,historyRuntime,wakeTimes,schemaIsRed,
+    canaryBlocked:async()=>Boolean(activeListJob(await readQueryControlState(chrome.storage.local))||bbmtWaiter),safeWatches}))
+  .register('dieu-huong',navigationHandlers({tabs:chrome.tabs,runtime:chrome.runtime,getState:(...a)=>getState(...a),isEgpUrl,defaultEgpUrl:EGP_DEFAULT_URL}))
+  .register('tra-cuu-kho',searchStoreHandlers({getState:(...a)=>getState(...a),save:(...a)=>save(...a),withLock:(...a)=>withLock(...a),appStorage,searchStateRuntime,KEYS,SAVED_SEARCHES,safeSavedSearches,isEgpUrl}));
 const exportRuntime=createExportRuntime({readSearchState:(...args)=>searchStateRuntime.read(...args),getState:(...args)=>getState(...args),downloadData:(...args)=>downloadData(...args),downloadXlsx:(...args)=>downloadXlsx(...args),mobileHtml:(...args)=>mobileHtml(...args),getContractorProfile:(...args)=>getContractorProfile(...args),priceRow:(...args)=>priceRow(...args),sanitizedTemplateState:(...args)=>sanitizedTemplateState(...args),stamp,numOrNull,chrome});
 
 void liveCanaryRuntime.hydrate().catch(()=>{});
@@ -3916,102 +3758,11 @@ chrome.runtime.onMessage.addListener((message,sender,sendResponse)=>{
       const unlock=type==='UPDATE_SETTINGS'&&senderIsOptions(sender)&&message.payload?.readOnlyMode===false;
       if(!unlock){sendResponse({ok:false,message:'Đang khóa chỉnh sửa và tự động hóa. Mở Cấu hình để tắt chế độ chỉ xem.'});return;}
     }
+    // 4.19.0: lệnh đã tách sang mô-đun theo mảng (lib/handlers/*) đi qua sổ đăng ký;
+    // phần kiểm tra nguồn gửi và chế độ khoá ở trên vẫn áp dụng cho mọi lệnh.
+    const routed=await messageRegistry.dispatch(message,sender);
+    if(routed.handled){sendResponse(routed.response);return;}
     switch(message.type){
-      case 'CANARY_STATUS': sendResponse(await liveCanaryRuntime.status());break;
-      case 'CANARY_CONFIG': sendResponse(await liveCanaryRuntime.configure(message.payload||{}));break;
-      case 'CANARY_RUN': {
-        if(activeListJob(await readQueryControlState(chrome.storage.local))||bbmtWaiter){sendResponse({ok:false,message:'Hãy chờ lượt tra cứu đang chạy hoàn tất trước khi kiểm tra cấu trúc.'});break;}
-        sendResponse(await liveCanaryRuntime.run({trigger:'manual',wait:message.payload?.wait===true}));break;
-      }
-      case 'SAVE_NAMED_SEARCH': {
-        const p=message.payload||{};
-        const item=safeSavedSearches([{id:p.id||crypto.randomUUID(),name:p.name,criteria:p.criteria}])[0];
-        if(!item)throw new Error('Tên hoặc tiêu chí tìm kiếm không hợp lệ.');
-        const rows=await withLock(async()=>{
-          const s=await getState();
-          const rest=s.savedSearches.filter(x=>x.id!==item.id);
-          if(rest.length>=30)throw new Error('Đã lưu 30 bộ tìm kiếm. Hãy xóa một bộ trước.');
-          const rows=[item,...rest];await save({[SAVED_SEARCHES]:rows});return rows;
-        });
-        sendResponse({ok:true,savedSearches:rows});break;
-      }
-      case 'DELETE_NAMED_SEARCH': {
-        const rows=await withLock(async()=>{const s=await getState();const rows=s.savedSearches.filter(x=>x.id!==message.payload?.id);await save({[SAVED_SEARCHES]:rows});return rows;});
-        sendResponse({ok:true,savedSearches:rows});break;
-      }
-      case 'SAVE_HUNT': {
-        const parsed=validateHunt(message.payload||{});
-        if(!parsed.ok){sendResponse(parsed);break;}
-        const rows=await withLock(async()=>{
-          const s=await getState();
-          const hunt={...parsed.hunt,id:parsed.hunt.id||crypto.randomUUID()};
-          /* Trạng thái quét nhanh chỉ còn giá trị khi TIÊU CHÍ giữ nguyên: đổi tiêu
-             chí là đổi tập gói, mốc và bằng chứng cũ không áp dụng được nữa. */
-          const old=(s.hunts||[]).find(x=>x.id===hunt.id);
-          const sameCriteria=old&&JSON.stringify(old.criteria)===JSON.stringify(hunt.criteria)&&old.kind===hunt.kind;
-          hunt.deltaState=sameCriteria&&!message.payload?.resetDelta?old.deltaState:validateHunt({...hunt,deltaState:null}).hunt.deltaState;
-          if(old){for(const k of ['lastRunAt','lastStatus','lastCompletedJobId','lastMessage','createdAt','activeSince','lastCatchup'])if(!hunt[k])hunt[k]=old[k];}
-          /* Trạm săn (4.19.0): mốc "bắt đầu có hiệu lực" — tạo mới, bật lại hoặc đổi giờ
-             thì tính từ bây giờ, để lượt chạy bù không chạy cho giờ chưa từng được hẹn. */
-          const nowIso=new Date().toISOString();
-          if(!old)hunt.createdAt=nowIso;
-          if(!old||(!old.enabled&&hunt.enabled)||(old.times||[]).join(',')!==(hunt.times||[]).join(','))hunt.activeSince=nowIso;
-          const rest=(s.hunts||[]).filter(x=>x.id!==hunt.id);
-          if(rest.length>=MAX_HUNTS_ALLOWED)throw new Error(`Đã đủ ${MAX_HUNTS_ALLOWED} bộ săn. Hãy xóa một bộ trước.`);
-          const hunts=[hunt,...rest];
-          await save({[KEYS.hunts]:hunts});
-          await ensureHuntAlarms(hunts);
-          return hunts;
-        });
-        sendResponse({ok:true,hunts:rows});break;
-      }
-      case 'DELETE_HUNT': {
-        const rows=await withLock(async()=>{
-          const s=await getState();
-          const hunts=(s.hunts||[]).filter(x=>x.id!==message.payload?.id);
-          await save({[KEYS.hunts]:hunts});
-          await ensureHuntAlarms(hunts);
-          return hunts;
-        });
-        sendResponse({ok:true,hunts:rows});break;
-      }
-      case 'RUN_HUNT': sendResponse(await runHuntById(message.payload?.id,{forceFull:message.payload?.full===true}));break;
-      case 'EGP_HEALTH': {
-        // Chỉ đọc: tiện ích có đang tự dừng vì e-GP đổi cấu trúc, bộ săn nào đang lỗi.
-        const s=await getState();
-        const canary=(await liveCanaryRuntime.status().catch(()=>null))?.liveCanary||null;
-        const failingHunts=(s.hunts||[]).filter(h=>h.enabled&&['ERROR','TIMEOUT'].includes(h.lastStatus)).slice(0,5).map(h=>({name:h.name,status:h.lastStatus,at:h.lastRunAt||''}));
-        sendResponse({ok:true,red:schemaIsRed(s),canaryStatus:canary?.status||'UNKNOWN',canaryReason:String(canary?.reason||'').slice(0,200),checkedAt:canary?.checkedAt||null,failingHunts});
-        break;
-      }
-      case 'HISTORY_STATUS': sendResponse(await historyRuntime.status());break;
-      case 'HISTORY_CONFIGURE': sendResponse(await historyRuntime.configure(message.payload||{},{watchedInvestors:(await getState()).watchedInvestors}));break;
-      case 'HISTORY_PAUSE': sendResponse(await historyRuntime.setPaused(message.payload?.paused!==false));break;
-      case 'HISTORY_CLEAR': sendResponse(await historyRuntime.clear());break;
-      case 'HISTORY_TICK': {await historyRuntime.tick();sendResponse(await historyRuntime.status());break;}
-      case 'STATION_STATUS': {
-        const s=await getState();
-        sendResponse({ok:true,station:await huntRuntime.stationStatus(),huntTimes:wakeTimes(s.hunts,0),wakeTimes:wakeTimes(s.hunts,3),readOnly:Boolean(s.settings.readOnlyMode)});
-        break;
-      }
-      case 'SAVE_WATCH': {
-        const rows=await withLock(async()=>{
-          const s=await getState();
-          const next=safeWatches([{id:message.payload?.id||crypto.randomUUID(),name:message.payload?.name,taxCode:message.payload?.taxCode,createdAt:new Date().toISOString()},...s.watchedInvestors]);
-          await save({[KEYS.watchedInvestors]:next});
-          return next;
-        });
-        sendResponse({ok:true,watchedInvestors:rows});break;
-      }
-      case 'DELETE_WATCH': {
-        const rows=await withLock(async()=>{
-          const s=await getState();
-          const next=(s.watchedInvestors||[]).filter(x=>x.id!==message.payload?.id);
-          await save({[KEYS.watchedInvestors]:next});
-          return next;
-        });
-        sendResponse({ok:true,watchedInvestors:rows});break;
-      }
       case 'SAVE_CHECKLIST': {
         const key=String(message.payload?.key||'').slice(0,220);
         if(!key){sendResponse({ok:false,message:'Thiếu mã gói.'});break;}
@@ -4137,18 +3888,6 @@ chrome.runtime.onMessage.addListener((message,sender,sendResponse)=>{
       case 'FILTER_AUDIT': {
         const s=await getState();
         sendResponse({ok:true,rows:filterAuditLog(s.auditLog||[],message.payload||{})});break;
-      }
-      case 'GET_SEARCH_STATE': {sendResponse(await searchStateRuntime.read(message.payload||{}));break;}
-      /* Tìm nhanh (Ctrl K): chỉ đọc kho trên máy, trả tối đa 8 gói với vài trường
-         cần hiện — không gửi gì ra ngoài. Không có trong CONTENT_MESSAGE_TYPES nên
-         trang e-GP không gọi được. */
-      case 'QUICK_FIND': {
-        const {tenders=[]}=await appStorage.get({[KEYS.tenders]:[]});
-        const found=quickFindPackages(tenders,String(message.payload?.q??'').slice(0,200));
-        const pick=t=>({key:t.key,notifyNo:t.notifyNo||'',bidNo:t.bidNo||'',displayCode:t.displayCode||'',bidName:t.bidName||'',
-          investorName:t.investorName||'',location:t.location||'',price:t.price??null,closeDate:t.closeDate||'',detailUrl:isEgpUrl(t.detailUrl)?t.detailUrl:''});
-        sendResponse({ok:true,query:found.query,exact:found.exact.map(pick),hits:found.hits.map(pick),total:found.total});
-        break;
       }
       case 'COMPARE_SEARCH_RUNS': {
         const p=message.payload||{};
@@ -4312,9 +4051,6 @@ chrome.runtime.onMessage.addListener((message,sender,sendResponse)=>{
           message:`Đã nhập ${clean.tenders.length} gói. Telegram và lịch tự động đang tắt để bảo đảm an toàn.`});
         break;
       }
-      case 'OPEN_DASHBOARD': await chrome.tabs.create({url:chrome.runtime.getURL('dashboard.html')});sendResponse({ok:true});break;
-      case 'OPEN_CONTRACTORS': await chrome.tabs.create({url:chrome.runtime.getURL('contractors.html')});sendResponse({ok:true});break;
-      case 'OPEN_WINNERS': await chrome.tabs.create({url:chrome.runtime.getURL('winners.html')});sendResponse({ok:true});break;
       case 'WINNER_LOOKUP': sendResponse(await startWinnerLookup(message.payload||{}));break;
       // Cả hai tính năng dùng chung bộ máy phân trang trên tab e-GP; tách theo mode.
       case 'KQLCNT_RESULTS': {
@@ -4335,24 +4071,18 @@ chrome.runtime.onMessage.addListener((message,sender,sendResponse)=>{
       case 'FETCH_AND_DOWNLOAD': sendResponse(await fetchAndDownloadAttachments(message.payload||{}));break;
       case 'CONTRACTOR_PROFILE': sendResponse(await getContractorProfile(message.payload||{}));break;
       case 'EXPORT_PROFILE_XLSX': await exportProfileXlsx(message.payload||{});sendResponse({ok:true});break;
-      case 'OPEN_PROFILE': await chrome.tabs.create({url:chrome.runtime.getURL('profile.html')});sendResponse({ok:true});break;
       case 'INVESTOR_SCAN': sendResponse(await startInvestorScan(message.payload||{}));break;
       case 'CANCEL_INVESTOR_SCAN': sendResponse(await cancelLookups('investorScan'));break;
       case 'EXPORT_INVESTOR_XLSX': await exportInvestorXlsx();sendResponse({ok:true});break;
-      case 'OPEN_INVESTOR': await chrome.tabs.create({url:chrome.runtime.getURL('investor.html')});sendResponse({ok:true});break;
       case 'CANCEL_ALL_LOOKUPS': sendResponse(await cancelLookups(null));break;
       case 'RECONCILE_LOOKUPS': sendResponse(await reconcileStaleLookups());break;
       case 'EXPORT_AREA_XLSX': await exportAreaXlsx();sendResponse({ok:true});break;
-      case 'OPEN_AREA': await chrome.tabs.create({url:chrome.runtime.getURL('market.html')});sendResponse({ok:true});break;
       case 'TBMT_SEARCH': sendResponse(await startTbmtSearch(message.payload||{}));break;
       case 'CANCEL_ACTIVE_RUN': sendResponse(await cancelActiveRun(message.payload?.runId||null));break;
-      case 'OPEN_SEARCH': await chrome.tabs.create({url:chrome.runtime.getURL('search.html')});sendResponse({ok:true});break;
       case 'GET_PLAN_STATE': sendResponse(await planStateReply(message.payload||{}));break;
       case 'CANCEL_PLAN_LOOKUP': sendResponse(await cancelLookups('planLookup'));break;
       case 'CLEAR_PLAN_LOOKUP': await save({[KEYS.planLookup]:null});sendResponse({ok:true});break;
       case 'EXPORT_PLANS_CSV': await exportPlansCsv(message.payload||{});sendResponse({ok:true});break;
-      case 'OPEN_PLANS': await chrome.tabs.create({url:chrome.runtime.getURL('plans.html')});sendResponse({ok:true});break;
-      case 'OPEN_IPHONE': await chrome.tabs.create({url:chrome.runtime.getURL('mobile/iphone.html')});sendResponse({ok:true});break;
       case 'EGP_ENDPOINT_SEEN': sendResponse(await recordEndpointSeen(message.payload||{}));break;
       case 'CLEAR_ENDPOINT_MAP': await save({[KEYS.endpointMap]:[]});sendResponse({ok:true});break;
       case 'BBMT_BIDDERS': sendResponse(await onBbmtBidders(message.payload||{},sender.tab?.id));break;
@@ -4361,13 +4091,11 @@ chrome.runtime.onMessage.addListener((message,sender,sendResponse)=>{
       case 'BID_OPEN_SCAN': sendResponse(await startBidOpenScan(message.payload||{}));break;
       case 'CANCEL_BID_OPEN_SCAN': sendResponse(await cancelLookups('bidOpenScan'));break;
       case 'GET_ANALYTICS': await flushObservations();sendResponse(await getAnalytics(message.payload||{}));break;
-      case 'OPEN_ANALYTICS': await chrome.tabs.create({url:chrome.runtime.getURL('analytics.html')});sendResponse({ok:true});break;
       case 'CLEAR_OBSERVATIONS': obsQueue=[];await save({[KEYS.observations]:[]});sendResponse({ok:true});break;
       case 'GET_BID_OPEN_STATE': sendResponse({ok:true,scan:await getBidScan()});break;
       case 'RETRY_BID_OPEN': sendResponse(await retryBidOpen(message.payload||{}));break;
       case 'CLEAR_BID_OPEN_SCAN': await save({[KEYS.bidOpenScan]:null});sendResponse({ok:true});break;
       case 'EXPORT_BID_OPEN_CSV': await exportBidOpenCsv(message.payload||{});sendResponse({ok:true});break;
-      case 'OPEN_BID_OPEN': await chrome.tabs.create({url:chrome.runtime.getURL('bidopen.html')});sendResponse({ok:true});break;
       case 'KQLCNT_DONE': sendResponse(await routeKqlcntDone(message.payload||{},sender));break;
       case 'KHLCNT_DETAIL': sendResponse(planDetailReader.accept(message.payload||{},sender.tab?.id,sender.url||sender.tab?.url||''));break;
       case 'CONTENT_READY': sendResponse(await onBbmtContentReady(message.payload||{},sender.tab?.id));break;
@@ -4376,13 +4104,11 @@ chrome.runtime.onMessage.addListener((message,sender,sendResponse)=>{
       case 'CLEAR_WINNER_LOOKUP': await save({[KEYS.winnerLookup]:null});sendResponse({ok:true});break;
       case 'CLEAR_WINNER_CACHE': await save({[KEYS.winnerCache]:{}});sendResponse({ok:true});break;
       case 'EXPORT_WINNERS_CSV': await exportWinnersCsv();sendResponse({ok:true});break;
-      case 'OPEN_OPTIONS': await chrome.runtime.openOptionsPage();sendResponse({ok:true});break;
       case 'RUN_TRACE_SUMMARY': {const {runTrace=[]}=await chrome.storage.local.get({runTrace:[]});
         sendResponse({ok:true,summary:summarizeTrace(runTrace),last7d:summarizeTrace(runTrace,{sinceMs:7*864e5}),recent:runTrace.slice(-30).reverse(),modes:MODE_LABELS,stages:STAGES});break;}
       case 'CLEAR_RUN_TRACE': await chrome.storage.local.set({runTrace:[]});sendResponse({ok:true});break;
       case 'MORNING_BULLETIN_SEND': sendResponse(await maybeSendBulletin({force:true}));break;
       case 'EGP_PREWARM': sendResponse(await queryRuntime.prewarm());break;
-      case 'OPEN_EGP': {const s=await getState();await chrome.tabs.create({url:s.template?.sourcePageUrl||EGP_DEFAULT_URL});sendResponse({ok:true});break;}
       case 'SCAN_CURRENT_TAB': {const [tab]=await chrome.tabs.query({active:true,currentWindow:true});if(!isEgpUrl(tab?.url))throw new Error('Tab hiện tại không phải e-GP.');sendResponse(await sendToTab(tab.id,{type:'SCAN_CURRENT_PAGE'}));break;}
       default: sendResponse({ok:false,message:'Lệnh không được hỗ trợ.'});
     }

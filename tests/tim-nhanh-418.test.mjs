@@ -65,9 +65,12 @@ test('trang chức năng khớp tên (không dấu); lệnh tra e-GP đúng đí
 
 test('nền: QUICK_FIND chỉ đọc kho, trả vài trường; trang e-GP (content script) không gọi được', () => {
   const bg = read('background.js');
-  const a = bg.indexOf("case 'QUICK_FIND'");
+  // 4.19.0: lệnh nằm ở mô-đun tra cứu kho, đi qua sổ đăng ký lệnh.
+  const mod = read('lib/handlers/search-store.js');
+  assert.match(bg, /\.register\('tra-cuu-kho',searchStoreHandlers\(/);
+  const a = mod.indexOf('QUICK_FIND: async (p) =>');
   assert.ok(a > 0);
-  const block = bg.slice(a, bg.indexOf('break;', a));
+  const block = mod.slice(a, mod.indexOf('\n    },', a));
   assert.match(block, /appStorage\.get\(\{\[KEYS\.tenders\]:\[\]\}\)/);
   assert.match(block, /detailUrl:isEgpUrl\(t\.detailUrl\)\?t\.detailUrl:''/, 'chỉ trả liên kết e-GP chính thức');
   assert.doesNotMatch(block, /chrome\.tabs|fetch\(|sendMessage/, 'không mở tab, không gọi mạng');

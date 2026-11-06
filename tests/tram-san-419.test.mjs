@@ -197,12 +197,15 @@ test('nền: nhịp tim khi Chrome khởi động và mỗi 30 phút; trạng th
   const startup = bg.slice(bg.indexOf('chrome.runtime.onStartup.addListener'), bg.indexOf('chrome.alarms.onAlarm.addListener'));
   assert.match(startup, /huntRuntime\.heartbeat\(\{startup:true\}\)/);
   assert.match(bg, /alarm\.name===DEADLINE_ALARM\)\{await huntRuntime\.heartbeat\(\)/);
-  assert.match(bg, /case 'STATION_STATUS'/);
+  // 4.19.0: lệnh trạm săn nằm ở lib/handlers/automation.js, đi qua sổ đăng ký.
+  const handlers = read('GiaoSuCuiBap/lib/handlers/automation.js');
+  assert.match(handlers, /STATION_STATUS: async \(\) =>/);
+  assert.match(bg, /\.register\('tu-dong-hoa',automationHandlers\(/);
   const set = bg.slice(bg.indexOf('const CONTENT_MESSAGE_TYPES=new Set(['), bg.indexOf(']);', bg.indexOf('const CONTENT_MESSAGE_TYPES')));
   assert.doesNotMatch(set, /STATION_STATUS/);
   // Mốc hiệu lực: tạo mới, bật lại hoặc đổi giờ.
-  assert.match(bg, /if\(!old\)hunt\.createdAt=nowIso;/);
-  assert.match(bg, /if\(!old\|\|\(!old\.enabled&&hunt\.enabled\)\|\|\(old\.times\|\|\[\]\)\.join\(','\)!==\(hunt\.times\|\|\[\]\)\.join\(','\)\)hunt\.activeSince=nowIso;/);
+  assert.match(handlers, /if \(!old\) hunt\.createdAt = nowIso;/);
+  assert.match(handlers, /if \(!old \|\| \(!old\.enabled && hunt\.enabled\) \|\| \(old\.times \|\| \[\]\)\.join\(','\) !== \(hunt\.times \|\| \[\]\)\.join\(','\)\) hunt\.activeSince = nowIso;/);
 });
 
 test('quyền chạy nền là TUỲ CHỌN — người dùng tự bật ở trang Bộ săn; trang không còn hứa sai', () => {

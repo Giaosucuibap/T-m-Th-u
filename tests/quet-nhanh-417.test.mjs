@@ -131,7 +131,9 @@ test('nối dây: mọi truy vấn của lượt nhanh đều có sàn ngày; l�
   const bg=fs.readFileSync(new URL('../GiaoSuCuiBap/background.js',import.meta.url),'utf8').replace(/\r\n/g,'\n');
   assert.match(bg,/query:deltaQuery\(run,nativeTbmtQueryFromTemplate\(template\)\)/,'truy vấn thứ 2+ của lượt');
   assert.match(bg,/query:deltaQuery\(run,buildTbmtQuery\(queue\[0\]\.criteria\)\)/,'truy vấn đầu');
-  assert.match(bg,/hunt\.deltaState=sameCriteria&&!message\.payload\?\.resetDelta\?old\.deltaState:/);
+  // 4.19.0: SAVE_HUNT đã chuyển sang lib/handlers/automation.js (sổ đăng ký lệnh).
+  const handlers=fs.readFileSync(new URL('../GiaoSuCuiBap/lib/handlers/automation.js',import.meta.url),'utf8').replace(/\r\n/g,'\n');
+  assert.match(handlers,/hunt\.deltaState = sameCriteria && !p\?\.resetDelta \? old\.deltaState :/);
   const rt=fs.readFileSync(new URL('../GiaoSuCuiBap/lib/runtime-hunt.js',import.meta.url),'utf8').replace(/\r\n/g,'\n');
   assert.match(rt,/if\(result\?\.followUpFull\)setTimeout\(\(\)=>\{void runHuntById\(job\.huntId,\{forceFull:true\}\)/);
   assert.match(rt,/if\(!duplicate&&hunt\.kind==='tbmt'&&hunt\.delta&&job\.huntPlan\)/,'đánh giá đúng một lần mỗi lượt');

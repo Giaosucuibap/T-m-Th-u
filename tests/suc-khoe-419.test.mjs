@@ -66,9 +66,10 @@ test('dải cảnh báo: đỏ khi tiện ích đã tự dừng vì e-GP đổi 
 
 test('nền: EGP_HEALTH chỉ đọc, không mở cho content script', () => {
   const bg = read('background.js');
-  const a = bg.indexOf("case 'EGP_HEALTH'");
+  const h = read('lib/handlers/automation.js');
+  const a = h.indexOf('EGP_HEALTH: async () =>');
   assert.ok(a > 0);
-  const block = bg.slice(a, bg.indexOf('break;', a));
+  const block = h.slice(a, h.indexOf('\n    },', a));
   assert.doesNotMatch(block, /save\(|chrome\.tabs|fetch\(|sendTelegram/);
   const set = bg.slice(bg.indexOf('const CONTENT_MESSAGE_TYPES=new Set(['), bg.indexOf(']);', bg.indexOf('const CONTENT_MESSAGE_TYPES')));
   assert.doesNotMatch(set, /EGP_HEALTH/);
