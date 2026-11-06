@@ -243,9 +243,11 @@ function render(){
   $('stop').disabled=!running;
   if(STATE.activeRun&&!running&&!starting){alertMessage('Một lượt quét khác đang chạy. Có thể xem kết quả đã lưu; chờ lượt hiện tại hoàn tất trước khi tìm mới.');}
   else if($('alert').textContent.startsWith('Một lượt quét khác'))alertMessage('');
-  renderScope(run,all);
+  // Danh sách tạm (lượt trước / kho) không thuộc lượt đang chạy: không dùng nó để mô tả
+  // phạm vi hay chất lượng dữ liệu của lượt này.
+  renderScope(run,stale?[]:all);
   const quality=summarizeTenderFields(all);
-  $('run-field-quality').classList.toggle('hidden',!all.length);
+  $('run-field-quality').classList.toggle('hidden',stale||!all.length);
   $('run-field-quality').textContent=`${quality.missingOfficial}/${quality.total} gói chưa có trường lĩnh vực gốc investField (${quality.missingOfficialPercent.toLocaleString('vi-VN',{maximumFractionDigits:1})}%). ${quality.invalidOfficial} giá trị nguồn chưa nhận diện; ${quality.unclassified} gói chưa phân loại. Tính trên dữ liệu của lượt đã nhận, không đoán theo tên.`;
   const valid=new Set(all.map(t=>t.key));selected=new Set([...selected].filter(k=>valid.has(k)));
   show('summary',Boolean(run));show('results-section',all.length>0);show('empty-state',!all.length);

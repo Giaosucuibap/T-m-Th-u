@@ -92,6 +92,9 @@ test('kết quả tức thì: danh sách tạm không bao giờ được xuất 
   assert.match(src, /Kết quả tức thì từ kho trên máy: \$\{n\.toLocaleString\('vi-VN'\)\} gói khớp tiêu chí\.<\/b> Đây là dữ liệu đã lưu từ các lượt trước — có thể đã cũ/);
   // Chỉ hiện khi lượt mới CHƯA có trang nào, và chỉ khi không có lượt trước cùng tiêu chí.
   assert.match(src, /const showingStore=!showingOld&&running&&!view\.all\.length&&instant\.forRun===runId&&instant\.keys\.length>0&&Boolean\(run\?\.criteria\);/);
+  // Phạm vi và chất lượng dữ liệu mô tả LƯỢT ĐANG CHẠY, không mô tả danh sách tạm.
+  assert.match(src, /renderScope\(run,stale\?\[\]:all\);/);
+  assert.match(src, /\$\('run-field-quality'\)\.classList\.toggle\('hidden',stale\|\|!all\.length\);/);
   // Mở từ Tìm nhanh: chỉ nhận đúng dạng mã, không nhận chuỗi tùy ý trên địa chỉ trang.
   assert.match(src, /\/\^\(\?:IB\|PL\)\\d\{8,12\}\(\?:-\\d\{1,2\}\)\?\$\/i\.test\(code\)/);
 });
