@@ -357,7 +357,7 @@ $('stop').addEventListener('click', async () => {
   await send('CANCEL_INVESTOR_SCAN');
   await refresh();
   $('stop').disabled = false;
-  $('stop').textContent = '⏹ Dừng';
+  $('stop').textContent = 'Dừng';
 });
 $('xlsx').addEventListener('click', async () => {
   const res = await send('EXPORT_INVESTOR_XLSX', {});

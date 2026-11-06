@@ -15,6 +15,14 @@ const esc = x => String(x ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt
 const show = (el, on) => el.classList.toggle('hidden', !on);
 let SCAN=null, POLL=null, loading=false, refreshAgain=false, starting=false, listHtml='',formRestored=false;
 const running = () => ['LISTING','SCANNING','RUNNING'].includes(SCAN?.status);
+/* Lượt đã lưu có thể mang số gói tối đa không nằm trong danh sách chọn (bản cũ,
+   bộ săn, hay lượt đọc lại). Trước đây ô chọn khi đó hiện TRỐNG, và lượt quét
+   sau âm thầm dùng 150 — khác điều người dùng thấy. Nay thêm đúng giá trị đó. */
+function setMaxPackages(value){
+  const n=Math.max(1,Math.min(Number(value)||150,600)),v=String(n),sel=$('maxPackages');
+  if(![...sel.options].some(o=>o.value===v))sel.add(new Option(`${n} gói`,v));
+  sel.value=v;
+}
 function alertBox(text, error=false) {
   $('alert').textContent=text; $('alert').className='notice'+(error?' error':''); show($('alert'),Boolean(text));
 }
@@ -56,7 +64,7 @@ async function refresh(){
     if(!formRestored){
       formRestored=true;const c=SCAN.scope||{};
       for(const key of ['field','province','investor','keyword','minPrice','maxPrice'])$(key).value=c[key]||'';
-      $('q').value=SCAN.contractorQuery||'';$('maxPackages').value=String(SCAN.maxPackages||150);
+      $('q').value=SCAN.contractorQuery||'';setMaxPackages(SCAN.maxPackages);
       $('days').value=c.fromDate||c.toDate?'custom':String(c.days||30);
       $('fromDate').value=c.fromDate||'';$('toDate').value=c.toDate||'';syncDateRange();
     }

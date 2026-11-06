@@ -58,6 +58,19 @@ const runComparison=createRunComparison({send,getRuns:()=>STATE.runs||[],getRunI
    và làm mốc gắn nhãn Mới/Đổi khi lượt mới xong. Mọi thứ gắn với ĐÚNG runId —
    đổi lượt đang xem là bỏ hết, không bao giờ trộn hai lượt. */
 let baseline={runId:'',run:null,state:null,diff:null,diffFor:'',loading:false,onlyDiff:false};
+/* KẾT QUẢ TỨC THÌ TỪ KHO (4.18.0): bấm tìm là đọc ngay kho trên máy và lọc
+   bằng ĐÚNG cổng tiêu chí của lượt mới (passesHardFilter qua createResultView),
+   hiện trong lúc e-GP chưa trả trang nào. Chỉ dùng khi KHÔNG có lượt trước cùng
+   tiêu chí; luôn ghi rõ là dữ liệu đã lưu; không xuất Excel/so sánh từ đây. */
+let instant={forRun:'',tenders:[],keys:[],loadedAt:0};
+async function loadInstant(pending){
+  const r=await send('GET_SEARCH_STATE',{scope:'warehouse'}).catch(()=>null);
+  if(pending!==instantToken)return;
+  const tenders=Array.isArray(r?.tenders)?r.tenders:[];
+  instant={...instant,tenders,keys:tenders.map(t=>t.key),loadedAt:Date.now()};
+  if(STATE.activeRun?.id===runId)render();
+}
+let instantToken=0;
 async function syncBaseline(){
   const run=chosenRun();
   if(!run){baseline={...baseline,runId:'',run:null,state:null,diff:null,diffFor:''};return;}
@@ -81,8 +94,14 @@ async function syncBaseline(){
     if(baseline.runId===forRun){baseline.loading=false;baseline.diff=diffBadges(cmp);baseline.diffFor=run.status;render();}
   }
 }
-function renderBaselineStrip(showingOld){
+function renderBaselineStrip(showingOld,storeView=null){
   const strip=$('baseline-strip');
+  if(storeView){
+    const n=storeView.summary.total;
+    strip.className='instant-strip';
+    strip.innerHTML=`${icon('archive',18)}<div><b>Kết quả tức thì từ kho trên máy: ${n.toLocaleString('vi-VN')} gói khớp tiêu chí.</b> Đây là dữ liệu đã lưu từ các lượt trước — có thể đã cũ hoặc thiếu gói mới đăng. Đang hỏi e-GP; danh sách tự thay bằng dữ liệu mới khi e-GP trả về. Chưa xuất Excel từ danh sách này.</div>`;
+    show('baseline-strip',true);return;
+  }
   const label=baseline.run?formatDate(baseline.run.finishedAt||baseline.run.startedAt):'';
   if(showingOld){
     strip.className='run-strip warn';
@@ -125,11 +144,15 @@ async function start(){
   starting=true;$('go').disabled=true;alertMessage('');
   writeLocal(LAST,criteria());
   $('progress-text').textContent='Đang chuẩn bị lượt tìm trên e-GP…';show('progress',true);
+  const token=++instantToken;instant={forRun:'',tenders:[],keys:[],loadedAt:0};
+  const warehouse=loadInstant(token);
   const r=await send('TBMT_SEARCH',{...v.criteria,wardIdentities:criteria().wardIdentities,focusTab:true});
   starting=false;
   if(!r.ok){alertMessage(r.message||'Chưa bắt đầu được lượt tìm.');show('progress',false);$('go').disabled=false;return;}
   runId=r.runId;writeLocal(RUN,runId);selected.clear();page=1;
+  if(token===instantToken)instant.forRun=runId;
   await refresh();
+  void warehouse;
 }
 function schedule(){clearTimeout(timer);if(STATE.activeRun)timer=setTimeout(refresh,2000);}
 async function refresh(){
@@ -208,9 +231,13 @@ function render(){
   // Lượt mới chưa nhận trang nào: hiện kết quả lượt trước, ghi rõ là cũ.
   const showingOld=running&&!view.all.length&&Boolean(baseline.state&&baseline.runId===runId);
   if(showingOld)view=createResultView(baseline.state.tenders||[],baseline.state.selectedRun,viewFilters());
+  const showingStore=!showingOld&&running&&!view.all.length&&instant.forRun===runId&&instant.keys.length>0&&Boolean(run?.criteria);
+  if(showingStore)view=createResultView(instant.tenders,{criteria:run.criteria,foundKeys:instant.keys},viewFilters());
+  const stale=showingOld||showingStore;
   if(!showingOld&&baseline.onlyDiff&&baseline.diff?.badges)view={...view,rows:view.rows.filter(t=>baseline.diff.badges.has(t.key))};
   const all=view.all;
-  renderBaselineStrip(showingOld);
+  renderBaselineStrip(showingOld,showingStore?view:null);
+  $('list').classList.toggle('from-store',stale);
   show('progress',running||starting);$('go').disabled=starting||Boolean(STATE.activeRun);
   if(running)$('progress-text').textContent=STATE.activeRun.message||'Đang tìm trên e-GP…';
   $('stop').disabled=!running;
@@ -235,7 +262,8 @@ function render(){
   $('list-count').textContent=`${filtered.length?`${offset+1}–${offset+rows.length}`:'0'} / ${filtered.length} gói sau lọc · ${all.length} gói trong lượt tìm`;
   $('list').innerHTML=rows.map(card).join('')||'<div class="empty-state"><h3>Chưa có gói khớp bộ lọc nhanh.</h3><p>Thử xóa từ khóa, giảm ngưỡng điểm hoặc chọn mọi trạng thái.</p></div>';
   show('pagination',pages>1);$('page-label').textContent=`Trang ${page} / ${pages}`;$('prev-page').disabled=page<=1;$('next-page').disabled=page>=pages;
-  $('csv').disabled=!filtered.length;$('calendar').disabled=!filtered.some(t=>statusOf(t)==='OPEN');
+  // Danh sách tạm (lượt trước / kho trên máy) không được xuất: Excel và lịch chỉ lấy dữ liệu của lượt đang xem.
+  $('csv').disabled=stale||!filtered.length;$('calendar').disabled=stale||!filtered.some(t=>statusOf(t)==='OPEN');
   $('csv').title=`Xuất ${filtered.length} gói sau lọc, bao gồm mọi trang`;
   $('calendar').title='Xuất lịch cho các gói còn hạn trong kết quả sau lọc';
   if(!all.length){
@@ -322,5 +350,15 @@ document.addEventListener('visibilitychange',()=>{if(!document.hidden)refresh();
 const clockTick=setInterval(()=>{if(!document.hidden&&currentRows().length)render();},60000);
 window.addEventListener('pagehide',()=>{clearTimeout(timer);clearInterval(clockTick);});
 fillCriteria(readLocal(LAST,{}));runId=readLocal(RUN,'');refresh();loadProvinces();
+/* Mở từ Tìm nhanh (Ctrl K) với một mã: chỉ giữ đúng mã đó làm tiêu chí (tiêu
+   chí cũ như tỉnh/giá có thể loại mất gói đang tra) rồi tìm ngay nếu run=1. */
+{
+  const params=new URLSearchParams(location.search),code=String(params.get('q')||'').trim().slice(0,40);
+  if(/^(?:IB|PL)\d{8,12}(?:-\d{1,2})?$/i.test(code)){
+    fillCriteria({keyword:code.toUpperCase()});
+    history.replaceState(null,'',location.pathname);
+    if(params.get('run')==='1')queueMicrotask(()=>start());
+  }
+}
 
 document.addEventListener('change',e=>{if(e.target?.id==='only-diff'){baseline.onlyDiff=e.target.checked;page=1;render();}});

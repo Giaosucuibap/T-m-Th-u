@@ -1,5 +1,6 @@
 import {deadlineInfo, safeSource, matchesQuery} from './lib/workspace.js';
 import { statusOf } from './lib/decision.js';
+import { icon } from './lib/icons.js';
 /* Giáo Sư Cùi Bắp — popup.js : bảng điều khiển một-cú-click.
  * Hiển thị kết quả đã chấm điểm, lọc chi tiết ngay tại chỗ, kèm link mở từng gói
  * và theo dõi tiến độ lượt quét theo thời gian thực. */
@@ -73,7 +74,7 @@ function renderTemplates() {
   const activeId = STATE.template && STATE.template.id;
   const scanAll = $('scanAll');
   scanAll.style.display = list.length > 1 ? 'block' : 'none';
-  if (list.length > 1) scanAll.textContent = `🔁 Quét tất cả ${list.length} bộ lọc`;
+  if (list.length > 1) scanAll.textContent = `Quét tất cả ${list.length} bộ lọc`;
   if (!list.length) { box.innerHTML = ''; return; }
   box.innerHTML = list.map((t) => `<span class="tpl-item">
     <button class="tpl ${t.id === activeId ? 'active' : ''}" type="button" data-id="${esc(t.id)}"
@@ -103,18 +104,18 @@ function renderStatus() {
   const bar = $('bar');
   const scanBtn = $('scan');
   if (activeRun) {
-    $('status').innerHTML = `<b>⏳ Đang quét…</b><br><span style="color:var(--muted)">${esc(activeRun.message || activeRun.status)}</span>`;
+    $('status').innerHTML = `<b>${icon('clock',15)} Đang quét…</b><br><span style="color:var(--muted)">${esc(activeRun.message || activeRun.status)}</span>`;
     bar.classList.add('on');
     scanBtn.disabled = true;
-    scanBtn.textContent = '⏳ Đang quét dữ liệu…';
+    scanBtn.textContent = 'Đang quét dữ liệu…';
   } else {
     const last = runs && runs[0];
-    const tmpl = template ? '✅ Radar đã có bộ lọc' : '⚠️ Chưa lưu bộ lọc — hãy tìm một lần trên e-GP rồi bấm “Lưu bộ lọc”';
+    const tmpl = template ? `${icon('check',14)} Radar đã có bộ lọc` : `${icon('info',14)} Chưa lưu bộ lọc — hãy tìm một lần trên e-GP rồi bấm “Lưu bộ lọc”`;
     const lastTxt = last ? ` · Lần gần nhất: ${esc(RUN_TEXT[last.status] || last.status)}${last.newCount ? ` (+${last.newCount} mới)` : ''}` : '';
     $('status').innerHTML = `<b>${tenders.length}</b> gói thầu đã lưu<br><span style="color:var(--muted)">${tmpl}${lastTxt}</span>`;
     bar.classList.remove('on');
     scanBtn.disabled = false;
-    scanBtn.textContent = '🔍 Quét theo bộ lọc đang chọn';
+    scanBtn.textContent = 'Quét theo bộ lọc đang chọn';
   }
 }
 
@@ -154,8 +155,8 @@ function tenderCard(t) {
       <div class="grow">
         <h3>${esc(t.bidName || code)}</h3>
         <div class="meta">
-          <span title="${esc(label)}">🆔 ${esc(label)}: <b>${esc(code)}</b></span>
-          <span>📍 ${esc(loc)}</span>
+          <span title="${esc(label)}">${esc(label)}: <b>${esc(code)}</b></span>
+          <span>${icon('pin',13)} ${esc(loc)}</span>
           <span>${closeTxt}</span>
         </div>
       </div>
@@ -163,8 +164,8 @@ function tenderCard(t) {
         aria-pressed="${Boolean(t.watchlisted)}" aria-label="${t.watchlisted ? 'Bỏ theo dõi' : 'Theo dõi'} ${esc(t.bidName || code)}">${t.watchlisted ? '★' : '☆'}</button>
     </div>
     <div class="line">
-      <span>💰 <b>${money(t.price)}</b></span>
-      ${t.investorName ? `<span>🏛 ${esc(t.investorName)}</span>` : ''}
+      <span><b>${money(t.price)}</b></span>
+      ${t.investorName ? `<span>${icon('building',13)} ${esc(t.investorName)}</span>` : ''}
     </div>
     <div class="actions">
       <span class="rec">${esc(t.recommendation || 'THAM KHẢO')}</span>
@@ -250,7 +251,7 @@ function init() {
   });
   $('save').addEventListener('click', async () => {
     const r = await send('SAVE_LAST_TEMPLATE');
-    alert(r && r.ok ? '✅ Đã lưu bộ lọc vừa dùng trên e-GP.' : (r?.message || 'Chưa quan sát được yêu cầu tìm kiếm.'));
+    alert(r && r.ok ? 'Đã lưu bộ lọc vừa dùng trên e-GP.' : (r?.message || 'Chưa quan sát được yêu cầu tìm kiếm.'));
     refresh();
   });
   $('scanAll').addEventListener('click', async () => {

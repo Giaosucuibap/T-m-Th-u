@@ -16,7 +16,7 @@
   @media(max-width:900px){.pills{grid-template-columns:1fr 1fr}}
   .pill{border:1px solid var(--line);border-radius:10px;padding:11px;text-align:center}
   .pill .v{font-weight:850;font-size:22px;font-variant-numeric:tabular-nums}
-  .pill .k{color:#64748b;font-size:12px;margin-top:2px}
+  .pill .k{color:#64748b;font-size:14px;margin-top:2px}
   .pill.won{background:#ecfdf5;border-color:#6ee7b7}
   .pill.lost{background:#fef2f2;border-color:#fca5a5}
   .pill.pend{background:#fffbeb;border-color:#fcd34d}
@@ -26,20 +26,20 @@
                font-weight:800;cursor:pointer;color:#475569}
   .tabs button.on{background:var(--accent);color:#fff;border-color:var(--accent)}
   .band{border-left:4px solid #16a34a;background:#f0fdf4;padding:11px 13px;border-radius:0 9px 9px 0;
-        margin:12px 0;font-size:13px;line-height:1.6}
+        margin:12px 0;font-size:14.5px;line-height:1.6}
   .band.warn{border-left-color:#f59e0b;background:#fffbeb}
   .band.info{border-left-color:#64748b;background:#f8fafc;color:#334155}
   .chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
   .spin{display:inline-block;width:13px;height:13px;border:2px solid #cbd5e1;border-top-color:var(--accent);
         border-radius:50%;animation:sp .8s linear infinite;vertical-align:-2px;margin-right:7px}
   @keyframes sp{to{transform:rotate(360deg)}}
-  td .sub{display:block;color:#64748b;font-size:12px;margin-top:2px}
-  .tag{display:inline-block;padding:3px 9px;border-radius:999px;font-size:11px;font-weight:800;
+  td .sub{display:block;color:#64748b;font-size:14px;margin-top:2px}
+  .tag{display:inline-block;padding:3px 9px;border-radius:999px;font-size:13.5px;font-weight:800;
        background:#e2e8f0;color:#0f172a}
   .tag-v{background:#fef3c7;color:#92400e}
-  td .sub{display:block;color:#64748b;font-size:12px;margin-top:2px}
+  td .sub{display:block;color:#64748b;font-size:14px;margin-top:2px}
 </style>
-<link rel="stylesheet" href="workspace.css"><link rel="icon" href="icons/icon32.png"></head>
+<link rel="stylesheet" href="workspace.css"><link rel="stylesheet" href="theme.css"><link rel="icon" href="icons/icon32.png"></head>
 <body>
   <header>
     <b>🧭 Hồ sơ 360° nhà thầu</b>
@@ -58,8 +58,8 @@
           <label for="mst">Mã số thuế nhà thầu (10 chữ số)</label>
           <input id="mst" placeholder="VD: 3400726761" autocomplete="off">
         </div>
-        <button id="go" class="btn" style="width:auto">🧭 Dựng hồ sơ</button>
-        <button id="xlsx" class="btn light hidden" style="width:auto">⬇ Xuất Excel</button>
+        <button id="go" class="btn" style="width:auto"><span data-icon="radar"></span>Dựng hồ sơ</button>
+        <button id="xlsx" class="btn light hidden" style="width:auto"><span data-icon="download"></span>Xuất Excel</button>
       </div>
       <div id="build-progress" class="muted small hidden" style="margin-top:8px"></div>
       <div class="muted small" style="margin-top:10px;line-height:1.6">
@@ -73,7 +73,7 @@
       <div class="card" style="margin-top:14px">
         <div class="row space">
           <div>
-            <div id="p-name" style="font-weight:900;font-size:20px">—</div>
+            <div id="p-name" style="font-weight:900;font-size:21px">—</div>
             <div class="muted small">Mã số thuế <span id="p-mst" class="code">—</span></div>
           </div>
           <div id="p-years" class="muted small"></div>
@@ -90,13 +90,13 @@
           <div id="m-won" class="metric num">0</div>
           <div id="m-won-sub" class="muted small">—</div></div>
         <div class="card"><div class="muted small">Giá trị trúng độc lập</div>
-          <div id="m-solo" class="num" style="font-weight:850;font-size:19px">—</div>
+          <div id="m-solo" class="num" style="font-weight:850;font-size:20px">—</div>
           <div id="m-venture" class="muted small">—</div></div>
         <div class="card"><div class="muted small">Giảm giá trung vị</div>
           <div id="m-disc" class="metric num">—</div>
           <div id="m-disc-sub" class="muted small">—</div></div>
         <div class="card"><div class="muted small">Địa bàn & bên mời thầu</div>
-          <div id="m-scope" class="num" style="font-weight:850;font-size:19px">—</div>
+          <div id="m-scope" class="num" style="font-weight:850;font-size:20px">—</div>
           <div id="m-scope-sub" class="muted small">—</div></div>
       </div>
 
@@ -119,8 +119,8 @@
             Dò TOÀN QUỐC (chậm hơn nhiều, nhưng không bỏ sót tỉnh nhà thầu chưa từng trúng)
           </label>
           <div class="row" style="margin-top:9px">
-            <button id="loss-scan" class="btn" style="width:auto">🔍 Dò gói đã trượt</button>
-            <button id="loss-stop" class="btn warn hidden" style="width:auto">⏹ Dừng</button>
+            <button id="loss-scan" class="btn" style="width:auto"><span data-icon="search"></span>Dò gói đã trượt</button>
+            <button id="loss-stop" class="btn warn hidden" style="width:auto">Dừng</button>
           </div>
           <div id="loss-scope" class="muted small" style="margin-top:7px"></div>
           <div id="loss-progress" class="muted small hidden" style="margin-top:7px"></div>
@@ -128,11 +128,11 @@
       </div>
 
       <div class="tabs">
-        <button data-tab="years" class="on">📅 Theo năm</button>
-        <button data-tab="provinces">📍 Tỉnh / Thành phố</button>
-        <button data-tab="entities">🏛️ Bên mời thầu</button>
-        <button data-tab="packages">📦 Danh sách gói đã trúng</button>
-        <button data-tab="joined">🤝 Gói đã dự (trúng &amp; trượt)</button>
+        <button data-tab="years" class="on">Theo năm</button>
+        <button data-tab="provinces">Tỉnh / Thành phố</button>
+        <button data-tab="entities">Bên mời thầu</button>
+        <button data-tab="packages">Danh sách gói đã trúng</button>
+        <button data-tab="joined">Gói đã dự (trúng &amp; trượt)</button>
       </div>
       <div id="panel" class="card" style="border-radius:0 10px 10px 10px"></div>
 

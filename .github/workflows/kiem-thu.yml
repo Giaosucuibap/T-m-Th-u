@@ -71,7 +71,7 @@ jobs:
   trinh-duyet:
     name: Chromium + e-GP giả lập khó tính
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
@@ -118,6 +118,26 @@ jobs:
           for i in $(seq 1 30); do curl -sk --max-time 2 https://127.0.0.1:9443/ -o /dev/null && break; sleep 1; done
           xvfb-run -a node tools/test/tbmt-search.mjs "$PWD/GiaoSuCuiBap" 2
           test "$(grep -c 'CẮT KẾT NỐI (cutfirst' "$MOCK_LOG")" = 6
+      - name: Giao diện 4.18.0 — chụp mọi trang, đo cỡ chữ và tương phản WCAG, không tràn khung
+        env:
+          MOCK_PORT: '9443'
+          MOCK_LOG: ${{ runner.temp }}/mock.log
+        run: |
+          pkill -f "node tools/test/mock-egp.mjs" || true; sleep 1
+          : > "$MOCK_LOG"
+          MOCK_CHAOS=autoload node tools/test/mock-egp.mjs >> "$MOCK_LOG" 2>&1 &
+          for i in $(seq 1 30); do curl -sk --max-time 2 https://127.0.0.1:9443/ -o /dev/null && break; sleep 1; done
+          xvfb-run -a node tools/test/ui-shots.mjs "$PWD/GiaoSuCuiBap" "${{ runner.temp }}/ui-shots" 1366x768,1920x1080
+      - name: Kết quả tức thì từ kho + Tìm nhanh (Ctrl K) dưới e-GP chậm
+        env:
+          MOCK_PORT: '9443'
+          MOCK_LOG: ${{ runner.temp }}/mock.log
+        run: |
+          pkill -f "node tools/test/mock-egp.mjs" || true; sleep 1
+          : > "$MOCK_LOG"
+          MOCK_CHAOS=autoload,nativeslow=3000,slow=2500 node tools/test/mock-egp.mjs >> "$MOCK_LOG" 2>&1 &
+          for i in $(seq 1 30); do curl -sk --max-time 2 https://127.0.0.1:9443/ -o /dev/null && break; sleep 1; done
+          xvfb-run -a node tools/test/instant-results.mjs "$PWD/GiaoSuCuiBap"
       - name: e-GP mới — yêu cầu phụ, yêu cầu đếm gộp, trang phát chậm, dạng phòng xa
         env:
           MOCK_PORT: '9443'

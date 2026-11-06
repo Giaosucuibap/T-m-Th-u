@@ -118,7 +118,7 @@ async function refresh() {
   } else {
     stopPolling();
     $('stop').disabled = false;
-    $('stop').textContent = '⏹ Dừng';
+    $('stop').textContent = 'Dừng';
   }
 
   if (lk.status === 'ERROR') {
@@ -266,13 +266,13 @@ function renderPackages(lk) {
       <td class="num">
         <a class="link tbmt" href="${esc(p.detailUrl)}" target="_blank" rel="noopener"
            title="Mở kết quả lựa chọn nhà thầu trên e-GP">${esc(p.notifyNoStand)} ↗</a>
-        <button class="btn light" style="width:auto;margin-top:6px;padding:4px 8px;font-size:12px"
+        <button class="btn light" style="width:auto;margin-top:6px;padding:4px 8px;font-size:14px"
                 data-dl data-no="${esc(p.notifyNo)}" data-url="${esc(p.detailUrl)}"
                 data-net="${p.isInternet ? '1' : '0'}"
                 title="Tải quyết định phê duyệt và báo cáo đánh giá (chấm thầu) qua phần mềm hỗ trợ e-GP"
         >📎 Tải hồ sơ</button>
         ${p.planNo ? `
-        <button class="btn light" style="width:auto;margin-top:6px;padding:4px 8px;font-size:12px"
+        <button class="btn light" style="width:auto;margin-top:6px;padding:4px 8px;font-size:14px"
                 data-plan="${esc(p.planNo)}"
                 title="Mở Kế hoạch lựa chọn nhà thầu ${esc(p.planNo)} — đường chắc ăn khi trang chi tiết KQLCNT của e-GP trắng trơn, hay gặp với gói chỉ định thầu"
         >📋 Xem KHLCNT</button>` : ''}
@@ -354,8 +354,8 @@ $('csv').addEventListener('click', async () => {
 // Gợi ý ngay khi gõ: cho biết sẽ tra chính xác hay dò theo tên.
 $('q').addEventListener('input', () => {
   const raw = $('q').value.trim();
-  if (!raw) { $('go').textContent = '🔎 Tra cứu trên e-GP'; return; }
-  $('go').textContent = looksLikeTaxCode(raw) ? '🎯 Tra chính xác theo MST' : '🔎 Dò theo tên công ty';
+  if (!raw) { $('go').textContent = 'Tra cứu trên e-GP'; return; }
+  $('go').textContent = looksLikeTaxCode(raw) ? 'Tra chính xác theo MST' : 'Dò theo tên công ty';
 });
 
 refresh();

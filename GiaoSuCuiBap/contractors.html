@@ -18,7 +18,7 @@
   .search-row{display:flex;gap:10px;align-items:stretch;flex-wrap:wrap}
   .search-row input{flex:1;min-width:200px}
 </style>
-<link rel="stylesheet" href="workspace.css"><link rel="icon" href="icons/icon32.png"></head>
+<link rel="stylesheet" href="workspace.css"><link rel="stylesheet" href="theme.css"><link rel="icon" href="icons/icon32.png"></head>
 <body>
   <header>
     <b>🏢 Nhà thầu trong dữ liệu đã quét</b>
@@ -32,7 +32,7 @@
       <label for="q">Nhập <b>Mã số thuế</b> hoặc <b>Tên công ty</b> để xem các gói thầu đã tham gia</label>
       <div class="search-row">
         <input id="q" placeholder="VD: 0301234567  hoặc  Công ty TNHH Xây dựng ABC">
-        <button id="btn" class="btn">🔎 Tra cứu</button>
+        <button id="btn" class="btn"><span data-icon="search"></span>Tra cứu</button>
         <button id="clear" class="btn light" style="width:auto">Xóa</button>
       </div>
       <div class="muted small" style="margin-top:8px">Dữ liệu nhà thầu được tổng hợp từ các trang <b>Kết quả mở thầu / KQLCNT</b> mà Giáo Sư Cùi Bắp đã quét. Nếu chưa có dữ liệu, hãy quét mục kết quả trên e-GP trước.</div>
@@ -40,7 +40,7 @@
 
     <div id="summary" class="hidden">
       <div class="metrics">
-        <div class="card"><div class="muted small">Nhà thầu</div><div id="m-name" class="cname" style="font-size:16px">—</div><div id="m-tax" class="muted small">—</div></div>
+        <div class="card"><div class="muted small">Nhà thầu</div><div id="m-name" class="cname" style="font-size:17px">—</div><div id="m-tax" class="muted small">—</div></div>
         <div class="card"><div class="muted small">Số gói đã tham gia</div><div id="m-join" class="metric">0</div></div>
         <div class="card"><div class="muted small">Số gói trúng</div><div id="m-won" class="metric" style="color:#166534">0</div></div>
         <div class="card"><div class="muted small">Tỉ lệ trúng</div><div id="m-rate" class="metric">0%</div></div>

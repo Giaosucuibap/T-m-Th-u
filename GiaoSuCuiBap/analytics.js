@@ -99,7 +99,7 @@ async function showProfile() {
   $('profileOut').innerHTML = `
     ${p.sampleNote ? `<div class="notice error" style="margin-top:14px">⚠️ ${esc(p.sampleNote)}</div>` : ''}
     <div class="card" style="margin-top:14px">
-      <div style="font-size:19px;font-weight:850">${esc(p.name || '(chưa rõ tên)')}</div>
+      <div style="font-size:20px;font-weight:850">${esc(p.name || '(chưa rõ tên)')}</div>
       <div class="muted small">Mã số thuế <span class="pill-tax">${esc(p.taxCode)}</span> ·
         ${p.n} lượt quan sát trong kho</div>
     </div>

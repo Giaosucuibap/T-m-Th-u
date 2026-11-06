@@ -15,7 +15,7 @@
   .scope{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
   @media(max-width:900px){.scope{grid-template-columns:1fr 1fr}}
   .scope>div{min-width:0}
-  @media(max-width:540px){.scope{grid-template-columns:1fr}.plan table{font-size:12px}.plan th:last-child{width:auto!important}}
+  @media(max-width:540px){.scope{grid-template-columns:1fr}.plan table{font-size:14px}.plan th:last-child{width:auto!important}}
   .spin{display:inline-block;width:13px;height:13px;border:2px solid #cbd5e1;border-top-color:var(--accent);
         border-radius:50%;animation:sp .8s linear infinite;vertical-align:-2px;margin-right:7px}
   @keyframes sp{to{transform:rotate(360deg)}}
@@ -24,13 +24,13 @@
   @keyframes slide{0%{margin-left:-38%}100%{margin-left:100%}}
   .plan{border:1px solid var(--line);border-radius:10px;background:#fff;margin-top:12px;overflow:hidden}
   .plan>header{background:#f8fafc;padding:11px 13px;display:block;position:static;color:var(--text)}
-  .plan h3{margin:0 0 4px;font-size:15px;line-height:1.35}
+  .plan h3{margin:0 0 4px;font-size:16px;line-height:1.35}
   .plan table{margin:0}
-  .tag{display:inline-block;padding:3px 8px;border-radius:999px;font-size:11px;font-weight:800;background:#e2e8f0;color:#0f172a}
+  .tag{display:inline-block;padding:3px 8px;border-radius:999px;font-size:13.5px;font-weight:800;background:#e2e8f0;color:#0f172a}
   .tag-new{background:#dcfce7;color:#166534}
   .chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
 </style>
-<link rel="stylesheet" href="workspace.css"><link rel="icon" href="icons/icon32.png"></head>
+<link rel="stylesheet" href="workspace.css"><link rel="stylesheet" href="theme.css"><link rel="icon" href="icons/icon32.png"></head>
 <body>
   <header>
     <b>📋 Kế hoạch lựa chọn nhà thầu</b>
@@ -94,11 +94,11 @@
         </div>
       </div>
       <div class="row" style="margin-top:12px">
-        <button id="go" class="btn">🔎 Tra cứu trên e-GP</button>
+        <button id="go" class="btn"><span data-icon="search"></span>Tra cứu trên e-GP</button>
         <button id="reset" class="btn light" style="width:auto">Xóa</button>
       </div>
-      <div class="muted small" style="margin-top:10px;line-height:1.6">
-        Cần <b>ít nhất một tiêu chí</b> — có thể chọn Loại gói thầu hoặc Tỉnh/Thành phố để tra cứu.
+      <p class="muted small" style="margin:12px 0 0">Cần <b>ít nhất một tiêu chí</b> — chọn Loại gói thầu hoặc Tỉnh/Thành phố là đủ để tra cứu.</p>
+      <details class="help-more"><summary>Cách tra cứu và phạm vi dữ liệu</summary><div>
         Mỗi tên/mã chủ đầu tư là một nhánh tìm trên e-GP; kết quả được gộp, bỏ trùng và đối chiếu với tỉnh, xã/phường cùng các tiêu chí đã chọn.
         Loại gói thầu đối chiếu từng gói trong kế hoạch; các nhóm tư vấn thiết kế, giám sát… nhận diện theo tên gói.
         Khi chọn loại, bảng và tổng giá chỉ tính <b>các gói khớp</b> trong những kế hoạch đã tải.
@@ -106,13 +106,13 @@
         Danh mục xã/phường lấy từ e-GP và có thể gồm tên huyện/xã trước sáp nhập.
         Tối đa 2.000 kế hoạch trong một lượt. Khi chưa tải hết, phần đối soát sẽ ghi rõ kết quả một phần;
         thêm Xã/Phường hoặc Chủ đầu tư để thu hẹp phạm vi.
-      </div>
+      </div></details>
     </div>
 
     <div id="progress" class="notice hidden" style="margin-top:14px">
       <div class="row space">
         <div><span class="spin"></span><span id="progress-text">Đang tra cứu…</span></div>
-        <button id="stop" class="btn warn" style="width:auto">⏹ Dừng</button>
+        <button id="stop" class="btn warn" style="width:auto">Dừng</button>
       </div>
       <div class="bar"><i></i></div>
       <div class="muted small" style="margin-top:8px">Giáo Sư Cùi Bắp đang thao tác trên tab e-GP. Đừng đóng tab đó.</div>
@@ -126,10 +126,10 @@
           <div id="m-plan-sub" class="muted small">—</div></div>
         <div class="card"><div id="m-pkg-title" class="muted small">Tổng số gói thầu</div><div id="m-pkg" class="metric num">0</div>
           <div id="m-pkg-sub" class="muted small">—</div></div>
-        <div class="card"><div id="m-val-title" class="muted small">Tổng giá các gói</div><div id="m-val" class="num" style="font-weight:850;font-size:19px">—</div>
+        <div class="card"><div id="m-val-title" class="muted small">Tổng giá các gói</div><div id="m-val" class="num" style="font-weight:850;font-size:20px">—</div>
           <div id="m-invest" class="muted small">—</div></div>
         <div class="card"><div class="muted small">Còn gói chưa mời thầu</div><div id="m-new" class="metric num" style="color:#166534">0</div>
-          <button id="csv" class="btn light" style="width:auto;margin-top:8px">⬇ Xuất Excel</button></div>
+          <button id="csv" class="btn light" style="width:auto;margin-top:8px"><span data-icon="download"></span>Xuất Excel</button></div>
       </div>
       <div class="card" style="margin-bottom:4px">
         <div class="form-grid">

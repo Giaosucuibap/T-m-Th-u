@@ -2,6 +2,59 @@
 
 Tài liệu này ghi lại các thay đổi quan trọng của Giáo Sư Cùi Bắp. Cấu trúc tham khảo [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) và phiên bản tuân theo cách đánh số ngữ nghĩa ở mức sản phẩm.
 
+## [4.18.0] — 2026-11-06
+
+### Giao diện mới — đo được, không cảm tính
+Đo bằng `tools/test/ui-shots.mjs` trên 23 trang ở 1366×768 (có dữ liệu thật từ e-GP giả lập):
+
+| Chỉ số | 4.17.3 | 4.18.0 |
+|---|---|---|
+| Khối chữ nhỏ hơn 12px | 57,9% (cửa sổ bật lên: cỡ giữa 9px) | 0% trên mọi trang tiện ích |
+| Khối chữ không đạt tương phản WCAG 2.1 AA | 14,3% | 0,1% (6/5.738) |
+| Kiểu khung trang | 2 (thanh trái / đầu trang tối) | 1 |
+| Tràn ngang, ô vượt khung, lỗi trang | 0 | 0 |
+
+- `theme.css` — hệ thống thiết kế nạp sau cùng trên mọi trang: bảng màu xanh ngọc đậm, 4 tầng chữ đều
+  ≥ 4,5:1, thang cỡ chữ (chữ thân 15px), nút, ô nhập, bảng, thẻ gói, thông báo thống nhất.
+- Phông **Be Vietnam Pro** đủ 400/500/600/700 (SIL OFL 1.1, tách bảng mã tiếng Việt / Latin / Latin mở rộng,
+  woff2) thay 2 tệp TTF — gói nhẹ hơn 68 KB.
+- Toàn bộ 320 khai báo cỡ chữ cũ được quy đổi theo một bảng duy nhất (7–8px→12, 9→12,5, 10→13, 11→13,5,
+  12→14, 13→14,5, 14–20px +1); có bài kiểm thử chặn cỡ chữ dưới 12px quay lại.
+- `shell.js`: **một khung cho mọi trang** — 13 trang đầu trang tối được tự chuyển vào khung có thanh trái.
+  Điều hướng nhóm theo công việc (Tra cứu e-GP · Theo dõi · Phân tích thị trường · Năng lực công ty · Hệ thống);
+  ba trang tra cứu e-GP trước đây nằm trong "Nâng cao" nay ở ngay đầu. Bỏ thanh 4 bước trùng lặp. Màn hình
+  hẹp: thanh trái thành ngăn kéo.
+- Cửa sổ bật lên: không còn bị chèn thanh 4 bước (bị bóp chữ) và dòng "Đến nội dung chính" lộ ra.
+- Emoji trên nút, thẻ chuyển tab, tiêu đề → bộ biểu tượng SVG chung. Đoạn giải thích dài thu vào
+  "Cách tra cứu và phạm vi dữ liệu".
+
+### Kỹ năng mới — Tìm nhanh (Ctrl K)
+- `lib/quick-find-core.js` + `lib/quick-find.js`: gõ mã TBMT/KHLCNT → khớp chính xác trong kho trên máy
+  và lệnh tra mã đó trên e-GP; gõ chữ (không dấu) → gói trong kho có đủ mọi từ, gói còn hạn trước;
+  gõ tên trang → chuyển trang. Nền: thông điệp `QUICK_FIND` chỉ đọc kho, trả ≤ 8 gói, không có trong
+  danh sách thông điệp trang e-GP được gửi.
+- `search.html?q=IB…&run=1` (từ Tìm nhanh): chỉ giữ đúng mã làm tiêu chí rồi tìm ngay.
+
+### Tăng tốc — kết quả tức thì từ kho
+- Bấm *Tìm gói thầu* với tiêu chí mới: trong lúc e-GP chưa trả trang nào, hiện ngay các gói đã lưu
+  khớp tiêu chí — lọc bằng **đúng cổng tiêu chí** của lượt mới (`passesHardFilter`). Dải xanh ghi rõ là
+  dữ liệu đã lưu, có thể cũ; **khoá Xuất Excel và Lịch đóng thầu** cho tới khi dữ liệu e-GP về.
+- Đo trên Chromium, e-GP giả lập chậm (`tools/test/instant-results.mjs`, 3 lần mỗi bản):
+  thẻ gói đầu tiên **8,26 giây → 0,22 giây** (trung vị; từng lần 8,25/8,28/8,26 và 0,22/0,22/0,20);
+  thời gian e-GP trả đủ dữ liệu không đổi (16,6 giây so với 16,7 giây).
+
+### Sửa lỗi
+- *Mở thầu · Chờ kết quả*: ô "Số gói tối đa sẽ đọc" hiện **trống** khi mở lại lượt có số gói ngoài danh sách
+  chọn (bộ săn, bản cũ, kịch bản), và lượt sau âm thầm dùng 150. Nay thêm đúng giá trị đó vào ô chọn.
+- Thanh trái: nhóm tự mở vì chứa trang đang xem không còn bị ghi nhớ sang mọi trang khác.
+
+### Kiểm thử
+- 16 bài mới (`tests/giao-dien-418.test.mjs`, `tests/tim-nhanh-418.test.mjs`) — đỏ toàn bộ trên 4.17.3.
+- Kịch bản Chromium mới: `ui-shots.mjs` (chặn khi chữ < 12px hoặc tương phản kém vượt 1%),
+  `instant-results.mjs`; CI chạy cả hai.
+
+**Chưa xác nhận được:** chưa chạy trên e-GP thật (môi trường phát triển bị chặn truy cập).
+
 ## [4.17.3] — 2026-10-20
 
 ### Sửa lại cho đúng nguyên nhân thật — dựa trên bản tác giả 4.17.1 đã chạy trên e-GP thật

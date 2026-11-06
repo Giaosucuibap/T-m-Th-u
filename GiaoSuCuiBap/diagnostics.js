@@ -140,7 +140,7 @@ function epRender(list) {
       + 'rồi quay lại bấm ↻ Làm mới.</div>';
     return;
   }
-  box.innerHTML = `<table style="width:100%;border-collapse:collapse;font-size:13px">
+  box.innerHTML = `<table style="width:100%;border-collapse:collapse;font-size:14.5px">
     <thead><tr>
       <th style="text-align:left;padding:6px 8px">Đường dẫn</th>
       <th style="text-align:left;padding:6px 8px">PT</th>

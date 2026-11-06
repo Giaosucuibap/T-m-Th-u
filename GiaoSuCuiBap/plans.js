@@ -201,7 +201,7 @@ async function refresh() {
   } else {
     stopPolling();
     $('stop').disabled = false;
-    $('stop').textContent = '⏹ Dừng';
+    $('stop').textContent = 'Dừng';
   }
 
   if (LOOKUP.status === 'ERROR') {

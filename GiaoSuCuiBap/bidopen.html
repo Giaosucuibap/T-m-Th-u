@@ -19,20 +19,20 @@
   .bar i{display:block;height:100%;background:var(--accent);transition:width .3s}
   .pkg{border:1px solid var(--line);border-radius:10px;background:#fff;margin-top:12px;overflow:hidden}
   .pkg>header{background:#f8fafc;padding:11px 13px;display:block;position:static;color:var(--text)}
-  .pkg h3{margin:0 0 4px;font-size:15px}
+  .pkg h3{margin:0 0 4px;font-size:16px}
   .pkg table{margin:0}
   .me{background:#ecfdf5}
   .me td{font-weight:750}
   .rank1{color:#166534;font-weight:900}
   .disc{font-weight:850;color:#166534}
   .disc0{color:var(--muted);font-weight:700}
-  .tag{display:inline-block;padding:3px 8px;border-radius:999px;font-size:11px;font-weight:800;background:#e0f2fe;color:#075985}
+  .tag{display:inline-block;padding:3px 8px;border-radius:999px;font-size:13.5px;font-weight:800;background:#e0f2fe;color:#075985}
   .tag-wait{background:#fef3c7;color:#92400e}
   .scope{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
   @media(max-width:900px){.scope{grid-template-columns:1fr 1fr}}
-  .empty-note{color:var(--muted);padding:10px 13px;font-size:13px}
+  .empty-note{color:var(--muted);padding:10px 13px;font-size:14.5px}
 </style>
-<link rel="stylesheet" href="workspace.css"><link rel="stylesheet" href="bidopen.css"><link rel="icon" href="icons/icon32.png"></head>
+<link rel="stylesheet" href="workspace.css"><link rel="stylesheet" href="bidopen.css"><link rel="stylesheet" href="theme.css"><link rel="icon" href="icons/icon32.png"></head>
 <body>
   <header>
     <b>⏳ Gói đang chờ kết quả</b>
@@ -47,13 +47,13 @@
 
   <main>
     <div class="notice" style="margin-bottom:14px">
-      <b>Nhà thầu và giá dự thầu — đối chiếu ngay trên từng gói</b>
-      <div class="small" style="margin-top:6px;line-height:1.65">
-        Chọn tỉnh hoặc chủ đầu tư để thu hẹp danh sách. Bảng nhà thầu hiện ngay khi từng biên bản trả về,
-        gồm <b>giá dự thầu, giá sau giảm và chênh lệch bằng đồng / %</b>.
+      <b>Nhà thầu và giá dự thầu — đối chiếu ngay trên từng gói.</b> Bảng hiện ngay khi từng biên bản trả về:
+      <b>giá dự thầu, giá sau giảm, chênh lệch bằng đồng và %</b>.
+      <details class="help-more"><summary>Mốc so sánh giá</summary><div>
+        Chọn tỉnh hoặc chủ đầu tư để thu hẹp danh sách.
         Mốc so sánh ưu tiên dự toán được duyệt; khi e-GP chỉ trả giá gói thầu, bảng sẽ ghi rõ mốc này.
         Hạng giá chỉ so sánh giá đã công bố, chưa phải kết quả trúng thầu.
-      </div>
+      </div></details>
     </div>
 
     <div class="card">
@@ -120,7 +120,7 @@
           <input id="maxPrice" type="number" min="0" step="1" placeholder="Bỏ trống = không giới hạn">
         </div>
         <div style="display:flex;align-items:flex-end;gap:8px">
-          <button id="go" class="btn" style="flex:1">🔎 Bắt đầu quét</button>
+          <button id="go" class="btn" style="flex:1"><span data-icon="search"></span>Bắt đầu quét</button>
         </div>
       </div>
 
@@ -132,7 +132,7 @@
     <div id="progress" class="notice hidden" style="margin-top:14px">
       <div class="row space">
         <div><span class="spin"></span><span id="progress-text">Đang quét…</span></div>
-        <button id="stop" class="btn warn" style="width:auto">⏹ Dừng</button>
+        <button id="stop" class="btn warn" style="width:auto">Dừng</button>
       </div>
       <div class="bar"><i id="barfill" style="width:0%"></i></div>
       <div class="muted small" style="margin-top:8px">
@@ -153,8 +153,8 @@
           <div id="m-join-sub" class="muted small">—</div></div>
         <div class="card"><div class="muted small">Giảm giá bình quân</div><div id="m-disc" class="metric num" style="font-size:24px">—</div>
           <div id="m-disc-sub" class="muted small">—</div></div>
-        <div class="card"><div class="muted small">Tổng giá dự thầu</div><div id="m-val" class="num" style="font-weight:850;font-size:19px">—</div>
-          <button id="csv" class="btn light" style="width:auto;margin-top:8px">⬇ Xuất Excel</button></div>
+        <div class="card"><div class="muted small">Tổng giá dự thầu</div><div id="m-val" class="num" style="font-weight:850;font-size:20px">—</div>
+          <button id="csv" class="btn light" style="width:auto;margin-top:8px"><span data-icon="download"></span>Xuất Excel</button></div>
       </div>
     </div>
 

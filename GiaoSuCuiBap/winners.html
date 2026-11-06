@@ -11,7 +11,7 @@
   .search-row .btn{white-space:nowrap}
   .metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:14px 0}
   @media(max-width:900px){.metrics{grid-template-columns:1fr 1fr}}
-  .cname{font-weight:850;font-size:17px;line-height:1.3}
+  .cname{font-weight:850;font-size:18px;line-height:1.3}
   .badge-solo{background:#dcfce7;color:#166534}
   .badge-venture{background:#fef3c7;color:#92400e}
   .badge-run{background:#e0f2fe;color:#075985}
@@ -36,11 +36,11 @@
   .disc-flat{color:var(--muted);font-weight:700}
   tbody tr:hover{background:#f8fafc}
   .tbmt{font-family:ui-monospace,Menlo,Consolas,monospace;font-weight:800}
-  .hist{display:inline-flex;align-items:center;gap:6px;font-size:12px;padding:5px 10px;border-radius:999px;
+  .hist{display:inline-flex;align-items:center;gap:6px;font-size:14px;padding:5px 10px;border-radius:999px;
         background:#e2e8f0;cursor:pointer;font-weight:700}
   .hist:hover{background:#cbd5e1}
 </style>
-<link rel="stylesheet" href="workspace.css"><link rel="icon" href="icons/icon32.png"></head>
+<link rel="stylesheet" href="workspace.css"><link rel="stylesheet" href="theme.css"><link rel="icon" href="icons/icon32.png"></head>
 <body>
   <header>
     <b>🏆 Tra cứu nhà thầu trúng thầu</b>
@@ -60,7 +60,7 @@
       <label for="q">Nhà thầu (tùy chọn khi đã nhập chủ đầu tư): tên công ty hoặc mã số thuế trên Hệ thống mạng đấu thầu quốc gia</label>
       <div class="search-row">
         <input id="q" placeholder="VD: 5400512273  hoặc  Công ty TNHH Thương mại và Xây lắp An Khang" autofocus>
-        <button id="go" class="btn">🔎 Tra cứu trên e-GP</button>
+        <button id="go" class="btn">Tra cứu trên e-GP</button>
         <button id="reset" class="btn light" style="width:auto">Xóa</button>
       </div>
       <div class="owner-scope-grid">
@@ -68,19 +68,19 @@
         <div><label for="province">Tỉnh / Thành phố (tùy chọn)</label><input id="province" placeholder="VD: Tỉnh Lâm Đồng" list="province-list" autocomplete="off"><datalist id="province-list"></datalist></div>
       </div>
       <p id="result-scope" class="muted small owner-result-scope hidden"></p>
-      <div class="muted small" style="margin-top:9px">
+      <p class="muted small" style="margin:10px 0 0">Nhập <b>mã số thuế</b> để có kết quả đầy đủ nhất — gồm cả gói trúng theo <b>liên danh</b> mà tìm theo tên sẽ bỏ sót.</p>
+      <details class="help-more"><summary>Nguồn dữ liệu</summary><div>
         Kết quả được lấy trực tiếp từ mục <b>Kết quả lựa chọn nhà thầu</b> của
         <b>muasamcong.mof.gov.vn</b> ngay tại thời điểm bạn bấm tra cứu.
-        Nhập <b>mã số thuế</b> cho kết quả chính xác nhất — e-GP định danh nhà thầu trúng thầu theo mã số thuế,
-        nên cách này lấy được cả những gói trúng theo <b>liên danh</b> (tìm theo tên sẽ bỏ sót).
-      </div>
+        e-GP định danh nhà thầu trúng thầu theo mã số thuế, nên tra theo mã số thuế không phụ thuộc cách viết tên công ty.
+      </div></details>
       <div id="hist" class="chips"></div>
     </div>
 
     <div id="progress" class="notice hidden" style="margin-top:14px">
       <div class="row space">
         <div><span class="spin"></span><span id="progress-text">Đang tra cứu…</span></div>
-        <button id="stop" class="btn warn" style="width:auto">⏹ Dừng</button>
+        <button id="stop" class="btn warn" style="width:auto">Dừng</button>
       </div>
       <div class="bar"><i></i></div>
       <div class="muted small" style="margin-top:8px">
@@ -122,7 +122,7 @@
         <div class="row space">
           <div><span class="muted small">Gói trúng lớn nhất</span>
             <div id="m-max-name" style="font-weight:750"></div></div>
-          <div id="m-max" class="num" style="font-weight:850;font-size:18px">—</div>
+          <div id="m-max" class="num" style="font-weight:850;font-size:19px">—</div>
         </div>
       </div>
 
@@ -130,7 +130,7 @@
         <div class="row space">
           <b>Phân bố</b>
           <span>
-            <button id="csv" class="btn light" style="width:auto">⬇ Xuất Excel (.xlsx)</button>
+            <button id="csv" class="btn light" style="width:auto"><span data-icon="download"></span>Xuất Excel (.xlsx)</button>
           </span>
         </div>
         <div class="form-grid" style="margin-top:10px">

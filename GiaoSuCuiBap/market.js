@@ -353,7 +353,7 @@ function drawInvestors(s) {
 function priceTable(title, rows, note) {
   if (!rows || !rows.length) return '';
   return `
-    <h3 style="margin:18px 0 8px;font-size:15px">${esc(title)}</h3>
+    <h3 style="margin:18px 0 8px;font-size:16px">${esc(title)}</h3>
     ${note ? `<div class="muted small" style="margin-bottom:8px">${esc(note)}</div>` : ''}
     <table>
       <thead><tr>
@@ -522,7 +522,7 @@ $('stop').addEventListener('click', async () => {
   // Không chờ tab báo về: đọc lại trạng thái ngay, background đã chốt sổ rồi.
   await refresh();
   $('stop').disabled = false;
-  $('stop').textContent = '⏹ Dừng';
+  $('stop').textContent = 'Dừng';
 });
 $('xlsx').addEventListener('click', async () => {
   const res = await send('EXPORT_AREA_XLSX', {});
