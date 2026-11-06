@@ -149,6 +149,7 @@ Gõ mã TBMT/KHLCNT → mở ngay gói trong kho hoặc tra mã trên e-GP; gõ 
 - Danh sách tức thì dùng **đúng bộ lọc tiêu chí** của lượt tìm (không phải tìm gần đúng).
 - Luôn ghi "dữ liệu đã lưu, có thể cũ"; **khoá Xuất Excel/Lịch** cho tới khi dữ liệu e-GP về.
 - Sửa lỗi ô "Số gói tối đa" hiện trống khiến lượt quét dùng con số khác điều người dùng thấy.
+- Lượt đang chạy không còn bị gọi nhầm là "bản lưu cũ"; dòng đếm ghi rõ số gói đến từ kho, lượt trước hay lượt đang tìm.
 
 ---
 

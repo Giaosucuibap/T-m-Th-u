@@ -47,6 +47,9 @@ Tài liệu này ghi lại các thay đổi quan trọng của Giáo Sư Cùi B�
 - *Mở thầu · Chờ kết quả*: ô "Số gói tối đa sẽ đọc" hiện **trống** khi mở lại lượt có số gói ngoài danh sách
   chọn (bộ săn, bản cũ, kịch bản), và lượt sau âm thầm dùng 150. Nay thêm đúng giá trị đó vào ô chọn.
 - Thanh trái: nhóm tự mở vì chứa trang đang xem không còn bị ghi nhớ sang mọi trang khác.
+- *Tìm gói thầu*: lượt **đang chạy** chưa có kết quả bị ô phạm vi gọi là "bản lưu cũ chưa lưu riêng giá"
+  (có từ trước); trong lúc hiện danh sách tạm, dòng đếm và dòng chất lượng dữ liệu mô tả kho chứ không phải
+  lượt đang tìm. Nay mỗi dòng ghi đúng nguồn của nó.
 
 ### Kiểm thử
 - 16 bài mới (`tests/giao-dien-418.test.mjs`, `tests/tim-nhanh-418.test.mjs`) — đỏ toàn bộ trên 4.17.3.
