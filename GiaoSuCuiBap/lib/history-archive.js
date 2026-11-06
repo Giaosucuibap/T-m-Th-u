@@ -82,10 +82,20 @@ export function nextItem(state) {
 export function isNight(now) { const h = new Date(now + VN).getUTCHours(); return h >= 23 || h < 6; }
 
 /** Có được bắt đầu một lượt nạp ngay bây giờ không — luôn nhường người dùng, bộ săn và canary. */
-export function canStartNow(state, { now, activeJob = null, canaryNextRunAt = null, huntDueSoon = false } = {}) {
+export const USER_SCAN_HOLD_MS = 2 * 3600000;
+/** Lượt soi biên bản của NGƯỜI DÙNG vừa xong (chưa tới 2 giờ): trang Mở thầu đang hiện kết quả đó —
+ *  kho lịch sử chạy bây giờ sẽ thay chỗ hiển thị, nên chờ. */
+export function userScanRecent(scan, now) {
+  if (!scan || scan.origin === 'history' || BUSY.includes(scan.status)) return false;
+  const t = Date.parse(scan.finishedAt || '');
+  return Number.isFinite(t) && now - t < USER_SCAN_HOLD_MS;
+}
+
+export function canStartNow(state, { now, activeJob = null, canaryNextRunAt = null, huntDueSoon = false, userScanHold = false } = {}) {
   if (!state?.enabled) return { ok: false, reason: 'Chưa bật nạp lịch sử.' };
   if (state.paused) return { ok: false, reason: 'Đang tạm dừng.' };
   if (activeJob) return { ok: false, reason: 'Đang có lượt tra cứu khác — nhường trước.' };
+  if (userScanHold) return { ok: false, reason: 'Giữ nguyên kết quả lượt soi biên bản anh vừa chạy — chờ 2 giờ sau khi lượt đó xong.' };
   if (state.config?.schedule !== 'now' && !isNight(now)) return { ok: false, reason: 'Chờ tới giờ đêm (23:00–06:00).' };
   const canary = Date.parse(canaryNextRunAt || '');
   if (Number.isFinite(canary) && canary - now >= -60_000 && canary - now <= 20 * 60_000) return { ok: false, reason: 'Sắp tới giờ kiểm tra cấu trúc e-GP — nhường trước.' };

@@ -11,7 +11,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { monthWindows, buildHistoryQueue, canStartNow, huntDueWithin, outcomeFromScan, recordOutcome, nextItem, archiveSummary, isNight, safeHistoryConfig,
-  HISTORY_KEY, HISTORY_ALARM } from '../GiaoSuCuiBap/lib/history-archive.js';
+  HISTORY_KEY, HISTORY_ALARM, userScanRecent } from '../GiaoSuCuiBap/lib/history-archive.js';
 import { createHistoryRuntime } from '../GiaoSuCuiBap/lib/runtime-history.js';
 
 const read = (f) => fs.readFileSync(new URL(`../GiaoSuCuiBap/${f}`, import.meta.url), 'utf8').replace(/\r\n/g, '\n');
@@ -157,4 +157,20 @@ test('nền: lệnh Kho lịch sử không mở cho content script; báo thức 
   assert.match(html, /data-t="history"/);
   assert.match(html, /tối đa 2\.000 dòng mới nhất/);
   void HISTORY_KEY; void archiveSummary;
+});
+
+test('không thay mất kết quả anh vừa soi: kho chờ 2 giờ sau lượt soi biên bản của người dùng', async () => {
+  const now = vn('2026-11-07T01:00:00');
+  const user = (finished) => ({ id: 'u', status: 'SUCCESS', origin: '', finishedAt: new Date(finished).toISOString() });
+  assert.equal(userScanRecent(user(now - 30 * 60_000), now), true);
+  assert.equal(userScanRecent(user(now - 3 * 3600_000), now), false);
+  assert.equal(userScanRecent({ ...user(now - 60_000), origin: 'history' }, now), false, 'lượt của chính kho không tính');
+  assert.equal(userScanRecent({ id: 'u', status: 'SCANNING' }, now), false, 'đang chạy thì đã có cổng "đang có lượt khác"');
+  assert.match(canStartNow({ enabled: true, config: { schedule: 'night' } }, { now, userScanHold: true }).reason, /Giữ nguyên kết quả/);
+  const h = harness();
+  await h.rt.configure({ months: 1, schedule: 'now', includeWatched: false });
+  h.setJobs({ bidOpenScan: { id: 'u', status: 'SUCCESS', origin: '', finishedAt: new Date(vn('2026-11-06T09:30:00')).toISOString() } });
+  assert.match((await h.rt.tick()).skipped, /Giữ nguyên kết quả/);
+  h.at('2026-11-06T11:31:00');
+  assert.equal((await h.rt.tick()).started, true, 'quá 2 giờ thì chạy');
 });

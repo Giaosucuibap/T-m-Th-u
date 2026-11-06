@@ -4,7 +4,7 @@
    dang được đánh dấu "bị gián đoạn" và thử lại. Mọi phụ thuộc Chrome/e-GP được
    truyền vào để kiểm thử chạy lại được. */
 import { HISTORY_KEY, HISTORY_ALARM, emptyHistory, buildHistoryQueue, nextItem, canStartNow, huntDueWithin, outcomeFromScan, recordOutcome,
-  isBusyScan, queueProgress, archiveSummary } from './history-archive.js';
+  isBusyScan, queueProgress, archiveSummary, userScanRecent } from './history-archive.js';
 
 export function createHistoryRuntime({ storage, alarms, readJobs, startScan, readObservations = async () => [], now = Date.now }) {
   let queue = Promise.resolve();
@@ -80,7 +80,8 @@ export function createHistoryRuntime({ storage, alarms, readJobs, startScan, rea
         await save({ ...state, lastTickAt: new Date(at).toISOString(), lastSkip: jobs.readOnly ? 'Đang khoá tự động hoá.' : 'e-GP vừa đổi cấu trúc — tự dừng.' });
         return { ok: true, skipped: 'blocked' };
       }
-      const gate = canStartNow(state, { now: at, activeJob: jobs.activeJob, canaryNextRunAt: jobs.canaryNextRunAt, huntDueSoon: huntDueWithin(jobs.hunts, at) });
+      const gate = canStartNow(state, { now: at, activeJob: jobs.activeJob, canaryNextRunAt: jobs.canaryNextRunAt, huntDueSoon: huntDueWithin(jobs.hunts, at),
+        userScanHold: userScanRecent(jobs.bidOpenScan, at) });
       if (!gate.ok) { await save({ ...state, lastTickAt: new Date(at).toISOString(), lastSkip: gate.reason }); return { ok: true, skipped: gate.reason }; }
       const started = await startScan({ ...next.payload, focusTab: false, historyLabel: next.label }).catch((e) => ({ ok: false, message: String(e?.message || e) }));
       state = { ...state, lastTickAt: new Date(at).toISOString(), lastSkip: '',

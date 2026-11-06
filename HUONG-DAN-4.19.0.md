@@ -49,6 +49,8 @@ Thanh bên trái › nhóm **Phân tích thị trường** › trang **Phân tí
   23:00–06:00**, luôn nhường lượt tra cứu của anh, giờ bộ săn và giờ kiểm tra cấu trúc e-GP.
 - Bảng độ phủ cho biết từng tháng: số gói, số biên bản đọc đủ / thiếu / chưa đọc được.
 - Dữ liệu vào đúng kho mà các thẻ *Chân dung giảm giá*, *Quan hệ CĐT – Nhà thầu* đang dùng.
+- Lượt do kho chạy hiện ở trang *Mở thầu · Chờ kết quả* với nhãn **"Kho lịch sử"**. Kho chờ **2 giờ** sau khi
+  lượt soi biên bản của anh xong mới chạy, để không thay mất kết quả anh đang xem.
 
 **Giới hạn:** tra theo tỉnh, e-GP không lọc ngày ở máy chủ — tiện ích đọc tối đa 2.000 dòng mới nhất rồi
 lọc ngày trên máy, nên tháng càng xa càng dễ thiếu (bảng ghi rõ). Tra theo chủ đầu tư thì đủ lịch sử.

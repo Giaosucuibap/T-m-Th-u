@@ -29,8 +29,9 @@ Khắc phục các điểm yếu nêu trong báo cáo thẩm định 4.18.0. Bá
 ### Kho lịch sử biên bản mở thầu
 - Phân tích › **Kho lịch sử**: nạp dần biên bản của các gói đã có kết quả — từng tháng của tỉnh + lĩnh
   vực, rồi toàn bộ lịch sử 4 năm của các chủ đầu tư đang theo dõi. Chạy ban đêm, tiếp tục được khi tắt
-  máy, luôn nhường lượt tra cứu của người dùng, giờ bộ săn và giờ canary. Bảng độ phủ ghi rõ biên bản đọc
-  đủ / thiếu / chưa đọc được và tháng chạm giới hạn 2.000 dòng của e-GP.
+  máy, luôn nhường lượt tra cứu của người dùng, giờ bộ săn và giờ canary; chờ 2 giờ sau lượt soi biên bản
+  của người dùng để không thay mất kết quả đang xem. Bảng độ phủ ghi rõ biên bản đọc đủ / thiếu / chưa đọc
+  được và tháng chạm giới hạn 2.000 dòng của e-GP.
 
 ### Gói cài có lại cầu nối E-HSMT
 - CI Windows biên dịch `NativeHost.cs`, chạy bộ kiểm thử trên đúng tệp đó, rồi giữ tệp (artifact + nhật ký
