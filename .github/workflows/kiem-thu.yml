@@ -79,6 +79,12 @@ jobs:
           $h = (Get-FileHash native-agent\GiaoSuCuiBap.NativeHost.exe -Algorithm SHA256).Hash.ToLower()
           "$h  GiaoSuCuiBap.NativeHost.exe" | Out-File -Encoding ascii native-agent\GiaoSuCuiBap.NativeHost.exe.sha256
           Get-Content native-agent\GiaoSuCuiBap.NativeHost.exe.sha256
+          # Cùng tệp đó in dạng base64 vào nhật ký (mã băm ở dòng đầu) — để máy đóng gói
+          # không tải được artifact vẫn lấy đúng tệp: tools/release/lay-cau-noi-tu-ci.mjs.
+          $b = [Convert]::ToBase64String([IO.File]::ReadAllBytes('native-agent\GiaoSuCuiBap.NativeHost.exe'))
+          Write-Output "GSCB-EXE-BEGIN $h $($b.Length)"
+          for ($i = 0; $i -lt $b.Length; $i += 3000) { Write-Output ("GSCB-EXE " + $b.Substring($i, [Math]::Min(3000, $b.Length - $i))) }
+          Write-Output "GSCB-EXE-END"
       - uses: actions/upload-artifact@v4
         with:
           name: cau-noi-e-hsmt-${{ github.sha }}
@@ -91,7 +97,7 @@ jobs:
   trinh-duyet:
     name: Chromium + e-GP giả lập khó tính
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
@@ -216,6 +222,20 @@ jobs:
           node tools/test/mock-egp.mjs >> "$MOCK_LOG" 2>&1 &
           for i in $(seq 1 30); do curl -sk --max-time 2 https://127.0.0.1:9443/ -o /dev/null && break; sleep 1; done
           xvfb-run -a node tools/test/prewarm-speed.mjs "$PWD/GiaoSuCuiBap" 3 6
+      - name: Trạm săn 4.19.0 — quyền chạy nền tuỳ chọn, giờ đánh thức, nhịp tim (Chromium thật)
+        env:
+          MOCK_PORT: '9443'
+        run: xvfb-run -a node tools/test/station-ui.mjs "$PWD/GiaoSuCuiBap"
+      - name: Nút "Kiểm chứng toàn trình" ở trang Chẩn đoán — chạy đủ luồng, kết luận trung thực
+        env:
+          MOCK_PORT: '9443'
+          MOCK_LOG: ${{ runner.temp }}/mock.log
+        run: |
+          pkill -f "node tools/test/mock-egp.mjs" || true; sleep 1
+          : > "$MOCK_LOG"
+          MOCK_CHAOS=autoload node tools/test/mock-egp.mjs >> "$MOCK_LOG" 2>&1 &
+          for i in $(seq 1 30); do curl -sk --max-time 2 https://127.0.0.1:9443/ -o /dev/null && break; sleep 1; done
+          xvfb-run -a node tools/test/self-check.mjs "$PWD/GiaoSuCuiBap"
       - name: Nhật ký máy chủ giả lập khi hỏng
         if: failure()
         run: tail -200 "${{ runner.temp }}/mock.log" || true

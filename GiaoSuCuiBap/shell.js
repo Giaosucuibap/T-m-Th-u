@@ -161,3 +161,26 @@ window.addEventListener('storage', (event) => { if (event.key === densityKey) ap
 const densityHost = document.querySelector('.ws-topbar') || document.querySelector('body > header');
 if (!IS_POPUP && document.querySelector('main') && densityHost) densityHost.append(densityButton);
 document.querySelectorAll('[data-version]').forEach((el) => { el.textContent = chrome.runtime.getManifest().version; });
+
+/* SỨC KHOẺ e-GP (4.19.0) — báo ngay trên các trang tra cứu/theo dõi khi tiện ích đã
+   tự dừng vì e-GP đổi cấu trúc, hoặc khi bộ săn đang lỗi. Trước đây người dùng chỉ
+   biết khi bấm tìm và gặp lỗi; bộ săn lỗi thì không ai biết. Chỉ đọc trạng thái. */
+const HEALTH_PAGES = new Set(['search.html', 'plans.html', 'bidopen.html', 'winners.html', 'dashboard.html', 'hunts.html', 'checklist.html']);
+export function healthBannerHtml(h, escape = (v) => String(v ?? '')) {
+  if (!h?.ok) return '';
+  if (h.red) return `<b>e-GP vừa đổi cấu trúc dữ liệu.</b> Tiện ích đã tự dừng tra cứu tự động để không lưu dữ liệu sai${h.canaryReason ? ` (${escape(h.canaryReason)})` : ''}. <a href="diagnostics.html">Mở Chẩn đoán</a> để xem chi tiết; tra cứu chạy lại khi kiểm tra cấu trúc xanh trở lại.`;
+  if (h.failingHunts?.length) return `<b>Bộ săn đang lỗi:</b> ${h.failingHunts.map((x) => escape(x.name)).join(', ')}. Các lượt tự động có thể đang bỏ sót gói mới. <a href="hunts.html">Xem Bộ săn</a> · <a href="diagnostics.html">Kiểm chứng trên e-GP</a>`;
+  return '';
+}
+if (!IS_POPUP && HEALTH_PAGES.has(file)) {
+  chrome.runtime.sendMessage({ type: 'EGP_HEALTH' }).then((h) => {
+    const esc = (v) => String(v ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+    const html = healthBannerHtml(h, esc);
+    const main = document.querySelector('main');
+    if (!html || !main || document.getElementById('egp-health')) return;
+    const el = document.createElement('div');
+    el.id = 'egp-health'; el.className = `notice ${h.red ? 'error' : 'warn'} health-banner`; el.setAttribute('role', 'alert'); el.innerHTML = html;
+    const anchor = main.querySelector('.ws-topbar');
+    if (anchor) anchor.after(el); else main.prepend(el);
+  }).catch(() => {});
+}

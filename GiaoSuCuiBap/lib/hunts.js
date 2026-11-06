@@ -51,6 +51,7 @@ export function validateHunt(raw = {}) {
       // với "chưa tồn tại / đang tắt / chưa có giờ đó" khi tính lượt chạy bù.
       createdAt: isoOrEmpty(raw.createdAt),
       activeSince: isoOrEmpty(raw.activeSince),
+      failAlertedAt: isoOrEmpty(raw.failAlertedAt),
       lastCatchup: raw.lastCatchup && isoOrEmpty(raw.lastCatchup.slot) && isoOrEmpty(raw.lastCatchup.at)
         ? { slot: isoOrEmpty(raw.lastCatchup.slot), time: normalizeTime(raw.lastCatchup.time), at: isoOrEmpty(raw.lastCatchup.at) } : null,
       // Quét nhanh phần mới — chỉ cho TBMT, người dùng chủ động bật (lib/delta-scan.js).

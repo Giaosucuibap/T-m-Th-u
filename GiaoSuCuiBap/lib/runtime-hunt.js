@@ -113,10 +113,19 @@ async function recordHuntOutcome(job){
     // Lượt chạy bù ghi rõ là chạy bù cho giờ nào — người dùng biết vì sao tin đến muộn.
     const catchupNote=hunt.lastCatchup&&hunt.lastCatchup.at===hunt.lastRunAt?`Chạy bù lượt ${slotLabel(Date.parse(hunt.lastCatchup.slot))} · `:'';
     const lastMessage=catchupNote+(delta&&delta.note&&job.huntPlan?.mode==='delta'||delta?.state?.broken&&!hunt.deltaState?.broken?`${delta.note} `:'')+String(job.message||'');
+    // Cảnh báo theo CHUYỂN trạng thái: lần đầu lỗi thì nhắn, hồi phục thì nhắn — không nhắn lại mỗi lượt.
+    const failed=['ERROR','TIMEOUT'].includes(job.status), healthy=['SUCCESS','PARTIAL'].includes(job.status);
+    const alert=duplicate?null:failed&&!hunt.failAlertedAt?'fail':healthy&&hunt.failAlertedAt?'recover':null;
     await save({[KEYS.hunts]:latest.hunts.map(h=>h.id===job.huntId?{...h,lastCompletedJobId:job.id,lastStatus:job.status,lastMessage:lastMessage.slice(0,300),
-      ...(delta?{deltaState:delta.state}:{})}:h)});
-    return {hunt,settings:latest.settings,duplicate,followUpFull:Boolean(delta?.followUpFull)};
+      ...(delta?{deltaState:delta.state}:{}),...(alert==='fail'?{failAlertedAt:new Date(now()).toISOString()}:alert==='recover'?{failAlertedAt:''}:{})}:h)});
+    return {hunt,settings:latest.settings,duplicate,followUpFull:Boolean(delta?.followUpFull),alert,lastMessage};
   });
+  if(result?.alert&&result.hunt.telegram&&result.settings.telegramEnabled&&!result.settings.readOnlyMode){
+    const text=result.alert==='fail'
+      ?`⚠️ <b>Bộ săn lỗi: ${escapeHtml(result.hunt.name)}</b>\n${escapeHtml(String(result.lastMessage||job.status).slice(0,300))}\n\nCác lượt tự động có thể đang bỏ sót gói mới. Phần mềm sẽ thử lại ở giờ hẹn tới; nếu lặp lại, mở Chẩn đoán → Kiểm chứng toàn trình trên e-GP.`
+      :`✅ <b>Bộ săn chạy lại bình thường: ${escapeHtml(result.hunt.name)}</b>\n${escapeHtml(String(result.lastMessage||'').slice(0,300))}`;
+    await Promise.resolve(sendTelegram(result.settings,text,{kind:'hunt-health',chatId:safeChatId(result.hunt.telegramChatId)})).catch(()=>null);
+  }
   // Quét nhanh trả 0 gói khi bộ lọc chưa được kiểm chứng: quét đầy đủ ngay.
   if(result?.followUpFull)setTimeout(()=>{void runHuntById(job.huntId,{forceFull:true}).catch(()=>{});},3000);
   if(result&&!result.duplicate&&result.hunt.kind==='plan'&&result.hunt.telegram&&result.settings.telegramEnabled&&!result.settings.readOnlyMode){

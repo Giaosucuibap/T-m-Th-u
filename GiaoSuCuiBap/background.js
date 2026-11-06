@@ -3964,6 +3964,14 @@ chrome.runtime.onMessage.addListener((message,sender,sendResponse)=>{
         sendResponse({ok:true,hunts:rows});break;
       }
       case 'RUN_HUNT': sendResponse(await runHuntById(message.payload?.id,{forceFull:message.payload?.full===true}));break;
+      case 'EGP_HEALTH': {
+        // Chỉ đọc: tiện ích có đang tự dừng vì e-GP đổi cấu trúc, bộ săn nào đang lỗi.
+        const s=await getState();
+        const canary=(await liveCanaryRuntime.status().catch(()=>null))?.liveCanary||null;
+        const failingHunts=(s.hunts||[]).filter(h=>h.enabled&&['ERROR','TIMEOUT'].includes(h.lastStatus)).slice(0,5).map(h=>({name:h.name,status:h.lastStatus,at:h.lastRunAt||''}));
+        sendResponse({ok:true,red:schemaIsRed(s),canaryStatus:canary?.status||'UNKNOWN',canaryReason:String(canary?.reason||'').slice(0,200),checkedAt:canary?.checkedAt||null,failingHunts});
+        break;
+      }
       case 'STATION_STATUS': {
         const s=await getState();
         sendResponse({ok:true,station:await huntRuntime.stationStatus(),huntTimes:wakeTimes(s.hunts,0),wakeTimes:wakeTimes(s.hunts,3),readOnly:Boolean(s.settings.readOnlyMode)});

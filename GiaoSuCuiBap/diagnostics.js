@@ -14,6 +14,7 @@ import { normalizeKhlcntPlan } from './lib/khlcnt.js';
 import { dateGate } from './lib/match-gate.js';
 import { matchesAreaCodes } from './lib/area-match.js';
 import { dateRangeFrom, firstStampMs } from './lib/core.js';
+import { runSelfCheck, sealReport, SELF_CHECK_KEY } from './lib/self-check.js';
 
 const $ = (id) => document.getElementById(id);
 const msg = (type, payload = {}) => chrome.runtime.sendMessage({ type, payload });
@@ -113,7 +114,10 @@ $('export').onclick = async () => {
     runs: state.runs.slice(0, 50).map(safeRunForBackup),
     counts: { tenders: state.tenders.length },
     // Chỉ số và nhãn giai đoạn — không có tiêu chí hay dữ liệu gói thầu.
-    runTrace: traceData?.ok ? { summary: traceData.summary, last7d: traceData.last7d, recent: traceData.recent } : null
+    runTrace: traceData?.ok ? { summary: traceData.summary, last7d: traceData.last7d, recent: traceData.recent } : null,
+    // 4.19.0: lần kiểm chứng toàn trình gần nhất và trạng thái trạm săn (chỉ con số).
+    selfCheck: scReport || null,
+    station: (await msg('STATION_STATUS').catch(() => null))?.station || null
   };
   const url = 'data:application/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(payload, null, 2));
   chrome.downloads.download({ url, filename: 'GiaoSuCuiBap/diagnostic.json', saveAs: true });
@@ -223,3 +227,44 @@ $('native-check').addEventListener('click',checkNative);
 $('native-guide').href=chrome.runtime.getURL('HUONG-DAN-NATIVE.md');
 window.addEventListener('pagehide',()=>clearTimeout(liveTimer));
 loadLiveCanary();
+
+/* ---------------- Kiểm chứng toàn trình trên e-GP thật (4.19.0) ---------------- */
+let scReport = null, scCancelled = false, scRunning = false;
+const scLabel = { STARTING: 'Đang bắt đầu', RUNNING: 'Đang chạy', LISTING: 'Đang đọc danh sách', SCANNING: 'Đang đọc biên bản', OPENING: 'Đang mở e-GP' };
+function scRows(flows, live) {
+  const rows = flows.map((f) => `<tr><td>${esc(f.name)}</td><td><b>${f.ok ? 'ĐẠT' : 'CHƯA ĐẠT'}</b></td><td>${esc(f.status)}</td><td>${esc(f.elapsedSeconds)} giây</td><td>${esc(f.summary)}</td></tr>`);
+  if (live) rows.push(`<tr><td>${esc(live.name)}</td><td><b>…</b></td><td>${esc(scLabel[live.status] || live.status)}</td><td>${esc(live.elapsedSeconds || 0)} giây</td><td>Đang chạy — giữ trang này mở.</td></tr>`);
+  return rows.length ? `<table><thead><tr><th>Luồng</th><th>Kết quả</th><th>Trạng thái</th><th>Thời gian</th><th>Chi tiết</th></tr></thead><tbody>${rows.join('')}</tbody></table>` : '';
+}
+function scNotice(text, kind) { const el = $('sc-status'); el.textContent = text; el.className = `notice ${kind || ''}${text ? '' : ' hidden'}`; }
+function scShow(report) {
+  scReport = report;
+  $('sc-table').innerHTML = scRows(report?.flows || []);
+  $('sc-download').disabled = !report;
+  if (report) scNotice(`Lần kiểm chứng ${new Date(report.finishedAt || report.startedAt).toLocaleString('vi-VN')} · bản ${report.version}: đạt ${report.passed}/${report.total} luồng trên e-GP thật.`, report.passed === report.total ? 'ok' : 'warn');
+}
+chrome.storage.local.get({ [SELF_CHECK_KEY]: null }).then((d) => { if (d[SELF_CHECK_KEY]) scShow(d[SELF_CHECK_KEY]); }).catch(() => {});
+$('sc-run').onclick = async () => {
+  if (scRunning) return;
+  if (!confirm('Chạy kiểm chứng trên e-GP thật? Mất khoảng 10–25 phút. Giữ trang này mở và không chạy tra cứu khác trong lúc kiểm.')) return;
+  scRunning = true; scCancelled = false;
+  $('sc-run').disabled = true; $('sc-stop').classList.remove('hidden'); $('sc-download').disabled = true;
+  scNotice('Đang kiểm chứng trên e-GP thật… Tab e-GP sẽ tự mở ở nền; đừng đóng nó.', 'warn');
+  const done = [];
+  try {
+    const report = await runSelfCheck({ send: msg, canary: $('sc-canary').checked, version: chrome.runtime.getManifest().version,
+      userAgent: navigator.userAgent, isCancelled: () => scCancelled,
+      onProgress: (p) => { if (p.phase === 'done') done.push(p); $('sc-table').innerHTML = scRows(done, p.phase === 'done' ? null : p); } });
+    const sealed = await sealReport(report);
+    await chrome.storage.local.set({ [SELF_CHECK_KEY]: sealed });
+    scShow(sealed);
+  } catch (error) { scNotice(`Kiểm chứng dừng vì lỗi: ${error?.message || error}`, 'error'); }
+  finally { scRunning = false; $('sc-run').disabled = false; $('sc-stop').classList.add('hidden'); }
+};
+$('sc-stop').onclick = () => { scCancelled = true; scNotice('Sẽ dừng sau khi luồng đang chạy kết thúc…', 'warn'); };
+$('sc-download').onclick = () => {
+  if (!scReport) return;
+  const url = 'data:application/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(scReport, null, 2));
+  const stamp = String(scReport.finishedAt || scReport.startedAt || '').replace(/[:.]/g, '-').slice(0, 19);
+  chrome.downloads.download({ url, filename: `GiaoSuCuiBap/kiem-chung-e-gp-${scReport.version}-${stamp}.json`, saveAs: true });
+};
