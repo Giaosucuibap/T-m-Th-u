@@ -139,3 +139,26 @@ test('trang Chẩn đoán có nút kiểm chứng, lưu và tải tệp bằng c
   assert.match(js, /await sealReport\(report\)/);
   assert.match(js, /selfCheck: scReport \|\| null/);
 });
+
+test('lượt lấy từ bộ nhớ đệm 2 phút KHÔNG tính là kiểm chứng: chờ đệm hết hạn rồi hỏi lại e-GP một lần', async () => {
+  const c = clock(); let runs = 0; const slept = [];
+  const sleep = async (ms) => { slept.push(ms); await c.sleep(ms); };
+  const send = async (type) => {
+    if (type === 'TBMT_SEARCH') { runs++; return { ok: true, runId: `r${runs}` }; }
+    if (type === 'GET_SEARCH_STATE') return { selectedRun: { id: `r${runs}`, status: 'SUCCESS', queryCache: runs === 1 ? { hit: true } : null,
+      coverage: { serverTotal: 10, fetched: 10, match: 3, complete: true, consistent: true, text: 'e-GP báo 10 · đã tải 10 · khớp 3' } } };
+    return { ok: false, message: 'bỏ qua' };
+  };
+  const r = await runSelfCheck({ send, now: c.now, sleep, canary: false });
+  assert.equal(runs, 2, 'hỏi lại e-GP đúng một lần');
+  assert.ok(slept.includes(130_000));
+  assert.equal(r.flows[0].ok, true);
+  assert.equal(r.flows[0].retriedAfterCache, true);
+  // Vẫn từ đệm sau khi chờ → CHƯA ĐẠT, nói rõ e-GP chưa được hỏi.
+  const c2 = clock();
+  const always = async (type) => type === 'TBMT_SEARCH' ? { ok: true, runId: 'x' } : type === 'GET_SEARCH_STATE'
+    ? { selectedRun: { id: 'x', status: 'SUCCESS', queryCache: { hit: true }, coverage: {} } } : { ok: false };
+  const r2 = await runSelfCheck({ send: always, ...c2, canary: false });
+  assert.equal(r2.flows[0].ok, false);
+  assert.match(r2.flows[0].summary, /bộ nhớ đệm.*e-GP chưa được hỏi/);
+});

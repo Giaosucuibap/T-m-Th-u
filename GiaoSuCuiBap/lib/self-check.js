@@ -42,7 +42,7 @@ export function readFlow(id, reply, ctx = {}) {
     const run = reply?.selectedRun || (reply?.runs || []).find((r) => r.id === ctx.runId) || null;
     if (!run || (ctx.runId && run.id !== ctx.runId)) return { done: false, status: 'STARTING' };
     const c = run.coverage || {};
-    return { done: !BUSY.includes(run.status), status: run.status, details: {
+    return { done: !BUSY.includes(run.status), status: run.status, details: { fromCache: run.queryCache?.hit === true,
       serverTotal: num(c.serverTotal), fetched: num(c.fetched), match: num(c.match), pagesRead: num(c.pagesRead), totalPages: num(c.totalPages),
       complete: c.complete === true, consistent: c.consistent !== false, coverage: short(c.text, 200), message: short(run.message) } };
   }
@@ -53,7 +53,7 @@ export function readFlow(id, reply, ctx = {}) {
     const detailTotal = num(s.detailTotal) || 0, detailRead = num(s.detailRead) || 0, detailFailed = num(s.detailFailed) || 0;
     const enoughDetails = s.listFinished === true && (detailTotal === 0 || detailRead + detailFailed >= Math.min(3, detailTotal));
     const terminal = !BUSY.includes(s.status);
-    return { done: terminal || enoughDetails, stillRunning: !terminal, status: terminal ? s.status : 'LISTED', details: { serverCount: num(s.serverCount), plans,
+    return { done: terminal || enoughDetails, stillRunning: !terminal, status: terminal ? s.status : 'LISTED', details: { fromCache: s.queryCache?.hit === true, serverCount: num(s.serverCount), plans,
       listFinished: s.listFinished === true, detailTotal, detailRead, detailFailed, message: short(s.message) } };
   }
   if (id === 'bidopen') {
@@ -63,7 +63,7 @@ export function readFlow(id, reply, ctx = {}) {
     const read = pkgs.filter((p) => Array.isArray(p.bidders) && p.bidders.length);
     const readStates = {};
     for (const p of pkgs) { const k = String(p.readState || 'CHƯA ĐỌC').slice(0, 20); readStates[k] = (readStates[k] || 0) + 1; }
-    return { done: !BUSY.includes(s.status), status: s.status, details: { packages: pkgs.length, openingsRead: read.length,
+    return { done: !BUSY.includes(s.status), status: s.status, details: { fromCache: s.queryCache?.hit === true, packages: pkgs.length, openingsRead: read.length,
       bidderRows: read.reduce((n, p) => n + p.bidders.length, 0), readStates, message: short(s.message) } };
   }
   if (id === 'canary') {
@@ -79,6 +79,8 @@ export function readFlow(id, reply, ctx = {}) {
 
 /** Đạt / không đạt và một dòng tóm tắt dễ đọc. Không đạt phải nói rõ vì sao. */
 export function judgeFlow(id, status, d = {}) {
+  // Lấy từ bộ nhớ đệm 2 phút: e-GP CHƯA được hỏi — không phải bằng chứng chạy trên trang thật.
+  if (d.fromCache) return { ok: false, summary: `${status} · lấy từ bộ nhớ đệm (≤ 2 phút), e-GP chưa được hỏi — chưa tính là kiểm chứng` };
   if (id === 'tbmt') {
     const ok = status === 'SUCCESS' || (status === 'PARTIAL' && (d.fetched || 0) > 0 && d.consistent);
     return { ok, summary: `${status} · ${d.coverage || 'chưa có số đối soát'}${status === 'PARTIAL' && ok ? ' (đọc được dữ liệu; lượt dừng ở giới hạn số trang)' : ''}` };
@@ -113,6 +115,25 @@ export async function runSelfCheck({ send, sleep = (ms) => new Promise((r) => se
     startedAt: new Date(now()).toISOString(), finishedAt: null, flows: [], passed: 0, total: 0 };
   for (const flow of selfCheckPlan({ canary })) {
     if (isCancelled()) break;
+    let item = await runFlow(flow);
+    // Trùng một lượt người dùng vừa chạy (< 2 phút) nên lấy từ bộ nhớ đệm: chờ đệm hết hạn rồi hỏi lại e-GP một lần.
+    if (item.details?.fromCache && !isCancelled()) {
+      onProgress({ ...item, status: 'STARTING', phase: 'poll', summary: 'Lấy từ bộ nhớ đệm — chờ 130 giây rồi hỏi lại e-GP' });
+      await sleep(130_000);
+      item = await runFlow(flow);
+      item.retriedAfterCache = true;
+    }
+    report.flows.push(item);
+    onProgress({ ...item, phase: 'done' });
+    // Nghỉ giữa các luồng — nhịp người dùng, không dồn truy vấn lên e-GP.
+    if (!isCancelled()) await sleep(3000);
+  }
+  report.finishedAt = new Date(now()).toISOString();
+  report.total = report.flows.length;
+  report.passed = report.flows.filter((f) => f.ok).length;
+  return report;
+
+  async function runFlow(flow) {
     const t0 = now();
     const item = { id: flow.id, name: flow.name, ok: false, status: 'STARTING', elapsedSeconds: 0, summary: '', details: {} };
     onProgress({ ...item, phase: 'start' });
@@ -140,15 +161,8 @@ export async function runSelfCheck({ send, sleep = (ms) => new Promise((r) => se
       }
     } catch (error) { item.status = 'ERROR'; item.summary = scrub(error?.message || error); }
     item.elapsedSeconds = Number(((now() - t0) / SEC).toFixed(1));
-    report.flows.push(item);
-    onProgress({ ...item, phase: 'done' });
-    // Nghỉ giữa các luồng — nhịp người dùng, không dồn truy vấn lên e-GP.
-    if (!isCancelled()) await sleep(3000);
+    return item;
   }
-  report.finishedAt = new Date(now()).toISOString();
-  report.total = report.flows.length;
-  report.passed = report.flows.filter((f) => f.ok).length;
-  return report;
 }
 
 /** Mã băm SHA-256 của nội dung báo cáo (trừ chính trường mã băm) — phát hiện tệp bị sửa tay. */
