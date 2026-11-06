@@ -95,6 +95,10 @@ test('kết quả tức thì: danh sách tạm không bao giờ được xuất 
   // Phạm vi và chất lượng dữ liệu mô tả LƯỢT ĐANG CHẠY, không mô tả danh sách tạm.
   assert.match(src, /renderScope\(run,stale\?\[\]:all\);/);
   assert.match(src, /\$\('run-field-quality'\)\.classList\.toggle\('hidden',stale\|\|!all\.length\);/);
+  // Lượt đang chạy chưa có kết quả không bị gọi là "bản lưu cũ".
+  assert.match(src, /const live=STATE\.activeRun\?\.id===run\.id;/);
+  assert.match(src, /\$\{!live&&!run\.resultStates\?'<div>Bản lưu cũ chưa lưu riêng giá/);
+  assert.match(src, /gói \$\{showingStore\?'trong kho trên máy':showingOld\?'trong lượt trước cùng tiêu chí':'trong lượt tìm'\}/);
   // Mở từ Tìm nhanh: chỉ nhận đúng dạng mã, không nhận chuỗi tùy ý trên địa chỉ trang.
   assert.match(src, /\/\^\(\?:IB\|PL\)\\d\{8,12\}\(\?:-\\d\{1,2\}\)\?\$\/i\.test\(code\)/);
 });

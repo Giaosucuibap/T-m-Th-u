@@ -184,13 +184,15 @@ function renderScope(run,all){
     return;
   }
   const incomplete=['PARTIAL','ERROR','TIMEOUT','CANCELLED'].includes(run.status)||run.partial;
+  // Lượt ĐANG CHẠY chưa có kết quả nào thì cũng chưa có resultStates — đó không phải "bản lưu cũ".
+  const live=STATE.activeRun?.id===run.id;
   const hasKeys=Array.isArray(run.foundKeys);
   const lost=hasKeys?Math.max(0,new Set(run.foundKeys).size-all.length):0;
   $('run-scope').className=`run-strip${incomplete||lost||!hasKeys?' warn':''}`;
   const localKeyword=Boolean(run.criteria?.investor&&run.criteria?.keyword);
   const category=normalizeCategory(run.criteria?.category);
   const description=run.criteria?[category?categoryLabel(category):'',run.criteria.keyword,run.criteria.investor,run.criteria.province,run.criteria.ward].filter(Boolean).join(' · '):'';
-  $('run-scope').innerHTML=`${icon(incomplete?'info':'check',18)}<div><b>${esc(RUN_LABEL[run.status]||run.status)}</b>${description?` · ${esc(description)}`:''}<span class="run-date">${esc(formatDate(run.finishedAt||run.startedAt))} · Giờ Việt Nam · Chỉ dữ liệu của lượt này</span>${incomplete?`<div>${esc(run.message||'Lượt bị gián đoạn.')} Không xem đây là toàn bộ kết quả thị trường.</div>`:''}${!run.resultStates?'<div>Bản lưu cũ chưa lưu riêng giá và kết quả đối chiếu tại thời điểm tìm. Các nhãn dưới đây được kiểm tra lại trên dữ liệu hiện có; nên chạy lại để xác nhận.</div>':''}${localKeyword?'<div>Từ khóa tên gói lọc tại máy trên các trang đã tải theo chủ đầu tư.</div>':''}${category.startsWith('TV_')?'<div>Chuyên môn tư vấn nhận diện theo tên gói trong các trang đã tải.</div>':''}${lost?`<div>${lost} gói của lượt này không còn trong kho (đã xóa hoặc vượt giới hạn lưu).</div>`:''}${!hasKeys?'<div>Bản lưu cũ không có liên kết kết quả. Cần chạy lại để xác định đúng phạm vi.</div>':''}${run.coverage?`<div>${esc(run.coverage.text||coverageText(run.coverage))}</div>`:''}<div>Điểm phù hợp dùng để ưu tiên các gói khớp tiêu chí; không phải xác suất trúng thầu.</div>${historySelect()}</div>`;
+  $('run-scope').innerHTML=`${icon(incomplete?'info':'check',18)}<div><b>${esc(RUN_LABEL[run.status]||run.status)}</b>${description?` · ${esc(description)}`:''}<span class="run-date">${esc(formatDate(run.finishedAt||run.startedAt))} · Giờ Việt Nam · Chỉ dữ liệu của lượt này</span>${incomplete?`<div>${esc(run.message||'Lượt bị gián đoạn.')} Không xem đây là toàn bộ kết quả thị trường.</div>`:''}${!live&&!run.resultStates?'<div>Bản lưu cũ chưa lưu riêng giá và kết quả đối chiếu tại thời điểm tìm. Các nhãn dưới đây được kiểm tra lại trên dữ liệu hiện có; nên chạy lại để xác nhận.</div>':''}${localKeyword?'<div>Từ khóa tên gói lọc tại máy trên các trang đã tải theo chủ đầu tư.</div>':''}${category.startsWith('TV_')?'<div>Chuyên môn tư vấn nhận diện theo tên gói trong các trang đã tải.</div>':''}${lost?`<div>${lost} gói của lượt này không còn trong kho (đã xóa hoặc vượt giới hạn lưu).</div>`:''}${!hasKeys?'<div>Bản lưu cũ không có liên kết kết quả. Cần chạy lại để xác định đúng phạm vi.</div>':''}${run.coverage?`<div>${esc(run.coverage.text||coverageText(run.coverage))}</div>`:''}<div>Điểm phù hợp dùng để ưu tiên các gói khớp tiêu chí; không phải xác suất trúng thầu.</div>${historySelect()}</div>`;
 }
 function historySelect(){
   const runs=STATE.runs.filter(x=>x.mode==='form');
@@ -261,7 +263,7 @@ function render(){
   $('result-count').textContent=filtered.length;
   const pages=Math.max(1,Math.ceil(filtered.length/PAGE_SIZE));page=Math.min(page,pages);
   const offset=(page-1)*PAGE_SIZE, rows=filtered.slice(offset,offset+PAGE_SIZE);
-  $('list-count').textContent=`${filtered.length?`${offset+1}–${offset+rows.length}`:'0'} / ${filtered.length} gói sau lọc · ${all.length} gói trong lượt tìm`;
+  $('list-count').textContent=`${filtered.length?`${offset+1}–${offset+rows.length}`:'0'} / ${filtered.length} gói sau lọc · ${all.length} gói ${showingStore?'trong kho trên máy':showingOld?'trong lượt trước cùng tiêu chí':'trong lượt tìm'}`;
   $('list').innerHTML=rows.map(card).join('')||'<div class="empty-state"><h3>Chưa có gói khớp bộ lọc nhanh.</h3><p>Thử xóa từ khóa, giảm ngưỡng điểm hoặc chọn mọi trạng thái.</p></div>';
   show('pagination',pages>1);$('page-label').textContent=`Trang ${page} / ${pages}`;$('prev-page').disabled=page<=1;$('next-page').disabled=page>=pages;
   // Danh sách tạm (lượt trước / kho trên máy) không được xuất: Excel và lịch chỉ lấy dữ liệu của lượt đang xem.
