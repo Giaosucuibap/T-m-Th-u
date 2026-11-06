@@ -13,6 +13,17 @@
 import { chromium } from 'playwright';
 import fs from 'node:fs';
 
+/* Trang tiện ích có CSP script-src 'self': page.waitForFunction của Playwright 1.48 (bản CI dùng)
+   phải eval chuỗi trong trang và bị chặn. Hỏi lặp bằng page.evaluate (đi qua CDP, không bị CSP chặn). */
+async function waitUntil(page, fn, { timeout = 15000, interval = 250 } = {}) {
+  const t = Date.now();
+  while (Date.now() - t < timeout) {
+    if (await page.evaluate(fn).catch(() => false)) return;
+    await page.waitForTimeout(interval);
+  }
+  throw new Error(`Quá ${timeout} ms chờ điều kiện trên trang`);
+}
+
 const EXT = process.argv[2], PORT = process.env.MOCK_PORT || 9443;
 const UD = fs.mkdtempSync('/tmp/ud-');
 const ctx = await chromium.launchPersistentContext(UD, { headless: false,
@@ -37,7 +48,7 @@ const send = (type, payload = {}) => page.evaluate(([t, p]) => chrome.runtime.se
 const saved = await send('SAVE_HUNT', { name: 'Thủy lợi Lâm Đồng', kind: 'tbmt', enabled: true, telegram: false, times: '06:05, 13:05', criteria: { province: 'Lâm Đồng', keyword: 'kênh' } });
 if (!saved?.ok) loi.push(`không lưu được bộ săn: ${saved?.message}`);
 await page.reload();
-await page.waitForFunction(() => !/Đang đọc/.test(document.getElementById('station-status').textContent), null, { timeout: 15000 });
+await waitUntil(page, () => !/Đang đọc/.test(document.getElementById('station-status').textContent), { timeout: 15000 });
 const ui = await page.evaluate(() => ({ status: document.getElementById('station-status').innerText, wake: document.getElementById('wake-line').innerText,
   note: document.getElementById('wake-note').innerText, bg: document.getElementById('bg-state').innerText, btn: document.getElementById('bg-toggle').innerText }));
 console.log(JSON.stringify(ui, null, 1));

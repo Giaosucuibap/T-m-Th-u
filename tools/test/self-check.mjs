@@ -14,6 +14,17 @@
 import { chromium } from 'playwright';
 import fs from 'node:fs';
 
+/* Trang tiện ích có CSP script-src 'self': page.waitForFunction của Playwright 1.48 (bản CI dùng)
+   phải eval chuỗi trong trang và bị chặn. Hỏi lặp bằng page.evaluate (đi qua CDP, không bị CSP chặn). */
+async function waitUntil(page, fn, { timeout = 15000, interval = 250 } = {}) {
+  const t = Date.now();
+  while (Date.now() - t < timeout) {
+    if (await page.evaluate(fn).catch(() => false)) return;
+    await page.waitForTimeout(interval);
+  }
+  throw new Error(`Quá ${timeout} ms chờ điều kiện trên trang`);
+}
+
 const EXT = process.argv[2], PORT = process.env.MOCK_PORT || 9443;
 const UD = fs.mkdtempSync('/tmp/ud-');
 const ctx = await chromium.launchPersistentContext(UD, { headless: false,
@@ -30,7 +41,7 @@ await page.waitForSelector('#sc-run');
 await page.uncheck('#sc-canary');
 const t0 = Date.now();
 await page.click('#sc-run');
-await page.waitForFunction(() => !document.getElementById('sc-run').disabled && document.getElementById('sc-table').querySelectorAll('tbody tr').length > 0, null, { timeout: 25 * 60 * 1000, polling: 1000 });
+await waitUntil(page, () => !document.getElementById('sc-run').disabled && document.getElementById('sc-table').querySelectorAll('tbody tr').length > 0, { timeout: 25 * 60 * 1000, interval: 1000 });
 const report = await page.evaluate(() => chrome.storage.local.get('selfCheckLast').then((d) => d.selfCheckLast));
 const rows = await page.evaluate(() => [...document.querySelectorAll('#sc-table tbody tr')].map((tr) => tr.innerText.replace(/\s+/g, ' ').trim()));
 const status = await page.evaluate(() => document.getElementById('sc-status').innerText);
