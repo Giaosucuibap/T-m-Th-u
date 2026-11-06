@@ -15,7 +15,7 @@
 | Gói cài có cầu nối E-HSMT (.exe) | có | **thiếu** | **có**, dựng và kiểm thử trên Windows CI |
 | Kiểm chứng trên e-GP thật | thủ công | thủ công | **một chạm**, xuất tệp bằng chứng |
 | `background.js` | 4.343 dòng · 118 nhánh lệnh | như cũ | **4.120 dòng · 94 nhánh** (+3 mô-đun lệnh, mô-đun Telegram) |
-| Bài kiểm thử tự động | 769 | 785 | **835** (+3 kịch bản Chromium) |
+| Bài kiểm thử tự động | 769 | 785 | **836** (+3 kịch bản Chromium) |
 
 **Chưa đạt điểm tối đa, và không nên tự nhận 10/10.** Ba việc còn lại nằm ngoài tầm sửa mã trong môi trường
 phát triển — mục 4 nói rõ từng việc và ai làm được.
@@ -83,7 +83,7 @@ thêm một nhánh thứ ba. **Cần anh gửi lại tệp zip đó.**
 | 4 | Phạm vi nghiệp vụ | 15% | 8,3 | **8,8** | Trạm săn, kho lịch sử biên bản, kiểm chứng toàn trình |
 | 5 | Giao diện & dễ đọc | 15% | 8,0 | **8,0** | Ô mới theo đúng hệ thống thiết kế; đo cỡ chữ/tương phản vẫn đạt |
 | 6 | Bảo mật & riêng tư | 10% | 8,5 | **8,6** | Quyền chạy nền là tuỳ chọn; tác vụ Windows quyền thấp nhất; mở e-GP chỉ nhận địa chỉ chính thức; tệp bằng chứng lọc dữ liệu |
-| 7 | Kiểm thử & phát hành | 10% | 8,7 | **9,2** | .exe dựng + kiểm thử trên Windows có SHA-256; Task Scheduler kiểm thật; +50 bài, +3 kịch bản Chromium |
+| 7 | Kiểm thử & phát hành | 10% | 8,7 | **9,2** | .exe dựng + kiểm thử trên Windows có SHA-256; Task Scheduler kiểm thật; +51 bài, +3 kịch bản Chromium |
 | 8 | Kiến trúc & bảo trì | 5% | 5,5 | **6,5** | Mô-đun Telegram, sổ đăng ký lệnh; vẫn còn hai nhánh chưa hợp nhất |
 | | **Tổng có trọng số** | | **7,9** | **8,2** | |
 
@@ -100,7 +100,7 @@ Vì vậy **không có phần mềm tra cứu e-GP nào chạy trên máy ngư�
 định không cấp điểm tối đa cho phần chưa có bằng chứng.
 
 ## 5. Số đo kiểm thử của bản này
-- Bài kiểm thử đơn vị: **835** (Linux: 824 đạt, 11 chỉ chạy trên Windows; Windows CI: chạy cả 11), chạy lại ở
+- Bài kiểm thử đơn vị: **836** (Linux: 825 đạt, 11 chỉ chạy trên Windows; Windows CI: chạy cả 11), chạy lại ở
   4 múi giờ đều đạt.
 - Chromium + e-GP giả lập khó tính: 21 kịch bản cũ (tra cứu, mạng chập chờn, e-GP đổi dạng yêu cầu, giao diện) **cộng** 3 kịch bản mới — trạm săn,
   nút kiểm chứng (Tìm gói ĐẠT; Kế hoạch/Mở thầu báo CHƯA ĐẠT đúng lý do vì giả lập không có trang chi tiết),

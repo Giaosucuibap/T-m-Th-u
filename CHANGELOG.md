@@ -43,7 +43,7 @@ Khắc phục các điểm yếu nêu trong báo cáo thẩm định 4.18.0. Bá
   tra cứu kho 4). `background.js` 4.394 → 4.120 dòng; khối switch 126 → 94 nhánh.
 
 ### Kiểm thử
-- 835 bài đơn vị (824 đạt trên Linux, 11 chỉ chạy trên Windows), 4 múi giờ; CI Chromium thêm 3 kịch bản
+- 836 bài đơn vị (825 đạt trên Linux, 11 chỉ chạy trên Windows), 4 múi giờ; CI Chromium thêm 3 kịch bản
   (trạm săn, nút kiểm chứng, kho lịch sử).
 - Tự rà trước phát hành, đã sửa: lượt kiểm chứng lấy từ bộ nhớ đệm 2 phút không còn được tính là đã hỏi e-GP
   (chờ đệm hết hạn rồi hỏi lại); kho lịch sử tự tạm dừng khi người dùng bấm Dừng lượt của kho.
