@@ -144,7 +144,19 @@ jobs:
       # Gồm 7 bài máy phục vụ Link điện thoại chạy trên đúng tệp .exe vừa biên dịch
       # (.NET Framework thật), và bài CÀI THẬT link-dien-thoai.ps1: tải cloudflared từ
       # GitHub, kiểm SHA-256 + chữ ký số Cloudflare, ghi HKCU, gỡ sạch.
-      - run: npm test
+      # Kết quả đầy đủ nằm trong tệp; nhật ký in 12 dòng tổng kết và — khi hỏng — từng
+      # bài hỏng kèm lỗi, để đọc được ngay ở cuối nhật ký.
+      - name: Bộ kiểm thử (npm test)
+        shell: pwsh
+        run: |
+          npm test *> test-results\npm-test.log
+          $code = $LASTEXITCODE
+          Get-Content test-results\npm-test.log -Tail 12
+          if ($code -ne 0) {
+            Write-Output '===== CAC BAI HONG ====='
+            Select-String -Path test-results\npm-test.log -Pattern '^not ok' -Context 0,60 | ForEach-Object { $_.ToString() }
+          }
+          exit $code
       # 4.20.0: mạng THẬT — cloudflared mở đường hầm trycloudflare, gọi từ Internet vào
       # tệp .exe, lệnh tìm đi vòng về; giết ngang tệp .exe thì cloudflared chết theo.
       # Phụ thuộc dịch vụ miễn phí của Cloudflare nên không chặn CI; kết quả in rõ.

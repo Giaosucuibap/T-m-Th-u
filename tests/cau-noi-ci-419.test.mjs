@@ -16,7 +16,7 @@ const ci = fs.readFileSync(new URL('../.github/workflows/kiem-thu.yml', import.m
 
 test('CI Windows: biên dịch → npm test → mới lưu tệp (artifact + base64 + SHA-256)', () => {
   const win = ci.slice(ci.indexOf('  windows:'), ci.indexOf('  trinh-duyet:'));
-  const order = ['csc.exe', 'run: npm test', 'Get-FileHash', 'GSCB-EXE-BEGIN', 'actions/upload-artifact@v4'].map((k) => win.indexOf(k));
+  const order = ['csc.exe', 'npm test *>', 'Get-FileHash', 'GSCB-EXE-BEGIN', 'actions/upload-artifact@v4'].map((k) => win.indexOf(k));
   assert.ok(order.every((i) => i > 0), 'đủ các bước');
   assert.deepEqual([...order].sort((a, b) => a - b), order, 'tệp chỉ được giữ SAU khi bộ kiểm thử Windows đạt');
   assert.match(win, /if-no-files-found: error/);

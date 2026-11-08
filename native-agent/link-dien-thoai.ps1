@@ -117,7 +117,10 @@ if ($Go) {
     if ($actual -and $actual -ne $ManifestPath) { Write-Host ('Dang ky dang tro toi ' + $actual + ' - khong phai ban cai nay, khong go.'); exit 1 }
     Remove-Item -LiteralPath $RegKey -Force
   }
-  if (Test-Path -LiteralPath $Dest) { Remove-Item -LiteralPath $Dest -Recurse -Force }
+  # Trinh diet virus co the dang giu tep vua tai (quet cloudflared.exe): thu lai vai lan.
+  for ($i = 1; (Test-Path -LiteralPath $Dest) -and $i -le 10; $i++) {
+    try { Remove-Item -LiteralPath $Dest -Recurse -Force -ErrorAction Stop } catch { if ($i -eq 10) { throw } ; Start-Sleep -Seconds 1 }
+  }
   Write-Host 'Da go Link dien thoai khoi may nay. Tien ich va Bo san khong bi anh huong.'
   exit 0
 }

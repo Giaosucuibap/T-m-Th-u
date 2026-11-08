@@ -176,6 +176,7 @@ function RemoteProvider({ children }) {
     }
     document.body.appendChild(form);
     form.submit();
+    setTimeout(() => form.remove(), 0);   // Safari giữ trang (tệp .ics không thay trang): không để thừa form ẩn
     return true;
   }, [key]);
 

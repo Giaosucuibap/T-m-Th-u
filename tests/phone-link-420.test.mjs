@@ -387,13 +387,14 @@ test('tệp cài: chỉ chữ ASCII; cloudflared ghim đúng bản/kích thướ
 test('CI Windows: biên dịch CẢ HAI cầu nối trước npm test; giữ cả hai tệp; công cụ lấy tệp tách đúng từng khối có tên', () => {
   const ci = read('.github/workflows/kiem-thu.yml');
   const win = ci.slice(ci.indexOf('  windows:'), ci.indexOf('  trinh-duyet:'));
-  const testAt = win.indexOf('run: npm test');
+  const testAt = win.indexOf('npm test *>');
   for (const src of ['native-agent\\NativeHost.cs', 'native-agent\\DienThoai.cs']) {
     const at = win.indexOf(src);
     assert.ok(at > 0 && at < testAt, `${src} biên dịch trước bộ kiểm thử`);
   }
   for (const name of CI_EXES) assert.ok(win.includes(`native-agent/${name}.sha256`), `artifact giữ ${name}`);
-  assert.match(win, /continue-on-error: true\n\s+timeout-minutes: \d+\n\s+run: node tools\/test\/phone-tunnel-live\.mjs/, 'chỉ bước mạng thật (dịch vụ ngoài) không chặn CI');
+  assert.match(win, /continue-on-error: true\r?\n\s+timeout-minutes: \d+\r?\n\s+run: node tools\/test\/phone-tunnel-live\.mjs/, 'chỉ bước mạng thật (dịch vụ ngoài) không chặn CI');
+  assert.equal((win.match(/continue-on-error: true/g) || []).length, 1, 'không bước nào khác được bỏ qua lỗi');
   const app = ci.slice(ci.indexOf('  app-di-dong:'), ci.indexOf('  windows:'));
   assert.ok(app.includes('EXPO_PUBLIC_GSCB_MODE: remote') && app.includes('tools/test/phone-link.mjs') && app.includes('tests/dien-thoai-host-420.test.mjs'));
 
