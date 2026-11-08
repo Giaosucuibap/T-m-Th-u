@@ -35,8 +35,15 @@ npx expo start                  # chạy thử: quét mã QR bằng app Expo Go 
 npx expo export --platform ios  # đóng gói thử (kiểm tra biên dịch)
 ```
 
-Phát hành: `npx eas-cli@latest build -p ios` (cần tài khoản Apple Developer) → `npx eas-cli@latest submit -p ios`
-→ TestFlight → App Store. Android: `build -p android` → Google Play.
+**Bản thử cho iPhone (Expo Go):** `.github/workflows/app-ban-thu.yml` — khi kho có bí mật `EXPO_TOKEN`,
+mỗi lần mã app đổi: kiểm thử → `eas init` → `eas update --branch thu-nghiem --platform ios --environment
+preview` → mã QR ở trang tóm tắt lượt chạy (`scripts/link-ban-thu.mjs`). `runtimeVersion` dùng chính sách
+`sdkVersion` (= `exposdk:58.0.0`) vì Expo Go chỉ nạp bản cập nhật cùng phiên bản SDK. Trên iPhone thật, mở dự
+án từ máy chủ phát triển (`npx expo start`) đòi Expo CLI và Expo Go đăng nhập cùng một tài khoản Expo.
+
+**Phát hành chính thức:** đổi `runtimeVersion` sang `{"policy": "appVersion"}` (hoặc `fingerprint`), rồi
+`npx eas-cli@latest build -p ios` (cần tài khoản Apple Developer) → `npx eas-cli@latest submit -p ios` →
+TestFlight → App Store. Android: `build -p android` → Google Play.
 
 ## Giới hạn đã biết (bản 1.0.0)
 

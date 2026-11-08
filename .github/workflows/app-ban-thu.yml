@@ -1,0 +1,92 @@
+# ============================================================================
+#  APP DI ĐỘNG — ĐĂNG BẢN THỬ CHO iPHONE (mở bằng Expo Go)
+#
+#  Chạy khi mã app (hoặc lõi tiện ích app dùng chung) thay đổi. CHỈ đăng khi kho
+#  có bí mật EXPO_TOKEN — mã truy cập tài khoản Expo của chủ phần mềm, do chính
+#  chủ phần mềm thêm ở Settings › Secrets and variables › Actions. Chưa có thì
+#  các bước bị bỏ qua, không báo lỗi. Mã chỉ nằm trong GitHub Secrets.
+#
+#  Trước khi đăng: kiểm thử đơn vị + kiểm tra lõi khớp nguyên văn tiện ích.
+#  Kết quả: mã QR + đường dẫn ở trang tóm tắt của lượt chạy.
+# ============================================================================
+name: App — bản thử iPhone
+
+on:
+  push:
+    branches: ['**']
+    paths:
+      - 'mobile-app/**'
+      - 'GiaoSuCuiBap/lib/**'
+      - 'GiaoSuCuiBap/content.js'
+      - 'GiaoSuCuiBap/page-hook.js'
+      - '.github/workflows/app-ban-thu.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: app-ban-thu-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  dang-ban-thu:
+    name: Đăng bản thử lên Expo (Expo Go, iOS)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    defaults:
+      run:
+        working-directory: mobile-app
+    steps:
+      - name: Kho đã có mã truy cập Expo (EXPO_TOKEN) chưa?
+        id: token
+        working-directory: .
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: |
+          if [ -n "$EXPO_TOKEN" ]; then
+            echo "co=1" >> "$GITHUB_OUTPUT"
+          else
+            echo "co=0" >> "$GITHUB_OUTPUT"
+            {
+              echo "### Chưa đăng bản thử"
+              echo "Kho chưa có bí mật **EXPO_TOKEN**. Làm theo HUONG-DAN-APP-IPHONE.md, Chặng 1, rồi chạy lại lượt này."
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - uses: actions/checkout@v5
+        if: steps.token.outputs.co == '1'
+      - uses: actions/setup-node@v5
+        if: steps.token.outputs.co == '1'
+        with:
+          node-version: 22
+      - name: Cài thư viện + kiểm thử trước khi đăng
+        if: steps.token.outputs.co == '1'
+        run: |
+          npm ci --no-audit --no-fund
+          node scripts/sync-core.mjs --check
+          node --test tests/unit/*.test.mjs
+      - name: Gắn dự án vào tài khoản Expo của chủ phần mềm
+        if: steps.token.outputs.co == '1'
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+          EXPO_NO_TELEMETRY: '1'
+        run: |
+          npx --yes eas-cli@27.5.0 init --non-interactive --force
+          npx --yes eas-cli@27.5.0 update:configure --platform ios --environment preview --non-interactive
+          # Expo Go chỉ nạp bản cập nhật có phiên bản chạy = phiên bản SDK (exposdk:58.0.0).
+          node -e 'const fs=require("fs");const a=JSON.parse(fs.readFileSync("app.json","utf8"));a.expo.runtimeVersion={policy:"sdkVersion"};fs.writeFileSync("app.json",JSON.stringify(a,null,2)+"\n");'
+          node -e 'const a=require("./app.json").expo;console.log("projectId:",a.extra&&a.extra.eas&&a.extra.eas.projectId,"| updates.url:",a.updates&&a.updates.url,"| runtimeVersion:",JSON.stringify(a.runtimeVersion))'
+      - name: Đăng bản thử (nhánh thu-nghiem)
+        if: steps.token.outputs.co == '1'
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+          EXPO_NO_TELEMETRY: '1'
+          GHI_CHU: ${{ github.event.head_commit.message || 'Bản thử' }}
+        run: |
+          MSG="$(printf '%s' "$GHI_CHU" | head -n 1 | cut -c1-120)"
+          npx --yes eas-cli@27.5.0 update --branch thu-nghiem --platform ios --environment preview \
+            --message "$MSG" --non-interactive --json > "$RUNNER_TEMP/eas-update.json"
+          cat "$RUNNER_TEMP/eas-update.json"
+      - name: Mã QR và đường dẫn mở trong Expo Go
+        if: steps.token.outputs.co == '1'
+        run: node scripts/link-ban-thu.mjs "$RUNNER_TEMP/eas-update.json" | tee -a "$GITHUB_STEP_SUMMARY"

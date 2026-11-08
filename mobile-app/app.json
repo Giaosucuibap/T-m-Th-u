@@ -10,11 +10,6 @@
     "backgroundColor": "#f3f5f8",
     "primaryColor": "#0f766e",
     "description": "Tìm gói thầu trên Hệ thống mạng đấu thầu quốc gia (e-GP), chấm điểm phù hợp và nhắc hạn nộp hồ sơ.",
-    "splash": {
-      "image": "./assets/splash-icon.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#0a2f2b"
-    },
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "vn.giaosucuibap.mobile",
@@ -50,10 +45,21 @@
         {
           "color": "#0f766e"
         }
+      ],
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#0a2f2b",
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 180
+        }
       ]
     ],
     "experiments": {
       "typedRoutes": false
+    },
+    "runtimeVersion": {
+      "policy": "sdkVersion"
     }
   }
 }

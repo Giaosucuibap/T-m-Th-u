@@ -26,6 +26,15 @@ App iPhone/Android đầu tiên, thư mục `mobile-app/` (Expo SDK 58, React Na
   tải danh sách, bỏ qua thao tác lúc bận; bấm Dừng giữa chừng; nhiều chủ đầu tư).
 - Đóng gói thử cho iOS (Hermes) và web; chụp 7 màn hình cỡ iPhone, 0 lỗi console.
 - **Chưa** chạy trên iPhone thật và **chưa** chạy với e-GP thật — xem `HUONG-DAN-APP-IPHONE.md`.
+- `expo install --check`: mọi thư viện khớp SDK 58. `expo-doctor` 19/20 — mục còn lại cần mạng tới danh bạ
+  thư viện React Native. Đã sửa lỗi cấu hình doctor bắt được: SDK 58 bỏ khóa `splash` cấp trên cùng → chuyển
+  sang plugin `expo-splash-screen`.
+
+### Bản thử cho iPhone qua Expo Go
+- Quy trình GitHub `app-ban-thu.yml`: khi kho có bí mật `EXPO_TOKEN` (mã tài khoản Expo do chủ phần mềm tự
+  thêm), mỗi lần mã app đổi sẽ kiểm thử, đăng bản thử (EAS Update, nhánh `thu-nghiem`, iOS) rồi in mã QR mở
+  bằng Expo Go. Chưa có bí mật thì bỏ qua, không báo lỗi.
+- `runtimeVersion` theo chính sách `sdkVersion` (= `exposdk:58.0.0`), vì Expo Go chỉ nạp bản cập nhật cùng SDK.
 
 ### Sửa an toàn cho bộ kiểm thử tiện ích
 - 24 kịch bản `tools/test/*.mjs` dùng `--no-proxy-server` để chặn proxy. Trên máy có proxy hệ thống (đã

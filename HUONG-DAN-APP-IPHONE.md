@@ -33,12 +33,23 @@ Miễn phí, mất khoảng 15 phút, không cần tài khoản Apple trả phí
    - Đăng nhập expo.dev, bấm ảnh đại diện ở góc phải.
    - Vào **Account settings › Access tokens › Create token**, đặt tên `giao-su-cui-bap`.
    - Bấm **Copy** để chép mã.
-4. **Đưa mã cho tôi một cách an toàn.** Trong cuộc trò chuyện này sẽ hiện một **biểu mẫu bảo mật** cho
-   `api.expo.dev`. Dán mã vào **biểu mẫu đó**, không dán vào khung chat. Khi được hỏi
-   **cho phép mạng tới máy chủ Expo**, bấm Cho phép.
-5. **Mở app trên iPhone.** Tôi đưa bản thử lên máy chủ Expo và gửi anh một đường link.
-   Bấm link trên iPhone, Expo Go sẽ tự mở app.
-6. **Chạy thử theo kịch bản** (mỗi bước chụp màn hình gửi lại):
+4. **Cất mã vào GitHub của anh** (mã nằm trong kho của anh, không đưa cho ai, kể cả tôi):
+   - Mở <https://github.com/Giaosucuibap/T-m-Th-u/settings/secrets/actions> (cần đăng nhập GitHub).
+   - Bấm **New repository secret**.
+   - Ô **Name** gõ đúng `EXPO_TOKEN`. Ô **Secret** dán mã vừa chép. Bấm **Add secret**.
+5. **Nhắn tôi "đã thêm EXPO_TOKEN".**
+   - Tôi chạy quy trình tự động "App — bản thử iPhone" trên GitHub. Quy trình tự kiểm thử lại, đăng bản
+     thử vào tài khoản Expo của anh, rồi tạo **mã QR**. Tôi gửi anh đường link tới trang có mã QR.
+   - Anh cũng có thể tự chạy: tab **Actions** › **App — bản thử iPhone** › chọn lượt mới nhất ›
+     **Re-run all jobs**.
+   - Từ đó, mỗi lần tôi sửa app, bản thử mới được đăng tự động.
+6. **Mở app trên iPhone**, chọn một trong hai cách:
+   - Mở trang có mã QR trên máy tính, dùng **camera iPhone** quét mã, rồi bấm "Mở trong Expo Go".
+   - Hoặc mở Expo Go, đăng nhập đúng tài khoản Expo ở bước 2, vào mục **Projects** › **Giáo Sư Cùi Bắp**.
+
+Không muốn dùng GitHub? Anh có thể tự thêm mã vào phần cài đặt môi trường của Claude Code (mục
+**Network secrets**, máy chủ `api.expo.dev`), rồi nhắn tôi để tôi đăng trực tiếp.
+7. **Chạy thử theo kịch bản** (mỗi bước chụp màn hình gửi lại):
    1. Ở dòng trên cùng màn Tìm gói, chờ **e-GP: Sẵn sàng** (lần đầu mất khoảng 5–20 giây).
    2. Để nguyên **Lâm Đồng · Xây lắp**, bấm **Tìm trên e-GP**. Giữ app mở tới khi xong, thường dưới 1 phút.
    3. **Đối chiếu với tiện ích Chrome.** Trên máy tính, tra cùng tiêu chí trong tiện ích Chrome. Hai con số
