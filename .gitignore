@@ -11,5 +11,10 @@ evidence/
 # Tệp thực thi biên dịch sẵn của cầu nối E-HSMT. Mã nguồn NativeHost.cs nằm
 # ngay cạnh; một tệp .exe trong git thì người duyệt không đọc được nó làm gì.
 native-agent/*.exe
+native-agent/*.exe.sha256
+
+# Giao diện iPhone của Link điện thoại (4.20.0): dựng từ mobile-app lúc đóng gói
+# (tools/release/dong-goi.mjs), không đưa bản dựng vào git.
+native-agent/web/
 
 canary-result.json

@@ -2,6 +2,79 @@
 
 Tài liệu này ghi lại các thay đổi quan trọng của Giáo Sư Cùi Bắp. Cấu trúc tham khảo [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) và phiên bản tuân theo cách đánh số ngữ nghĩa ở mức sản phẩm.
 
+## [4.20.0] — 2026-11-08
+
+**Link điện thoại.** iPhone tra gói thầu bằng Safari, không cài gì: máy tính công ty (Chrome + tiện ích)
+làm máy tra e-GP. Hướng dẫn: `HUONG-DAN-4.20.0.md`. Giao thức: `native-agent/DIEN-THOAI-GIAO-THUC.md`.
+
+### Có gì
+- Trang mới **Hệ thống › Link điện thoại**: bật/tắt, mã QR (quét bằng Camera iPhone), đổi khoá, và tuỳ
+  chọn **gửi link mới qua Telegram** khi link đổi.
+- Cầu nối mới `GiaoSuCuiBap.DienThoai.exe` (C# 5, .NET Framework có sẵn trong Windows, không thư viện ngoài):
+  - Chrome khởi động tệp này qua native messaging `vn.giaosucuibap.dienthoai`.
+  - Phục vụ giao diện iPhone và API ở `127.0.0.1`, cổng ngẫu nhiên; ra Internet qua **cloudflared**
+    (đường hầm `https://….trycloudflare.com` của Cloudflare).
+  - Tắt link hoặc tắt Chrome thì tệp thoát, cloudflared thoát theo. Kể cả khi tệp bị tắt ngang, job tự huỷ
+    của Windows vẫn đóng cloudflared.
+- Lệnh tìm từ điện thoại chạy **đúng luồng Tìm gói thầu** của tiện ích (`startTbmtSearch`):
+  - cùng hàng đợi, cùng khoá chống chạy chồng;
+  - bị chặn khi đang khoá chỉnh sửa hoặc khi e-GP đổi cấu trúc;
+  - mỗi lúc một lượt điện thoại, tối đa 15 phút, bấm Dừng từ điện thoại được.
+- Giao diện iPhone là bản web của `mobile-app` ở chế độ máy tính công ty (`EXPO_PUBLIC_GSCB_MODE=remote`):
+  - Tìm gói, kết quả, chi tiết, theo dõi.
+  - **Thêm vào Lịch iPhone**: tệp `.ics` có 3 lời nhắc, trước 72 giờ, 24 giờ và 3 giờ.
+  - Mở lại link là thấy lượt tra gần nhất.
+- Tệp cài một lần `native-agent/BAT-LINK-DIEN-THOAI.bat` (gỡ: `GO-LINK-DIEN-THOAI.bat`), không cần quyền
+  Administrator. Tệp tự làm ba việc:
+  - chép cầu nối và giao diện vào `%LOCALAPPDATA%\GiaoSuCuiBap\DienThoai`;
+  - tải cloudflared **2026.10.7**, chỉ nhận đúng 55.390.512 byte và SHA-256 `2493dbc1…1343`, rồi in chữ ký
+    số Cloudflare, Inc.;
+  - đăng ký với Chrome (HKCU).
+
+### An toàn
+- Khoá ngẫu nhiên 192 bit, chỉ nằm sau dấu `#` của link, nên không gửi lên máy chủ nào.
+- Mọi lệnh API đòi tiêu đề `X-GSCB-Key`, so khớp trong thời gian không đổi. API không mở CORS.
+- Trang HTML có CSP `script-src 'self'` và `frame-ancestors 'none'`.
+- Chặn đường dẫn `..`, `\`, `:`, `//`. Giới hạn phần đầu 16 KB, thân 64 KB.
+- Tiêu chí từ điện thoại chỉ giữ 9 trường đã biết, mỗi trường tối đa 500 ký tự (lọc ở cả cầu nối lẫn tiện ích).
+- Link qua Telegram chỉ gửi vào **chat riêng** (Chat ID số dương), tắt xem trước link. Gửi lỗi thì tự thử lại
+  sau 10 phút, không thành tin rác mỗi phút.
+
+### Kiểm thử
+- `tests/dien-thoai-host-420.test.mjs`: 7 bài cho máy phục vụ, đóng vai Chrome (khung native messaging) và
+  vai điện thoại (HTTP). Chạy trên .NET Framework thật ở CI Windows và dưới Mono ở CI Linux. Các bài kiểm:
+  - từ chối mã tiện ích lạ, khoá sai dạng;
+  - lọc tiêu chí, lượt chồng trả BUSY, tiến độ, kết quả, Dừng;
+  - CSP, ứng dụng một trang, chặn leo thư mục;
+  - tệp `.ics`, yêu cầu quá cỡ, thân chunked.
+- `tests/phone-link-420.test.mjs`: 14 bài.
+  - Phần thuần: khoá, link, lọc tiêu chí, kết quả gửi điện thoại, tin Telegram.
+  - Runtime với cổng native và kho giả: tìm, chặn, PC_BUSY, quá giờ, đổi khoá, nối lại, Telegram đúng một lần.
+  - Hợp đồng ba phía: mã tiện ích suy từ khoá manifest, tên cầu nối, tiêu đề khoá, danh sách tiêu chí C#.
+  - Tệp cài: chỉ chữ ASCII, ghim cloudflared khớp tài liệu, `.bat` xuống dòng CRLF.
+  - Trên Windows của CI: **cài thật** (tải cloudflared, kiểm mã băm và chữ ký số, HKCU, tệp kê khai, cài
+    lại, từ chối tệp bị sửa, gỡ sạch).
+- `tools/test/phone-link.mjs` (đầu-cuối, 7/7): Chrome thật nạp tiện ích, native messaging thật khởi động cầu
+  nối, tiện ích tra e-GP giả lập, rồi trang điện thoại cỡ iPhone:
+  - tìm ra 115 gói khớp;
+  - Lịch `.ics`;
+  - đổi khoá thì link cũ hết hiệu lực;
+  - tắt link thì cầu nối dừng;
+  - không trang nào ra e-GP thật.
+  Bài đầu-cuối bắt được và đã sửa một lỗi thật: quét mã QR mới (chỉ khác phần `#k=`) thì Safari không tải
+  lại trang, nên điện thoại vẫn giữ khoá cũ.
+- `tools/test/phone-tunnel-live.mjs`, mạng thật trên CI Windows:
+  - cloudflared mở đường hầm `trycloudflare.com`;
+  - gọi từ Internet: có khoá và thiếu khoá, lệnh tìm đi vòng về qua đường hầm;
+  - giết ngang cầu nối thì cloudflared chết theo.
+  Bài này phụ thuộc dịch vụ miễn phí của Cloudflare nên không chặn CI.
+
+### Giới hạn
+- **Chưa chạy trên iPhone thật và e-GP thật.**
+- TryCloudflare là dịch vụ thử nghiệm miễn phí, không cam kết thời gian hoạt động.
+- Link đổi khi máy tính hoặc Chrome khởi động lại.
+- Mạng chặn cổng 7844 của Cloudflare thì đường hầm không lên.
+
 ## [App di động 1.0.0 — thử nghiệm] — 2026-11-08
 
 App iPhone/Android đầu tiên, thư mục `mobile-app/` (Expo SDK 58, React Native). Hướng dẫn: `HUONG-DAN-APP-IPHONE.md`.

@@ -34,6 +34,9 @@ import { createMessageRegistry } from './lib/message-registry.js';
 import { automationHandlers } from './lib/handlers/automation.js';
 import { navigationHandlers } from './lib/handlers/navigation.js';
 import { searchStoreHandlers } from './lib/handlers/search-store.js';
+import { phoneHandlers } from './lib/handlers/phone.js';
+import { createPhoneRuntime } from './lib/runtime-phone.js';
+import { PHONE_ALARM, isPrivateTelegramChat } from './lib/phone-link.js';
 import { touchLifecycle, inferLifecycleEvent, shouldRemindDeadline, investorWatchHit, schemaHealthOf, findPriorTenderVersion, newTenderChanges, deadlineReminderState } from './lib/lifecycle.js';
 import { normalizeCapability, checklistProgress, emptyChecklist, checklistItemsFor } from './lib/capability.js';
 import { safeHttpsWebhook, safeEmail, safeChatId, channelPayload } from './lib/channels.js';
@@ -3655,16 +3658,31 @@ const historyRuntime=createHistoryRuntime({storage:chrome.storage.local,alarms:c
   readJobs:async()=>{const s=await getState();return {bidOpenScan:await getBidScan(),activeJob:activeListJob(await readQueryControlState(chrome.storage.local))||(bbmtWaiter?{kind:'bbmt'}:null),
     canaryNextRunAt:s.liveCanary?.nextRunAt||null,hunts:s.hunts,readOnly:Boolean(s.settings.readOnlyMode),schemaRed:schemaIsRed(s)};},
   startScan:payload=>startBidOpenScan(payload),readObservations:async()=>(await getState()).observations||[]});
+/* LINK ĐIỆN THOẠI (4.20.0): máy tính công ty làm máy tra cho iPhone. Lệnh từ điện thoại chạy
+   đúng luồng Tìm gói thầu (startTbmtSearch), cùng các chốt chặn: đang khoá chỉnh sửa, e-GP đổi cấu trúc. */
+const phoneRuntime=createPhoneRuntime({storage:chrome.storage.local,runtime:chrome.runtime,version:chrome.runtime.getManifest().version,
+  startSearch:payload=>startTbmtSearch(payload),cancelSearch:runId=>cancelActiveRun(runId),
+  readActiveRun:async()=>(await appStorage.get({[KEYS.activeRun]:null}))[KEYS.activeRun],
+  readFinishedRun:async runId=>{const st=await searchStateRuntime.read({runId});return {run:st.selectedRun||null,tenders:st.tenders||[]};},
+  blockedReason:async()=>{const s=await readSafetyState();return s.settings.readOnlyMode?'READ_ONLY':schemaIsRed(s)?'SCHEMA_RED':null;},
+  onEnabledChange:async enabled=>{if(enabled)await chrome.alarms.create(PHONE_ALARM,{periodInMinutes:1});else await chrome.alarms.clear(PHONE_ALARM);},
+  // Link mới qua Telegram: chỉ gửi vào Chat ID RIÊNG (số dương) đã cấu hình — link chứa khoá.
+  sendLinkMessage:async text=>{const s=await getState();
+    if(!isPrivateTelegramChat(s.settings.telegramChatId))return {ok:false,message:'Chat ID trong Cấu hình là nhóm/kênh hoặc còn trống — link có khoá chỉ được gửi vào chat riêng của anh với bot.'};
+    return dispatchOutbound(s.settings,text,{kind:'phone-link'});}});
 /* SỔ ĐĂNG KÝ LỆNH (4.19.0): các mảng đã tách khỏi khối switch bên dưới. */
 const messageRegistry=createMessageRegistry()
   .register('tu-dong-hoa',automationHandlers({getState:(...a)=>getState(...a),save:(...a)=>save(...a),withLock:(...a)=>withLock(...a),KEYS,validateHunt,maxHunts:MAX_HUNTS_ALLOWED,
     ensureHuntAlarms:(...a)=>ensureHuntAlarms(...a),runHuntById:(...a)=>runHuntById(...a),huntRuntime,liveCanaryRuntime,historyRuntime,wakeTimes,schemaIsRed,
     canaryBlocked:async()=>Boolean(activeListJob(await readQueryControlState(chrome.storage.local))||bbmtWaiter),safeWatches}))
   .register('dieu-huong',navigationHandlers({tabs:chrome.tabs,runtime:chrome.runtime,getState:(...a)=>getState(...a),isEgpUrl,defaultEgpUrl:EGP_DEFAULT_URL}))
-  .register('tra-cuu-kho',searchStoreHandlers({getState:(...a)=>getState(...a),save:(...a)=>save(...a),withLock:(...a)=>withLock(...a),appStorage,searchStateRuntime,KEYS,SAVED_SEARCHES,safeSavedSearches,isEgpUrl}));
+  .register('tra-cuu-kho',searchStoreHandlers({getState:(...a)=>getState(...a),save:(...a)=>save(...a),withLock:(...a)=>withLock(...a),appStorage,searchStateRuntime,KEYS,SAVED_SEARCHES,safeSavedSearches,isEgpUrl}))
+  .register('dien-thoai',phoneHandlers({phoneRuntime}));
 const exportRuntime=createExportRuntime({readSearchState:(...args)=>searchStateRuntime.read(...args),getState:(...args)=>getState(...args),downloadData:(...args)=>downloadData(...args),downloadXlsx:(...args)=>downloadXlsx(...args),mobileHtml:(...args)=>mobileHtml(...args),getContractorProfile:(...args)=>getContractorProfile(...args),priceRow:(...args)=>priceRow(...args),sanitizedTemplateState:(...args)=>sanitizedTemplateState(...args),stamp,numOrNull,chrome});
 
 void liveCanaryRuntime.hydrate().catch(()=>{});
+// Link điện thoại: service worker vừa thức dậy thì nối lại cầu nối nếu đang bật.
+void phoneRuntime.ensure().catch(()=>{});
 
 chrome.runtime.onInstalled.addListener(async details=>{
   const s0=await getState();
@@ -3713,6 +3731,7 @@ chrome.runtime.onStartup.addListener(async()=>{
   if(!successFresh&&!partialCooling)startScan('startup');
 });
 chrome.alarms.onAlarm.addListener(async alarm=>{
+  if(alarm.name===PHONE_ALARM){await phoneRuntime.ensure().catch(()=>{});return;}
   if(await liveCanaryRuntime.onAlarm(alarm))return;
   if(await historyRuntime.onAlarm(alarm))return;
   if((await getState()).settings.readOnlyMode&&!alarm.name.startsWith(TIMEOUT_PREFIX))return;

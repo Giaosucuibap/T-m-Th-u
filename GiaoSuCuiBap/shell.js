@@ -29,6 +29,7 @@ export const NAV_GROUPS = [
     ['timeline.html', 'clock', 'Nhật ký điều chỉnh']] },
   { id: 'he-thong', label: 'Hệ thống', items: [
     ['options.html', 'settings', 'Cấu hình'],
+    ['phone.html', 'phone', 'Link điện thoại'],
     ['diagnostics.html', 'shield', 'Kiểm tra dữ liệu']] }
 ];
 export const NAV_ITEMS = NAV_GROUPS.flatMap((g) => g.items.map((item) => [...item, g.label]));

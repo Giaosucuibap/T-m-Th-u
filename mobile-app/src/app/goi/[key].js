@@ -4,6 +4,7 @@ import { Alert, ScrollView, Share, StyleSheet, View } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import { useApp } from '../../state/AppState';
+import { useEgp } from '../../egp/EgpProvider';
 import { T, Card, Button, Badge, Notice, KeyValue } from '../../ui/kit.js';
 import { color, size, space, gateTone, scoreTone } from '../../ui/theme.js';
 import { formatVndFull, formatVndShort, formatDateTimeVn, timeLeft } from '../../core/format.js';
@@ -12,6 +13,7 @@ import { isEgpUrl } from '../../core/egp/egp-host.js';
 export default function TenderDetail() {
   const { key } = useLocalSearchParams();
   const app = useApp();
+  const egp = useEgp();
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState(null);
   const tender = app.findTender(String(key || ''));
@@ -36,6 +38,7 @@ export default function TenderDetail() {
       const r = await app.toggleWatch(tender);
       if (!r.watched) setNote({ tone: 'info', text: 'Đã bỏ theo dõi và huỷ các lời nhắc của gói này.' });
       else if (r.reminders) setNote({ tone: 'ok', text: `Đã theo dõi. Hẹn ${r.reminders} lời nhắc trước hạn nộp.${r.skipped === 'ios-limit' ? ' (iPhone chỉ giữ tối đa 64 lời nhắc — đã ưu tiên mốc sát hạn.)' : ''}` });
+      else if (r.skipped === 'calendar') setNote({ tone: 'ok', text: egp?.calendar ? 'Đã theo dõi. Bấm "Thêm vào Lịch iPhone" để Lịch nhắc 3 ngày, 24 giờ và 3 giờ trước hạn nộp.' : 'Đã theo dõi.' });
       else if (r.skipped === 'no-permission') setNote({ tone: 'warn', text: 'Đã theo dõi, nhưng chưa được phép gửi thông báo. Vào Cài đặt › Thông báo › Expo Go (hoặc Giáo Sư Cùi Bắp) để bật.' });
       else setNote({ tone: 'info', text: 'Đã theo dõi. Gói đã qua các mốc nhắc (hoặc đã đóng thầu) nên không hẹn lời nhắc.' });
     } finally { setBusy(false); }
@@ -74,6 +77,9 @@ export default function TenderDetail() {
         <T weight="bold" style={styles.price}>{formatVndShort(tender.price)}</T>
         <View style={{ gap: space.sm }}>
           <Button title={watched ? 'Bỏ theo dõi' : 'Theo dõi & nhắc hạn'} kind={watched ? 'secondary' : 'primary'} busy={busy} onPress={onWatch} />
+          {egp?.calendar && left.state === 'open' ? (
+            <Button title="Thêm vào Lịch iPhone (nhắc 3 lần)" kind="secondary" onPress={() => egp.calendar(tender)} />
+          ) : null}
           <View style={styles.row2}>
             <Button title="Mở trên e-GP" kind="secondary" style={{ flex: 1 }} onPress={onOpenEgp} />
             <Button title="Chia sẻ" kind="secondary" style={{ flex: 1 }} onPress={onShare} />

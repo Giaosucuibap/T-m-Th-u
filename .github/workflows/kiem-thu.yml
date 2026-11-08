@@ -1,9 +1,11 @@
 # ============================================================================
 #  KIỂM THỬ TỰ ĐỘNG — chạy mỗi lần đẩy mã và mỗi PR
 #
-#  Bốn việc, chạy song song (việc thứ tư — app di động — ở job app-di-dong):
+#  Bốn việc, chạy song song (việc thứ tư — app di động và Link điện thoại — ở job
+#  app-di-dong):
 #    1. Linux   : toàn bộ bộ kiểm thử + chạy lại các ca ngày/giá ở 4 múi giờ.
-#    2. Windows : toàn bộ bộ kiểm thử, GỒM 10 bài cầu nối E-HSMT chỉ chạy được
+#    2. Windows : toàn bộ bộ kiểm thử, GỒM 10 bài cầu nối E-HSMT và 7 bài cầu nối
+#                 Link điện thoại (4.20.0) chỉ chạy đúng nghĩa
 #                 trên Windows (biên dịch bằng csc.exe, chạy tệp .exe). Tệp .exe
 #                 được biên dịch NGAY TẠI ĐÂY từ native-agent/NativeHost.cs — bài
 #                 kiểm chạy trên đúng mã nguồn ai cũng đọc được, không phải trên
@@ -94,12 +96,29 @@ jobs:
           npx expo export --platform web --output-dir "$RUNNER_TEMP/app-web"
       - name: Chụp giao diện cỡ iPhone (dữ liệu mẫu) — không lỗi console, không gọi mạng
         run: node tests/browser/ui-shots.mjs "$RUNNER_TEMP/app-web" "$RUNNER_TEMP/app-shots"
+      # 4.20.0 — Link điện thoại: máy tính công ty làm máy tra, iPhone mở link Safari.
+      - name: Đóng gói giao diện web cho Link điện thoại (chế độ máy tính công ty)
+        env:
+          EXPO_NO_TELEMETRY: '1'
+          CI: '1'
+          EXPO_PUBLIC_GSCB_MODE: remote
+        run: npx expo export --platform web --output-dir "$RUNNER_TEMP/app-web-remote"
+      - name: Cài Mono (dựng và chạy GiaoSuCuiBap.DienThoai.exe trên Linux)
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq mono-mcs mono-runtime libmono-system-web-extensions4.0-cil
+      - name: Máy phục vụ Link điện thoại (DienThoai.cs dưới Mono) — 7 bài
+        working-directory: .
+        run: node --test tests/dien-thoai-host-420.test.mjs
+      - name: Link điện thoại đầu-cuối — Chrome thật + native messaging + tiện ích + e-GP giả lập + trang iPhone
+        working-directory: .
+        run: xvfb-run -a node tools/test/phone-link.mjs "$PWD/GiaoSuCuiBap" "$RUNNER_TEMP/app-web-remote"
       - name: Lưu ảnh màn hình app
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: app-anh-man-hinh
-          path: ${{ runner.temp }}/app-shots
+          path: |
+            ${{ runner.temp }}/app-shots
+            test-results/phone-link/*.png
           if-no-files-found: ignore
 
   windows:
@@ -111,36 +130,54 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version: 22
-      - name: Biên dịch cầu nối từ mã nguồn
+      - name: Biên dịch hai cầu nối từ mã nguồn (E-HSMT và Link điện thoại)
         shell: pwsh
         run: |
           $csc = 'C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe'
           & $csc /nologo /target:exe /optimize+ /r:System.Web.Extensions.dll `
             /out:native-agent\GiaoSuCuiBap.NativeHost.exe native-agent\NativeHost.cs
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & $csc /nologo /target:exe /optimize+ /r:System.Web.Extensions.dll `
+            /out:native-agent\GiaoSuCuiBap.DienThoai.exe native-agent\DienThoai.cs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           New-Item -ItemType Directory -Force test-results | Out-Null
+      # Gồm 7 bài máy phục vụ Link điện thoại chạy trên đúng tệp .exe vừa biên dịch
+      # (.NET Framework thật), và bài CÀI THẬT link-dien-thoai.ps1: tải cloudflared từ
+      # GitHub, kiểm SHA-256 + chữ ký số Cloudflare, ghi HKCU, gỡ sạch.
       - run: npm test
+      # 4.20.0: mạng THẬT — cloudflared mở đường hầm trycloudflare, gọi từ Internet vào
+      # tệp .exe, lệnh tìm đi vòng về; giết ngang tệp .exe thì cloudflared chết theo.
+      # Phụ thuộc dịch vụ miễn phí của Cloudflare nên không chặn CI; kết quả in rõ.
+      - name: Link điện thoại qua đường hầm Cloudflare THẬT (dịch vụ ngoài — không chặn CI)
+        continue-on-error: true
+        timeout-minutes: 8
+        run: node tools/test/phone-tunnel-live.mjs
       # 4.19.0: tệp .exe ĐÃ QUA bộ kiểm thử Windows ở bước trên được giữ lại làm
       # bản phát hành — gói cài không còn thiếu cầu nối E-HSMT. Kèm mã SHA-256 để
       # đối chiếu đúng tệp trong gói với đúng lần chạy kiểm thử này.
-      - name: Lưu cầu nối đã biên dịch và đã kiểm thử
+      - name: Lưu hai cầu nối đã biên dịch và đã kiểm thử
         shell: pwsh
         run: |
-          $h = (Get-FileHash native-agent\GiaoSuCuiBap.NativeHost.exe -Algorithm SHA256).Hash.ToLower()
-          "$h  GiaoSuCuiBap.NativeHost.exe" | Out-File -Encoding ascii native-agent\GiaoSuCuiBap.NativeHost.exe.sha256
-          Get-Content native-agent\GiaoSuCuiBap.NativeHost.exe.sha256
-          # Cùng tệp đó in dạng base64 vào nhật ký (mã băm ở dòng đầu) — để máy đóng gói
-          # không tải được artifact vẫn lấy đúng tệp: tools/release/lay-cau-noi-tu-ci.mjs.
-          $b = [Convert]::ToBase64String([IO.File]::ReadAllBytes('native-agent\GiaoSuCuiBap.NativeHost.exe'))
-          Write-Output "GSCB-EXE-BEGIN $h $($b.Length)"
-          for ($i = 0; $i -lt $b.Length; $i += 3000) { Write-Output ("GSCB-EXE " + $b.Substring($i, [Math]::Min(3000, $b.Length - $i))) }
-          Write-Output "GSCB-EXE-END"
+          foreach ($name in @('GiaoSuCuiBap.NativeHost.exe', 'GiaoSuCuiBap.DienThoai.exe')) {
+            $file = "native-agent\$name"
+            $h = (Get-FileHash $file -Algorithm SHA256).Hash.ToLower()
+            "$h  $name" | Out-File -Encoding ascii "$file.sha256"
+            Get-Content "$file.sha256"
+            # Cùng tệp đó in dạng base64 vào nhật ký (mã băm, độ dài, tên ở dòng đầu) — để máy
+            # đóng gói không tải được artifact vẫn lấy đúng tệp: tools/release/lay-cau-noi-tu-ci.mjs.
+            $b = [Convert]::ToBase64String([IO.File]::ReadAllBytes($file))
+            Write-Output "GSCB-EXE-BEGIN $h $($b.Length) $name"
+            for ($i = 0; $i -lt $b.Length; $i += 3000) { Write-Output ("GSCB-EXE " + $b.Substring($i, [Math]::Min(3000, $b.Length - $i))) }
+            Write-Output "GSCB-EXE-END"
+          }
       - uses: actions/upload-artifact@v4
         with:
           name: cau-noi-e-hsmt-${{ github.sha }}
           path: |
             native-agent/GiaoSuCuiBap.NativeHost.exe
             native-agent/GiaoSuCuiBap.NativeHost.exe.sha256
+            native-agent/GiaoSuCuiBap.DienThoai.exe
+            native-agent/GiaoSuCuiBap.DienThoai.exe.sha256
           if-no-files-found: error
           retention-days: 30
 

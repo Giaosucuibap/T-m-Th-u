@@ -8,6 +8,13 @@ import { T, Card, Button, Badge, Notice } from '../../ui/kit.js';
 import { color, size, space, radius } from '../../ui/theme.js';
 import { ago, criteriaSummary } from '../../core/format.js';
 
+const REMOTE_LIMITS = [
+  'Máy tính công ty làm việc tra e-GP (Chrome + tiện ích). Máy tính hoặc Chrome tắt thì điện thoại không tra được; Bộ săn tự động và tin nhắn Telegram vẫn chạy trên máy tính như cũ.',
+  'Link đổi khi máy tính hoặc Chrome khởi động lại: mở tiện ích › Link điện thoại trên máy tính và quét mã QR mới.',
+  'Mỗi lượt đọc tối đa 20 trang (1.000 gói) cho mỗi truy vấn. Vượt mức này, kết quả ghi rõ "chưa đầy đủ" — hãy thu hẹp tiêu chí.',
+  'Kết quả và danh sách theo dõi lưu trong Safari trên điện thoại này và trên máy tính công ty; không gửi về máy chủ nào khác. Ai có link đều tra được bằng máy tính — đừng gửi link cho người ngoài.'
+];
+
 const LIMITS = [
   'Tra cứu chạy khi app đang mở trên màn hình. iPhone không cho app tự chạy nền theo giờ như máy tính, nên Bộ săn tự động và tin nhắn Telegram vẫn do tiện ích Chrome trên máy tính đảm nhận.',
   'App dùng chính trang tra cứu công khai của e-GP. Khi e-GP đổi giao diện hoặc cấu trúc dữ liệu, có thể cần cập nhật lõi tra cứu (dùng chung với tiện ích).',
@@ -48,7 +55,7 @@ export default function InfoScreen() {
 
       <Card>
         <View style={styles.rowBetween}>
-          <T weight="semibold" style={styles.h2}>Kết nối e-GP</T>
+          <T weight="semibold" style={styles.h2}>{egp.mode === 'remote' ? 'Kết nối máy tính công ty' : 'Kết nối e-GP'}</T>
           <Badge label={state[0]} fg={state[1]} bg={state[2]} />
         </View>
         <T style={styles.muted}>{egp.page.message}</T>
@@ -58,7 +65,9 @@ export default function InfoScreen() {
             <Button title="Tải lại" kind="secondary" style={{ flex: 1 }} onPress={() => egp.reloadPage()} />
           </View>
         ) : null}
-        <T style={styles.small}>Gặp lỗi khi tra: bấm "Xem trang e-GP" để xem trang có mở được không (mạng, bảo trì, e-GP chặn truy cập), rồi "Tải lại".</T>
+        <T style={styles.small}>{egp.mode === 'remote'
+          ? 'Máy tính công ty và Chrome phải đang bật. Không kết nối được: trên máy tính mở tiện ích › Link điện thoại để xem trạng thái và quét mã QR mới.'
+          : 'Gặp lỗi khi tra: bấm "Xem trang e-GP" để xem trang có mở được không (mạng, bảo trì, e-GP chặn truy cập), rồi "Tải lại".'}</T>
       </Card>
 
       <Card>
@@ -74,11 +83,13 @@ export default function InfoScreen() {
 
       <Card>
         <T weight="semibold" style={styles.h2}>Những điều cần biết</T>
-        {LIMITS.map((line) => <T key={line} style={styles.limit}>• {line}</T>)}
+        {(egp.mode === 'remote' ? REMOTE_LIMITS : LIMITS).map((line) => <T key={line} style={styles.limit}>• {line}</T>)}
       </Card>
 
       <Notice tone="info" title="Nhắc hạn nộp">
-        {'Lời nhắc là thông báo hẹn sẵn trên iPhone. Nếu không thấy thông báo: Cài đặt › Thông báo › chọn app › bật Cho phép thông báo.'}
+        {egp.mode === 'remote' || egp.mode === 'demo'
+          ? 'Trên Safari: mở gói thầu › "Thêm vào Lịch iPhone". Lịch nhắc còn 3 ngày, 24 giờ, 3 giờ trước hạn nộp.'
+          : 'Lời nhắc là thông báo hẹn sẵn trên iPhone. Nếu không thấy thông báo: Cài đặt › Thông báo › chọn app › bật Cho phép thông báo.'}
       </Notice>
 
       <Button title="Xoá dữ liệu trên máy" kind="danger" onPress={confirmClear} />

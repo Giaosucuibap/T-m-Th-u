@@ -1,8 +1,12 @@
-# Giáo Sư Cùi Bắp 4.19.0
+# Giáo Sư Cùi Bắp 4.20.0
 
-Bản 4.19.0 khắc phục các điểm yếu trong báo cáo thẩm định 4.18.0: **trạm săn** (chạy bù lượt lỡ giờ, Chrome chạy nền tuỳ chọn, Task Scheduler đánh thức máy), **kiểm chứng toàn trình trên e-GP thật** một chạm ở trang Chẩn đoán, **kho lịch sử** biên bản mở thầu nạp dần, cảnh báo khi bộ săn hỏng, gói cài có lại cầu nối E-HSMT dựng và kiểm thử trên Windows CI, và bước đầu tách `background.js`. Đọc `HUONG-DAN-4.19.0.md` trước khi cập nhật; đánh giá chi tiết ở `BAO-CAO-THAM-DINH-4.19.0.md`.
+Bản 4.20.0 thêm **Link điện thoại**: iPhone tra gói thầu bằng Safari, không cài gì; máy tính công ty (Chrome + tiện ích) làm máy tra e-GP và trả kết quả về điện thoại qua đường hầm https của Cloudflare. Cài một lần trên máy tính bằng `native-agent/BAT-LINK-DIEN-THOAI.bat`, bật ở **Hệ thống › Link điện thoại**, quét mã QR bằng Camera iPhone; link mới có thể tự gửi qua Telegram. Đọc `HUONG-DAN-4.20.0.md` trước khi cập nhật; giao thức kỹ thuật ở `native-agent/DIEN-THOAI-GIAO-THUC.md`.
 
 ## Ghi chú các bản trước
+
+### 4.19.0
+
+Bản 4.19.0 khắc phục các điểm yếu trong báo cáo thẩm định 4.18.0: **trạm săn** (chạy bù lượt lỡ giờ, Chrome chạy nền tuỳ chọn, Task Scheduler đánh thức máy), **kiểm chứng toàn trình trên e-GP thật** một chạm ở trang Chẩn đoán, **kho lịch sử** biên bản mở thầu nạp dần, cảnh báo khi bộ săn hỏng, gói cài có lại cầu nối E-HSMT dựng và kiểm thử trên Windows CI, và bước đầu tách `background.js`. Đọc `HUONG-DAN-4.19.0.md` trước khi cập nhật; đánh giá chi tiết ở `BAO-CAO-THAM-DINH-4.19.0.md`.
 
 ### 4.16.0
 

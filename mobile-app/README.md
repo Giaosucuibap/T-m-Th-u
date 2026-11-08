@@ -14,8 +14,17 @@ src/core/egp/*.js        CHÉP NGUYÊN VĂN từ GiaoSuCuiBap/lib — không s�
 src/core/search.js       bộ điều phối (thay vai trò background.js): PROBE → START → RESULTS(ack) → DONE
 src/core/page-channel.js kênh nhắn tin app ↔ trang (dữ liệu từ trang luôn coi là không tin cậy)
 src/core/store.js        lưu trên máy (AsyncStorage); reminders.js nhắc hạn (thông báo cục bộ)
-src/egp/EgpProvider.web.js, sample-data.js   bản web CHỈ để xem trước giao diện, dữ liệu mẫu
+src/egp/EgpProvider.web.js  bản web, hai chế độ:
+                           - mặc định: xem trước giao diện với dữ liệu mẫu (sample-data.js);
+                           - EXPO_PUBLIC_GSCB_MODE=remote: giao diện iPhone của LINK ĐIỆN THOẠI (4.20.0) —
+                             gọi API của native-agent/DienThoai.cs (máy tính công ty làm máy tra e-GP)
+src/notify/index.web.js    bản web không hẹn thông báo được: nhắc hạn bằng tệp .ics (Lịch iPhone)
 ```
+
+**Link điện thoại (4.20.0):** `EXPO_PUBLIC_GSCB_MODE=remote npx expo export --platform web` →
+`native-agent/web` (tools/release/dong-goi.mjs tự dựng khi đóng gói). Khoá đọc từ `#k=` của link, lưu ở
+`localStorage`, gửi bằng tiêu đề `X-GSCB-Key`; giao thức: `../native-agent/DIEN-THOAI-GIAO-THUC.md`;
+kiểm thử đầu-cuối: `../tools/test/phone-link.mjs`.
 
 Luồng một lượt tra: app kiểm tiêu chí bằng `validateCriteria` → quy tên tỉnh ra mọi mã cùng tên
 (`codesForProvinceName`, Lâm Đồng = 68 + 703) → `buildTbmtQueries` → giao `KQLCNT_START` cho trang →

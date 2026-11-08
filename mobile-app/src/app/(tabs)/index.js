@@ -24,7 +24,7 @@ function PageStatus({ egp }) {
   return (
     <View style={styles.status}>
       <View style={[styles.dot, { backgroundColor: tone[0] }]} />
-      <T style={styles.statusText} numberOfLines={2}><T weight="semibold" style={styles.statusText}>e-GP: {tone[1]}</T>{egp.page.state === 'error' ? ` — ${egp.page.message}` : ''}</T>
+      <T style={styles.statusText} numberOfLines={3}><T weight="semibold" style={styles.statusText}>{egp.sourceLabel || 'e-GP'}: {egp.mode === 'remote' && egp.page.state === 'ready' ? 'Đã kết nối' : tone[1]}</T>{egp.page.state === 'error' ? ` — ${egp.page.message}` : ''}</T>
       {egp.mode === 'live' ? (
         <Pressable accessibilityRole="button" onPress={() => egp.showPage(true)} hitSlop={10}>
           <T weight="semibold" style={styles.link}>Xem trang</T>
@@ -148,7 +148,9 @@ export default function SearchScreen() {
 
       {!result && !egp.running ? (
         <Notice tone="info" title="Cách dùng">
-          {'Chọn tỉnh và loại gói rồi bấm "Tìm trên e-GP". App mở trang tra cứu chính thức của e-GP ngay trong máy, gắn tiêu chí vào chính yêu cầu tìm kiếm của trang, rồi chấm điểm từng gói theo năng lực Trường An. Bấm vào gói để xem chi tiết và bật nhắc hạn nộp.'}
+          {egp.mode === 'remote'
+            ? 'Chọn tỉnh và loại gói rồi bấm "Tìm trên e-GP". Máy tính công ty (Chrome + tiện ích Giáo Sư Cùi Bắp) tra e-GP thay điện thoại, chấm điểm từng gói theo năng lực Trường An rồi gửi kết quả về đây. Bấm vào gói để xem chi tiết và thêm hạn nộp vào Lịch.'
+            : 'Chọn tỉnh và loại gói rồi bấm "Tìm trên e-GP". App mở trang tra cứu chính thức của e-GP ngay trong máy, gắn tiêu chí vào chính yêu cầu tìm kiếm của trang, rồi chấm điểm từng gói theo năng lực Trường An. Bấm vào gói để xem chi tiết và bật nhắc hạn nộp.'}
         </Notice>
       ) : null}
     </View>

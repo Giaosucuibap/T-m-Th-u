@@ -5,7 +5,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createStore } from '../core/store.js';
 import { createReminders } from '../core/reminders.js';
 import { parseDate } from '../core/egp/core.js';
-import { ensurePermission, notificationApi } from '../notify';
+import { ensurePermission, notificationApi, REMINDER_KIND } from '../notify';
 
 const AppCtx = createContext(null);
 export const useApp = () => useContext(AppCtx);
@@ -42,7 +42,7 @@ export function AppStateProvider({ children }) {
       const after = parseDate(t.closeDate) || '';
       if (after && before !== after) {
         await reminders.cancel(old.reminderIds || []);
-        const scheduled = await reminders.scheduleFor(t).catch(() => ({ ids: [] }));
+        const scheduled = REMINDER_KIND === 'local' ? await reminders.scheduleFor(t).catch(() => ({ ids: [] })) : { ids: [] };
         await store.watch({ ...t, previousCloseDate: old.closeDate }, { reminderIds: scheduled.ids });
         changed.push({ key: t.key, before: old.closeDate, after: t.closeDate });
       } else {
@@ -70,6 +70,12 @@ export function AppStateProvider({ children }) {
       await store.unwatch(tender.key);
       setWatch(await store.getWatch());
       return { watched: false };
+    }
+    // Safari: trang web không hẹn được thông báo — nhắc hạn bằng Lịch iPhone (nút riêng ở trang chi tiết).
+    if (REMINDER_KIND !== 'local') {
+      await store.watch(tender, { reminderIds: [] });
+      setWatch(await store.getWatch());
+      return { watched: true, reminders: 0, skipped: 'calendar' };
     }
     const allowed = await ensurePermission().catch(() => false);
     const scheduled = allowed ? await reminders.scheduleFor(tender).catch(() => ({ ids: [], skipped: 'error' })) : { ids: [], skipped: 'no-permission' };

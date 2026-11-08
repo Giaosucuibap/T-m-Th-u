@@ -30,6 +30,7 @@ const paths = {
   chevron:'<path d="m9 5 7 7-7 7"/>',
   filter:'<path d="M3 5h18M6 12h12m-8 7h4"/>',
   stop:'<rect x="5" y="5" width="14" height="14" rx="2"/>',
+  phone:'<rect x="6.5" y="2.5" width="11" height="19" rx="2.4"/><path d="M10.5 18.5h3"/>',
   radar:'<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><path d="m12 12 6-7"/><circle cx="12" cy="12" r="1" fill="currentColor"/>'
 };
 export function icon(name, size = 20) {

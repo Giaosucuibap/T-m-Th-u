@@ -6,6 +6,7 @@ import { useApp } from '../../state/AppState';
 import { T, Notice, TenderRow } from '../../ui/kit.js';
 import { color, size, space } from '../../ui/theme.js';
 import { vnParts, formatDateTimeVn } from '../../core/format.js';
+import { REMINDER_KIND } from '../../notify';
 
 export default function WatchScreen() {
   const app = useApp();
@@ -27,7 +28,9 @@ export default function WatchScreen() {
       ListHeaderComponent={
         <View style={{ gap: space.md, marginBottom: space.md }}>
           <Notice tone="info" title="Nhắc hạn nộp hồ sơ">
-            {'Mỗi gói theo dõi được hẹn sẵn 3 lời nhắc trên điện thoại: còn 3 ngày, còn 24 giờ, còn 3 giờ trước đóng thầu. Lời nhắc vẫn kêu khi app đang đóng. Khi tra lại thấy gói được gia hạn, app tự hẹn lại theo hạn mới.'}
+            {REMINDER_KIND === 'local'
+              ? 'Mỗi gói theo dõi được hẹn sẵn 3 lời nhắc trên điện thoại: còn 3 ngày, còn 24 giờ, còn 3 giờ trước đóng thầu. Lời nhắc vẫn kêu khi app đang đóng. Khi tra lại thấy gói được gia hạn, app tự hẹn lại theo hạn mới.'
+              : 'Trên Safari, mở từng gói và bấm "Thêm vào Lịch iPhone": Lịch sẽ nhắc còn 3 ngày, còn 24 giờ, còn 3 giờ trước đóng thầu — kêu cả khi đã đóng Safari. Gói được gia hạn thì thêm lại lịch mới.'}
           </Notice>
           {list.length ? <T style={styles.count}>{list.length} gói</T> : null}
         </View>
@@ -36,7 +39,8 @@ export default function WatchScreen() {
         <View style={{ gap: 6 }}>
           <TenderRow tender={item} watched onPress={() => router.push({ pathname: '/goi/[key]', params: { key: item.key } })} />
           <T style={styles.meta}>
-            {item.reminderIds?.length ? `🔔 ${item.reminderIds.length} lời nhắc đã hẹn` : '🔕 Chưa hẹn lời nhắc (đã qua các mốc, hoặc chưa cho phép thông báo)'}
+            {REMINDER_KIND !== 'local' ? '📅 Nhắc hạn: mở gói › Thêm vào Lịch iPhone'
+              : item.reminderIds?.length ? `🔔 ${item.reminderIds.length} lời nhắc đã hẹn` : '🔕 Chưa hẹn lời nhắc (đã qua các mốc, hoặc chưa cho phép thông báo)'}
             {item.previousCloseDate ? ` · hạn cũ ${formatDateTimeVn(item.previousCloseDate)}` : ''}
           </T>
         </View>

@@ -3,6 +3,7 @@
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
 
+export const REMINDER_KIND = 'local';
 const CHANNEL = 'han-nop';
 let configured = false;
 
