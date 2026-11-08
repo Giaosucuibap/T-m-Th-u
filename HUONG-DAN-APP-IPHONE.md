@@ -1,5 +1,9 @@
 # Hướng dẫn app iPhone — Giáo Sư Cùi Bắp (bản thử 1.0.0)
 
+> **Từ bản 4.20.0 có cách đơn giản hơn, không cài gì trên iPhone:** *Link điện thoại*. Máy tính công ty
+> làm máy tra e-GP, còn iPhone chỉ mở một link trong Safari. Xem `HUONG-DAN-4.20.0.md`. Hướng dẫn dưới đây
+> dành cho app riêng (Expo), cần cài thêm và sau này mới phát hành chính thức.
+
 ## Tình trạng hiện tại
 
 **Đã làm xong**

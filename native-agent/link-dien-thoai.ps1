@@ -32,6 +32,10 @@ param(
 )
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'   # tat thanh tien do: Invoke-WebRequest nhanh hon nhieu
+# Mo tu PowerShell 7: bo cac duong dan mo-dun cua ban 7 khoi PSModulePath (ban 5.1 nap nham se loi).
+if ($PSVersionTable.PSVersion.Major -le 5 -and $env:PSModulePath) {
+  $env:PSModulePath = (@($env:PSModulePath -split ';') | Where-Object { $_ -and $_ -notmatch '\\PowerShell\\' }) -join ';'
+}
 
 $HostName = 'vn.giaosucuibap.dienthoai'
 $Origin = 'chrome-extension://injgpddgeaedalfgbnnbobdidghjncoj/'
@@ -45,7 +49,14 @@ $Dest = Join-Path $env:LOCALAPPDATA 'GiaoSuCuiBap\DienThoai'
 $RegKey = 'HKCU:\Software\Google\Chrome\NativeMessagingHosts\' + $HostName
 $ManifestPath = Join-Path $Dest ($HostName + '.json')
 
-function Get-Sha256([string]$Path) { return (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash.ToLowerInvariant() }
+# Bam SHA-256 bang .NET (khong dung Get-FileHash): Windows PowerShell 5.1 duoc mo tu
+# PowerShell 7 thua huong PSModulePath cua ban 7 va khong nap duoc Get-FileHash.
+function Get-Sha256([string]$Path) {
+  $sha = [System.Security.Cryptography.SHA256]::Create()
+  $fs = [System.IO.File]::OpenRead($Path)
+  try { $bytes = $sha.ComputeHash($fs) } finally { $fs.Dispose(); $sha.Dispose() }
+  return (($bytes | ForEach-Object { $_.ToString('x2') }) -join '')
+}
 
 # Tra ve '' khi tep dung ban cloudflared da ghim; nguoc lai tra ve ly do.
 function Test-Cloudflared([string]$Path) {
