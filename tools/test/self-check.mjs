@@ -29,7 +29,7 @@ const EXT = process.argv[2], PORT = process.env.MOCK_PORT || 9443;
 const UD = fs.mkdtempSync('/tmp/ud-');
 const ctx = await chromium.launchPersistentContext(UD, { headless: false,
   args: [`--disable-extensions-except=${EXT}`, `--load-extension=${EXT}`, '--no-sandbox', '--disable-dev-shm-usage', '--no-first-run',
-    '--no-proxy-server', '--ignore-certificate-errors', `--host-resolver-rules=MAP muasamcong.mof.gov.vn 127.0.0.1:${PORT}, MAP muasamcong.mpi.gov.vn 127.0.0.1:${PORT}`] });
+    '--proxy-server=direct://','--proxy-bypass-list=*', '--ignore-certificate-errors', `--host-resolver-rules=MAP muasamcong.mof.gov.vn 127.0.0.1:${PORT}, MAP muasamcong.mpi.gov.vn 127.0.0.1:${PORT}`] });
 const sw = ctx.serviceWorkers()[0] || await ctx.waitForEvent('serviceworker', { timeout: 15000 });
 const ID = new URL(sw.url()).host;
 const page = await ctx.newPage();

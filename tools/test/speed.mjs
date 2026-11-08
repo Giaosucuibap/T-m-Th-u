@@ -15,7 +15,7 @@ const ctx = await chromium.launchPersistentContext(UD, {
   args: [
     `--disable-extensions-except=${EXT}`, `--load-extension=${EXT}`,
     `--host-resolver-rules=MAP muasamcong.mof.gov.vn 127.0.0.1:${PORT}, MAP muasamcong.mpi.gov.vn 127.0.0.1:${PORT}`,
-    '--ignore-certificate-errors', '--no-proxy-server',
+    '--ignore-certificate-errors', '--proxy-server=direct://','--proxy-bypass-list=*',
     '--no-sandbox', '--disable-dev-shm-usage', '--no-first-run'
   ]
 });

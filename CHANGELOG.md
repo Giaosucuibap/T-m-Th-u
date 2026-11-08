@@ -2,6 +2,39 @@
 
 Tài liệu này ghi lại các thay đổi quan trọng của Giáo Sư Cùi Bắp. Cấu trúc tham khảo [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) và phiên bản tuân theo cách đánh số ngữ nghĩa ở mức sản phẩm.
 
+## [App di động 1.0.0 — thử nghiệm] — 2026-11-08
+
+App iPhone/Android đầu tiên, thư mục `mobile-app/` (Expo SDK 58, React Native). Hướng dẫn: `HUONG-DAN-APP-IPHONE.md`.
+
+### Có gì
+- **Tìm gói thầu (TBMT)** theo tỉnh, loại gói, từ khoá, khoảng giá, chủ đầu tư (nhiều CĐT), bắt buộc/loại trừ.
+- **Chi tiết gói**: điểm phù hợp kèm lý do, đối chiếu từng tiêu chí, mở trang e-GP, chia sẻ (Zalo…).
+- **Theo dõi & nhắc hạn**: 3 lời nhắc hẹn sẵn trên điện thoại (còn 3 ngày / 24 giờ / 3 giờ), kêu cả khi app
+  đóng; tra lại thấy gói gia hạn thì tự hẹn lại theo hạn mới.
+- Lịch sử 10 lượt tra, dùng lại tiêu chí một chạm. Dữ liệu chỉ lưu trên điện thoại.
+
+### Cách làm — không viết lại lõi
+- App dùng **nguyên văn** các tệp đã kiểm thử của tiện ích: 13 tệp `lib/` (dựng truy vấn e-GP, chuẩn hoá,
+  chấm điểm, lọc tiêu chí cứng, đối soát độ phủ) và `page-hook.js` + `content.js` (tiêm vào trang e-GP mở
+  trong khung trình duyệt nhúng của app, qua một lớp đệm thay `chrome.runtime`). `scripts/sync-core.mjs`
+  chép lại; bài kiểm thử chặn hai bên lệch nhau.
+- Mọi yêu cầu tìm kiếm do chính trang e-GP phát đi; app không tự gọi máy chủ e-GP.
+
+### Kiểm thử
+- 29 bài đơn vị (giao thức, đối soát, đường hỏng, lưu trữ, nhắc hạn, định dạng giờ VN).
+- 7 kịch bản cầu nối trên Chromium thật với e-GP giả lập (gồm chế độ "khó tính": mạng rớt 25%, trang tự
+  tải danh sách, bỏ qua thao tác lúc bận; bấm Dừng giữa chừng; nhiều chủ đầu tư).
+- Đóng gói thử cho iOS (Hermes) và web; chụp 7 màn hình cỡ iPhone, 0 lỗi console.
+- **Chưa** chạy trên iPhone thật và **chưa** chạy với e-GP thật — xem `HUONG-DAN-APP-IPHONE.md`.
+
+### Sửa an toàn cho bộ kiểm thử tiện ích
+- 24 kịch bản `tools/test/*.mjs` dùng `--no-proxy-server` để chặn proxy. Trên máy có proxy hệ thống (đã
+  gặp ở môi trường phát triển), Chromium bỏ qua cờ này cùng lệnh trỏ tên miền về e-GP giả lập — trang mở
+  ra là **e-GP thật**. Đổi sang `--proxy-server=direct:// --proxy-bypass-list=*` (đã kiểm: trỏ tên miền
+  hoạt động trở lại). Kịch bản cầu nối của app còn chặn cứng ở tầng trình duyệt: yêu cầu tới e-GP chỉ được
+  phục vụ từ máy giả lập, mọi tên miền khác bị huỷ, và bài thử tự dừng nếu trang đầu tiên không phải bản
+  giả lập.
+
 ## [4.19.0] — 2026-11-06
 
 Khắc phục các điểm yếu nêu trong báo cáo thẩm định 4.18.0. Báo cáo mới: `BAO-CAO-THAM-DINH-4.19.0.md`.

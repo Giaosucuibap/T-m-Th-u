@@ -1,7 +1,7 @@
 # ============================================================================
 #  KIỂM THỬ TỰ ĐỘNG — chạy mỗi lần đẩy mã và mỗi PR
 #
-#  Ba việc, chạy song song:
+#  Bốn việc, chạy song song (việc thứ tư — app di động — ở job app-di-dong):
 #    1. Linux   : toàn bộ bộ kiểm thử + chạy lại các ca ngày/giá ở 4 múi giờ.
 #    2. Windows : toàn bộ bộ kiểm thử, GỒM 10 bài cầu nối E-HSMT chỉ chạy được
 #                 trên Windows (biên dịch bằng csc.exe, chạy tệp .exe). Tệp .exe
@@ -51,6 +51,56 @@ jobs:
           cd "$RUNNER_TEMP/crlf"
           find . -type f \( -name '*.js' -o -name '*.mjs' -o -name '*.json' -o -name '*.html' \) -print0 | xargs -0 sed -i 's/\r*$/\r/'
           node --test tests/*.test.mjs
+
+  app-di-dong:
+    name: App di động (lõi, cầu nối e-GP giả lập, đóng gói iOS/web, giao diện cỡ iPhone)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: mobile-app
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - name: Lõi app khớp nguyên văn tiện ích (lib/, page-hook.js, content.js)
+        run: node scripts/sync-core.mjs --check
+      - name: Kiểm thử đơn vị
+        run: node --test tests/unit/*.test.mjs
+      - name: Cài Playwright + Chromium
+        working-directory: .
+        run: |
+          npm install --no-save --no-package-lock playwright@1.48.2
+          npx playwright install --with-deps chromium
+      - name: Chứng chỉ cho máy chủ giả lập
+        working-directory: .
+        run: |
+          mkdir -p tools/test/certs
+          openssl req -x509 -newkey rsa:2048 -nodes -days 2 \
+            -keyout tools/test/certs/key.pem -out tools/test/certs/cert.pem \
+            -subj "/CN=muasamcong.mpi.gov.vn" \
+            -addext "subjectAltName=DNS:muasamcong.mpi.gov.vn,IP:127.0.0.1"
+      - name: Cầu nối app ↔ e-GP giả lập — mã tiêm thật của app trong Chromium (gồm chế độ khó tính, bấm Dừng)
+        run: node tests/browser/connector.mjs
+      - name: Cài thư viện app
+        run: npm ci --no-audit --no-fund
+      - name: Đóng gói thử cho iOS và web
+        env:
+          EXPO_NO_TELEMETRY: '1'
+          CI: '1'
+        run: |
+          npx expo export --platform ios --output-dir "$RUNNER_TEMP/app-ios"
+          npx expo export --platform web --output-dir "$RUNNER_TEMP/app-web"
+      - name: Chụp giao diện cỡ iPhone (dữ liệu mẫu) — không lỗi console, không gọi mạng
+        run: node tests/browser/ui-shots.mjs "$RUNNER_TEMP/app-web" "$RUNNER_TEMP/app-shots"
+      - name: Lưu ảnh màn hình app
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-anh-man-hinh
+          path: ${{ runner.temp }}/app-shots
+          if-no-files-found: ignore
 
   windows:
     name: Bộ kiểm thử (Windows, gồm cầu nối E-HSMT)
