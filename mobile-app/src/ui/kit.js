@@ -1,7 +1,7 @@
 /* Các khối giao diện dùng chung. Chữ tối thiểu 13,5pt, vùng bấm ≥ 44pt (chuẩn Apple). */
 import { Pressable, StyleSheet, Text, TextInput, View, ActivityIndicator } from 'react-native';
 import { color, font, size, radius, space, shadow, gateTone, scoreTone } from './theme.js';
-import { formatVndShort, timeLeft } from '../core/format.js';
+import { formatVndShort, timeLeft, dedupeLocation } from '../core/format.js';
 
 export function T({ style, weight = 'regular', children, ...rest }) {
   return <Text {...rest} style={[styles.text, { fontFamily: font[weight] || font.regular }, style]}>{children}</Text>;
@@ -104,7 +104,7 @@ export function TenderRow({ tender, onPress, watched, now = Date.now() }) {
         {gate && tender.filterState !== 'MATCH' ? <Badge label={gate.label} fg={gate.fg} bg={gate.bg} /> : null}
         {watched ? <Badge label="★ Theo dõi" fg={color.gold} bg={color.warnBg} /> : null}
       </View>
-      <T style={styles.code}>{tender.displayCode}{tender.location ? ` · ${tender.location}` : ''}</T>
+      <T style={styles.code}>{tender.displayCode}{tender.location ? ` · ${dedupeLocation(tender.location)}` : ''}</T>
     </Pressable>
   );
 }

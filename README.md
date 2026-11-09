@@ -1,8 +1,12 @@
-# Giáo Sư Cùi Bắp 4.20.0
+# Giáo Sư Cùi Bắp 4.21.0
 
-Bản 4.20.0 thêm **Link điện thoại**: iPhone tra gói thầu bằng Safari, không cài gì; máy tính công ty (Chrome + tiện ích) làm máy tra e-GP và trả kết quả về điện thoại qua đường hầm https của Cloudflare. Cài một lần trên máy tính bằng `native-agent/BAT-LINK-DIEN-THOAI.bat`, bật ở **Hệ thống › Link điện thoại**, quét mã QR bằng Camera iPhone; link mới có thể tự gửi qua Telegram. Đọc `HUONG-DAN-4.20.0.md` trước khi cập nhật; giao thức kỹ thuật ở `native-agent/DIEN-THOAI-GIAO-THUC.md`.
+Bản 4.21.0 biến Link điện thoại thành **app "Cùi Bắp" trên iPhone và iPad**: biểu tượng trên màn hình chính, mở toàn màn hình, iPad có bố cục 2 cột. App dùng **địa chỉ cố định** (Cloudflare Worker miễn phí trên tài khoản của chủ phần mềm, thư mục `relay/`), nên mỗi máy chỉ quét mã một lần; máy tính công ty khởi động lại thì app tự tìm lại máy tính. Mất mạng vẫn mở app xem kết quả và gói theo dõi đã lưu. Sửa hai lỗi thấy trên iPhone thật: "0 đ – 0 đ" khi không nhập giá và địa điểm lặp. Đọc `HUONG-DAN-4.21.0.md` trước khi cập nhật.
 
 ## Ghi chú các bản trước
+
+### 4.20.0
+
+Bản 4.20.0 thêm **Link điện thoại**: iPhone tra gói thầu bằng Safari, không cài gì; máy tính công ty (Chrome + tiện ích) làm máy tra e-GP và trả kết quả về điện thoại qua đường hầm https của Cloudflare. Cài một lần trên máy tính bằng `native-agent/BAT-LINK-DIEN-THOAI.bat`, bật ở **Hệ thống › Link điện thoại**, quét mã QR bằng Camera iPhone; link mới có thể tự gửi qua Telegram. Đọc `HUONG-DAN-4.20.0.md` trước khi cập nhật; giao thức kỹ thuật ở `native-agent/DIEN-THOAI-GIAO-THUC.md`.
 
 ### 4.19.0
 

@@ -55,9 +55,9 @@ jobs:
           node --test tests/*.test.mjs
 
   app-di-dong:
-    name: App di động (lõi, cầu nối e-GP giả lập, đóng gói iOS/web, giao diện cỡ iPhone)
+    name: App di động (lõi, cầu nối e-GP giả lập, đóng gói iOS/web, giao diện cỡ iPhone, WebKit iPhone/iPad)
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     defaults:
       run:
         working-directory: mobile-app
@@ -111,6 +111,14 @@ jobs:
       - name: Link điện thoại đầu-cuối — Chrome thật + native messaging + tiện ích + e-GP giả lập + trang iPhone
         working-directory: .
         run: xvfb-run -a node tools/test/phone-link.mjs "$PWD/GiaoSuCuiBap" "$RUNNER_TEMP/app-web-remote"
+      # 4.21.0 — địa chỉ cố định (Cloudflare Worker) + app trên màn hình chính iPhone/iPad.
+      - name: Cài WebKit (nhân của Safari) + trình quản lý cửa sổ cho khung nhìn đúng cỡ iPhone/iPad
+        run: sudo apt-get install -y -qq webkit2gtk-driver matchbox-window-manager
+      - name: Địa chỉ cố định đầu-cuối — Worker giả lập + tiện ích + cầu nối + WebKit cỡ iPhone 390×844 và iPad 1024×1366
+        working-directory: .
+        env:
+          GSCB_REQUIRE_WEBKIT: '1'
+        run: xvfb-run -a node tools/test/phone-relay.mjs "$PWD/GiaoSuCuiBap" "$RUNNER_TEMP/app-web-remote"
       - name: Lưu ảnh màn hình app
         if: always()
         uses: actions/upload-artifact@v4
@@ -119,6 +127,7 @@ jobs:
           path: |
             ${{ runner.temp }}/app-shots
             test-results/phone-link/*.png
+            test-results/phone-relay/*.png
           if-no-files-found: ignore
 
   windows:

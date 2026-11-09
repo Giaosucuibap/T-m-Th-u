@@ -19,6 +19,20 @@
   </ol>
   <p class="muted small">Ai có link này đều tra được bằng máy tính của anh. Đừng gửi link cho người ngoài; lỡ gửi thì bấm <b>Đổi khoá</b>.</p>
 </section>
+<section class="card hidden" id="pl-relay-card" aria-labelledby="pl-relay-title" style="margin-top:14px">
+  <h2 id="pl-relay-title">Địa chỉ cố định — không phải quét lại mã</h2>
+  <p>Ghép máy tính này với <b>địa chỉ cố định</b> của anh (trên Cloudflare). Từ đó mã QR là một địa chỉ <b>không bao giờ đổi</b>: quét <b>một lần</b> trên iPhone và iPad, cài thành biểu tượng app trên màn hình chính — máy tính khởi động lại cũng không phải quét lại.</p>
+  <div id="pl-relay-status" class="notice" role="status"></div>
+  <div id="pl-relay-form">
+    <div class="row" style="margin-top:10px;gap:10px;flex-wrap:wrap">
+      <label style="flex:2;min-width:240px">Địa chỉ cố định<input id="pl-relay-url" autocomplete="off" spellcheck="false" placeholder="thau.ten-cua-anh.workers.dev"></label>
+      <label style="flex:1;min-width:160px">Mã ghép nối<input id="pl-relay-code" autocomplete="off" spellcheck="false" placeholder="XXXX-XXXX" maxlength="12" style="text-transform:uppercase;letter-spacing:.08em"></label>
+    </div>
+    <div class="row" style="margin-top:10px"><button id="pl-relay-pair" class="btn" type="button">Ghép nối</button></div>
+  </div>
+  <div class="row hidden" id="pl-relay-paired" style="margin-top:10px"><button id="pl-relay-unpair" class="btn light" type="button">Bỏ ghép địa chỉ cố định</button></div>
+  <p class="muted small">Địa chỉ và mã ghép nối do người bảo trì đưa khi tạo địa chỉ cố định (miễn phí, đứng tên anh trên Cloudflare). Khoá truy cập vẫn chỉ nằm trong mã QR, không gửi lên Cloudflare.</p>
+</section>
 <section class="card hidden" id="pl-tg-card" aria-labelledby="pl-tg-title" style="margin-top:14px">
   <h2 id="pl-tg-title">Nhận link mới qua Telegram</h2>
   <p>Mỗi lần máy tính hoặc Chrome khởi động lại, link đổi. Bật mục này để tiện ích tự nhắn link mới vào Telegram của anh (dùng Bot Token và Chat ID ở trang <a href="options.html">Cấu hình</a>) — ở công trường cũng mở được, không phải về văn phòng quét mã.</p>

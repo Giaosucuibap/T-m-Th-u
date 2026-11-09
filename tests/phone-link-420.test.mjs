@@ -19,7 +19,7 @@ import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import {
   PHONE_HOST, PHONE_STORE_KEY, PHONE_MAX_TENDERS, PHONE_CRITERIA_FIELDS, newPhoneKey, phoneLinkUrl, cleanPhoneCriteria,
-  phoneProgress, buildPhoneResult, phoneLinkMessage, isPrivateTelegramChat
+  phoneProgress, buildPhoneResult, phoneLinkMessage, isPrivateTelegramChat, dedupeLocation, criteriaPrice
 } from '../GiaoSuCuiBap/lib/phone-link.js';
 import { createPhoneRuntime, TELEGRAM_RETRY_MS } from '../GiaoSuCuiBap/lib/runtime-phone.js';
 import { phoneHandlers } from '../GiaoSuCuiBap/lib/handlers/phone.js';
@@ -114,6 +114,18 @@ test('kết quả gửi điện thoại: khớp tiêu chí và gói còn nhận 
 
   assert.deepEqual(phoneProgress({ status: 'RUNNING', message: 'Đang đọc trang 2', coverage: { pagesRead: 2, totalPages: 5, serverTotal: 240 }, sourceCount: 100 }),
     { status: 'RUNNING', message: 'Đang đọc trang 2', fetched: 100, pagesRead: 2, totalPages: 5, serverTotal: 240 });
+});
+
+test('4.21.0 — lỗi thấy trên iPhone thật (e-GP thật, 124 gói): "0 đ – 0 đ" và "Tỉnh Lâm Đồng; Tỉnh Lâm Đồng"', () => {
+  // readFinishedRun đọc lượt tra đã qua safeRunForBackup: mọi tiêu chí thành chuỗi, giá trống = "0".
+  const run = { status: 'SUCCESS', criteria: { province: 'Lâm Đồng', category: 'XL', keyword: '', investor: '', minPrice: '0', maxPrice: '0', mustKeywords: '', excludeKeywords: '', ward: '' } };
+  const t = { ...tender(2), location: 'Tỉnh Lâm Đồng; Tỉnh Lâm Đồng' };
+  const r = buildPhoneResult(run, [t], NOW);
+  assert.deepEqual(r.criteria, { province: 'Lâm Đồng', category: 'XL' }, 'giá trống và chuỗi rỗng không đi sang điện thoại');
+  assert.equal(r.tenders[0].location, 'Tỉnh Lâm Đồng');
+  assert.deepEqual(buildPhoneResult({ status: 'SUCCESS', criteria: { minPrice: '3000000000', maxPrice: '1000000000000000' } }, [], NOW).criteria, { minPrice: 3e9 }, 'mức trần 1e15 = không đặt');
+  for (const v of ['', '0', 0, null, -1, 'x', 1e15]) assert.equal(criteriaPrice(v), null, String(v));
+  assert.equal(dedupeLocation('A; a ; B;;A'), 'A; B');
 });
 
 test('tin Telegram: link nằm trong thẻ <a> đã thoát ký tự; chỉ chat riêng (Chat ID số dương) được nhận link có khoá', () => {
@@ -330,9 +342,9 @@ test('Telegram: tắt mặc định; bật thì gửi link hiện tại MỘT l�
   assert.equal(t.calls.telegram.length, 0, 'link 127.0.0.1 (chế độ thử) không bao giờ gửi đi');
 });
 
-test('lệnh trang: đúng 4 lệnh, lệnh ghi đều có tiền tố SET_ (bị chặn khi khoá chỉnh sửa), trang e-GP không gọi được', () => {
+test('lệnh trang: đúng 6 lệnh, lệnh ghi đều có tiền tố SET_/CLEAR_ (bị chặn khi khoá chỉnh sửa), trang e-GP không gọi được', () => {
   const types = Object.keys(phoneHandlers({ phoneRuntime: {} })).sort();
-  assert.deepEqual(types, ['PHONE_LINK_STATE', 'SET_PHONE_LINK', 'SET_PHONE_LINK_KEY', 'SET_PHONE_LINK_TELEGRAM']);
+  assert.deepEqual(types, ['CLEAR_PHONE_RELAY', 'PHONE_LINK_STATE', 'SET_PHONE_LINK', 'SET_PHONE_LINK_KEY', 'SET_PHONE_LINK_TELEGRAM', 'SET_PHONE_RELAY']);
   const bg = read('GiaoSuCuiBap/background.js');
   const content = bg.slice(bg.indexOf('const CONTENT_MESSAGE_TYPES=new Set(['), bg.indexOf(']);', bg.indexOf('const CONTENT_MESSAGE_TYPES=new Set([')));
   assert.ok(content.length > 40);

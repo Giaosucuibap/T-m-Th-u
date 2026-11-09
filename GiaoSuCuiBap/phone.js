@@ -31,6 +31,16 @@ function telegramText(s) {
   return 'Sẽ gửi ngay khi link sẵn sàng.';
 }
 
+function relayText(r) {
+  if (!r?.claimed) return { tone: '', text: 'Chưa ghép địa chỉ cố định: link đổi mỗi khi máy tính hoặc Chrome khởi động lại.' };
+  if (r.current) {
+    const at = r.registeredAt ? new Date(r.registeredAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : '';
+    return { tone: 'ok', text: `Đã ghép ${r.url} — điện thoại tự tìm thấy máy tính này (báo đường hầm mới lúc ${at}).` };
+  }
+  if (r.error) return { tone: 'warn', text: `Đã ghép ${r.url}, nhưng chưa báo được đường hầm hiện tại: ${r.errorText} ` };
+  return { tone: 'warn', text: `Đã ghép ${r.url} — đang chờ đường hầm của máy tính mở xong để báo địa chỉ mới…` };
+}
+
 function render(s) {
   current = s;
   const st = statusText(s);
@@ -44,6 +54,13 @@ function render(s) {
   const link = s?.link || '';
   $('pl-qr-card').classList.toggle('hidden', !link);
   $('pl-tg-card').classList.toggle('hidden', !s?.enabled);
+  $('pl-relay-card').classList.toggle('hidden', !s?.enabled);
+  const rt = relayText(s?.relay);
+  $('pl-relay-status').textContent = rt.text;
+  $('pl-relay-status').className = `notice${rt.tone ? ` ${rt.tone}` : ''}`;
+  $('pl-relay-form').classList.toggle('hidden', Boolean(s?.relay?.claimed));
+  $('pl-relay-paired').classList.toggle('hidden', !s?.relay?.claimed);
+  $('pl-qr-title').textContent = s?.relay?.claimed ? 'Địa chỉ cố định — quét MỘT LẦN bằng camera iPhone / iPad' : 'Quét mã này bằng camera iPhone';
   $('pl-tg').checked = s?.telegram === true;
   $('pl-tg-status').textContent = telegramText(s);
   if (link && link !== shownLink && typeof window.qrcode === 'function') {
@@ -69,6 +86,22 @@ $('pl-rotate').addEventListener('click', async () => {
   if (!confirm('Đổi khoá: mọi link và mã QR cũ hết hiệu lực ngay. Điện thoại phải quét mã mới. Tiếp tục?')) return;
   shownLink = '';
   render(await send('SET_PHONE_LINK_KEY'));
+});
+$('pl-relay-pair').addEventListener('click', async () => {
+  const btn = $('pl-relay-pair');
+  btn.disabled = true;
+  btn.textContent = 'Đang ghép…';
+  try {
+    const r = await send('SET_PHONE_RELAY', { url: $('pl-relay-url').value, code: $('pl-relay-code').value });
+    if (r?.ok === false) { $('pl-relay-status').textContent = r.message || 'Không ghép được.'; $('pl-relay-status').className = 'notice error'; return; }
+    shownLink = '';
+    render(r);
+  } finally { btn.disabled = false; btn.textContent = 'Ghép nối'; }
+});
+$('pl-relay-unpair').addEventListener('click', async () => {
+  if (!confirm('Bỏ ghép địa chỉ cố định? Mã QR quay về link đổi theo đường hầm; iPhone/iPad đã cài biểu tượng sẽ không tìm thấy máy tính này nữa.')) return;
+  shownLink = '';
+  render(await send('CLEAR_PHONE_RELAY'));
 });
 $('pl-tg').addEventListener('change', async () => {
   $('pl-tg').disabled = true;

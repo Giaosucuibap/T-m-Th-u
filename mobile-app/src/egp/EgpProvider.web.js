@@ -1,10 +1,15 @@
 /* ============================================================================
  *  BẢN WEB — HAI CHẾ ĐỘ (chọn lúc đóng gói bằng EXPO_PUBLIC_GSCB_MODE):
  *
- *  remote : LINK ĐIỆN THOẠI (4.20.0). Trang này do máy phục vụ trên MÁY TÍNH CÔNG
- *           TY phát qua đường hầm https. Lệnh tìm được gửi tới máy tính
+ *  remote : LINK ĐIỆN THOẠI (4.20.0). Lệnh tìm được gửi tới MÁY TÍNH CÔNG TY
  *           (/api/search); tiện ích Chrome trên máy tính tra e-GP rồi trả kết quả.
  *           Khoá nằm sau dấu # của link trong mã QR, lưu trong Safari.
+ *           Trang do một trong hai nơi phát:
+ *             - chính máy tính, qua đường hầm https://….trycloudflare.com (đổi địa chỉ
+ *               mỗi lần máy tính khởi động lại);
+ *             - 4.21.0: ĐỊA CHỈ CỐ ĐỊNH (Cloudflare Worker, relay/) — trang tự tìm đường
+ *               hầm hiện tại qua con trỏ đã ký (remote-link.js), cài được thành biểu
+ *               tượng app trên màn hình chính iPhone/iPad.
  *  demo   : BẢN XEM TRƯỚC GIAO DIỆN — dữ liệu mẫu (ghi rõ trên màn hình), để chụp
  *           và duyệt giao diện. Không gọi mạng.
  * ========================================================================== */
@@ -15,6 +20,7 @@ import { createPageChannel } from '../core/page-channel.js';
 import { createTbmtSearch, prepareSearch } from '../core/search.js';
 import { sampleRecords } from './sample-data.js';
 import { useApp } from '../state/AppState';
+import { readPointer, lastSeenText } from './remote-link.js';
 import { T } from '../ui/kit.js';
 import { color, size } from '../ui/theme.js';
 
@@ -25,9 +31,10 @@ export const MODE = process.env.EXPO_PUBLIC_GSCB_MODE === 'remote' ? 'remote' : 
 
 /* ------------------------------------------------------------------ remote */
 const KEY_STORE = 'gscb.key';
+const KEY_IN_HASH = /[#&]k=([A-Za-z0-9_-]{24,128})/;
 function readKey() {
   try {
-    const m = /[#&]k=([A-Za-z0-9_-]{24,128})/.exec(window.location.hash || '');
+    const m = KEY_IN_HASH.exec(window.location.hash || '');
     if (m) {
       localStorage.setItem(KEY_STORE, m[1]);
       // Xoá khoá khỏi thanh địa chỉ: không lộ khi chụp màn hình hay chia sẻ trang.
@@ -36,6 +43,20 @@ function readKey() {
     }
     return localStorage.getItem(KEY_STORE) || '';
   } catch { return ''; }
+}
+
+/** App mở từ biểu tượng trên màn hình chính (iPhone/iPad) — không có thanh địa chỉ. */
+export function isStandalone() {
+  try { return window.navigator.standalone === true || window.matchMedia('(display-mode: standalone)').matches; } catch { return false; }
+}
+
+/** Dán link kết nối (link có #k=…) khi app trên màn hình chính chưa có khoá. */
+export function applyKeyFromText(text) {
+  const m = KEY_IN_HASH.exec(String(text || '')) || /^([A-Za-z0-9_-]{24,128})$/.exec(String(text || '').trim());
+  if (!m) return false;
+  try { localStorage.setItem(KEY_STORE, m[1]); } catch { return false; }
+  window.location.replace(window.location.pathname);
+  return true;
 }
 
 const JOB_ERRORS = {
@@ -49,27 +70,26 @@ const JOB_ERRORS = {
   EXTENSION_ERROR: 'Tiện ích trên máy tính gặp lỗi khi tra.'
 };
 
-function createRemote(key) {
-  async function api(path, { method = 'GET', body } = {}) {
-    try {
-      const res = await fetch(path, {
-        method, cache: 'no-store',
-        headers: { 'X-GSCB-Key': key, ...(body ? { 'Content-Type': 'application/json' } : {}) },
-        body: body ? JSON.stringify(body) : undefined
-      });
-      let json = null;
-      try { json = await res.json(); } catch { /* không phải JSON */ }
-      return { status: res.status, json };
-    } catch { return { status: 0, json: null }; }
+function pageFromStatus(key, r, link) {
+  if (!key) {
+    return { state: 'error', code: 'NO_KEY', message: isStandalone()
+      ? 'App chưa có khoá kết nối. Mở mục Thông tin › "Dán link kết nối", hoặc mở link kết nối trong Safari rồi cài lại lên màn hình chính.'
+      : 'Chưa có khoá truy cập. Trên máy tính công ty mở tiện ích › Link điện thoại và quét mã QR.' };
   }
-  return { api };
-}
-
-function pageFromStatus(key, r) {
-  if (!key) return { state: 'error', message: 'Chưa có khoá truy cập. Trên máy tính công ty mở tiện ích › Link điện thoại và quét lại mã QR.' };
-  if (r.status === 401) return { state: 'error', message: 'Khoá không đúng hoặc đã được đổi. Quét lại mã QR mới trên máy tính công ty.' };
-  if (r.status !== 200 || !r.json?.ok) return { state: 'error', message: 'Không kết nối được máy tính công ty. Máy tính và Chrome phải đang bật; link có thể đã đổi — quét lại mã QR.' };
-  return { state: 'ready', message: r.json.busy ? 'Máy tính đang tra một lượt khác…' : 'Đã kết nối máy tính công ty — máy tính tra e-GP thay điện thoại.' };
+  if (link?.kind === 'relay-bad') return { state: 'error', code: 'KEY_MISMATCH', message: 'Khoá trên máy này đã cũ (máy tính vừa "Đổi khoá"). Quét lại mã QR trên máy tính công ty.' };
+  if (link?.kind === 'relay-empty') return { state: 'error', code: 'NO_POINTER', message: 'Máy tính công ty chưa báo địa chỉ. Trên máy tính: bật Link điện thoại và ghép địa chỉ cố định.' };
+  if (r.status === 401) return { state: 'error', code: 'BAD_KEY', message: 'Khoá không đúng hoặc đã được đổi. Quét lại mã QR mới trên máy tính công ty.' };
+  if (r.status === 502 && r.json?.code === 'PC_OFFLINE') {
+    const seen = lastSeenText(r.json.since);
+    return { state: 'error', code: 'PC_OFFLINE', message: `Máy tính công ty đang tắt, Chrome đang tắt hoặc mất mạng${seen ? ` (mở đường hầm lần cuối ${seen})` : ''}. Kết quả gần nhất vẫn xem được; bật lại máy tính là dùng tiếp, không phải quét mã.` };
+  }
+  if (r.status === 0 || link?.kind === 'offline') return { state: 'error', code: 'OFFLINE', message: 'Điện thoại chưa có mạng (hoặc mạng chặn). Kết quả gần nhất vẫn xem được.' };
+  if (r.status !== 200 || !r.json?.ok) {
+    return { state: 'error', code: 'UNREACHABLE', message: link?.kind === 'relay'
+      ? 'Chưa gọi được máy tính công ty. Thử lại sau ít phút.'
+      : 'Không kết nối được máy tính công ty. Máy tính và Chrome phải đang bật; link có thể đã đổi — quét lại mã QR.' };
+  }
+  return { state: 'ready', code: 'OK', message: r.json.busy ? 'Máy tính đang tra một lượt khác…' : 'Đã kết nối máy tính công ty — máy tính tra e-GP thay điện thoại.' };
 }
 
 function RemoteProvider({ children }) {
@@ -77,44 +97,86 @@ function RemoteProvider({ children }) {
   const keyRef = useRef(null);
   if (keyRef.current === null) keyRef.current = readKey();
   const key = keyRef.current;
-  const remote = useMemo(() => createRemote(key), [key]);
-  const [page, setPage] = useState(key ? { state: 'loading', message: 'Đang kết nối máy tính công ty…' } : pageFromStatus('', {}));
+  // Cách tìm máy tính: 'relay' (địa chỉ cố định, đích = đường hầm đã kiểm chữ ký),
+  // 'direct' (trang do chính máy tính phát qua đường hầm), hoặc trạng thái lỗi.
+  const linkRef = useRef({ kind: 'unknown', target: '', since: null });
+  const [connection, setConnection] = useState({ kind: 'unknown', since: null });
+  const [page, setPage] = useState(key ? { state: 'loading', message: 'Đang tìm máy tính công ty…' } : pageFromStatus('', {}));
   const [running, setRunning] = useState(false);
   const [progress, setProgress] = useState(null);
   const cancelled = useRef(false);
 
+  const locate = useCallback(async () => {
+    if (!key) return linkRef.current;
+    const r = await readPointer(key);
+    const prev = linkRef.current;
+    if (r.kind === 'direct') linkRef.current = { kind: 'direct', target: '', since: null };
+    else if (r.kind === 'relay') linkRef.current = r.valid ? { kind: 'relay', target: r.pointer.url, since: r.pointer.ts } : { kind: 'relay-bad', target: '', since: r.pointer.ts };
+    else if (r.kind === 'relay-empty') linkRef.current = { kind: 'relay-empty', target: '', since: null };
+    else linkRef.current = { ...prev, kind: prev.kind === 'relay' ? 'relay' : 'offline' };   // mất mạng: giữ đích cũ để thử lại
+    setConnection({ kind: linkRef.current.kind, since: linkRef.current.since });
+    return linkRef.current;
+  }, [key]);
+
+  const api = useCallback(async (path, { method = 'GET', body } = {}, retry = true) => {
+    if (!key) return { status: 0, json: null };
+    if (linkRef.current.kind === 'unknown' || linkRef.current.kind === 'offline') await locate();
+    const l = linkRef.current;
+    if (l.kind === 'relay-bad' || l.kind === 'relay-empty') return { status: 0, json: null, blocked: l.kind };
+    try {
+      const res = await fetch(path, {
+        method, cache: 'no-store',
+        headers: { 'X-GSCB-Key': key, ...(l.kind === 'relay' ? { 'X-GSCB-Target': l.target } : {}), ...(body ? { 'Content-Type': 'application/json' } : {}) },
+        body: body ? JSON.stringify(body) : undefined
+      });
+      let json = null;
+      try { json = await res.json(); } catch { /* không phải JSON */ }
+      // Máy tính vừa khởi động lại (đường hầm mới): hỏi lại con trỏ, kiểm chữ ký, gửi lại MỘT lần.
+      if (res.status === 409 && json?.code === 'STALE_TARGET' && retry) { await locate(); return api(path, { method, body }, false); }
+      if (res.status === 502 && json?.code === 'PC_OFFLINE' && retry && l.kind === 'relay') {
+        const before = l.target;
+        const now = await locate();
+        if (now.kind === 'relay' && now.target !== before) return api(path, { method, body }, false);
+      }
+      return { status: res.status, json };
+    } catch { return { status: 0, json: null }; }
+  }, [key, locate]);
+
   const refresh = useCallback(async () => {
     if (!key) return null;
-    const r = await remote.api('/api/status');
-    setPage(pageFromStatus(key, r));
+    const r = await api('/api/status');
+    setPage(pageFromStatus(key, r, linkRef.current));
     return r;
-  }, [key, remote]);
+  }, [key, api]);
 
   // Quét mã QR mới khi trang đang mở: Safari chỉ đổi phần sau dấu # (không tải lại trang)
   // → lưu khoá mới rồi tải lại để mọi lệnh dùng khoá mới.
   useEffect(() => {
     const onHash = () => {
-      const m = /[#&]k=([A-Za-z0-9_-]{24,128})/.exec(window.location.hash || '');
-      if (!m) return;
+      const m = KEY_IN_HASH.exec(window.location.hash || '');
+      if (!m || m[1] === key) return;
       try { localStorage.setItem(KEY_STORE, m[1]); } catch { /* chế độ riêng tư */ }
       window.location.replace(window.location.pathname);
     };
     window.addEventListener('hashchange', onHash);
     return () => window.removeEventListener('hashchange', onHash);
-  }, []);
+  }, [key]);
 
   useEffect(() => {
     if (!key) return undefined;
     void refresh();
     const t = setInterval(() => { if (document.visibilityState !== 'hidden') void refresh(); }, 8000);
-    return () => clearInterval(t);
+    // Mở lại app từ màn hình chính sau khi để nền: kiểm tra ngay, không chờ 8 giây.
+    const onVisible = () => { if (document.visibilityState === 'visible') void refresh(); };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => { clearInterval(t); document.removeEventListener('visibilitychange', onVisible); };
   }, [key, refresh]);
 
   // Safari tải lại trang sau khi để nền lâu: lấy lượt gần nhất máy tính đã tra xong.
   useEffect(() => {
     if (!key || !app?.ready) return;
     (async () => {
-      const r = await remote.api('/api/last');
+      const r = await api('/api/last');
       const last = r.json?.result;
       if (last && Array.isArray(last.tenders) && (!app.last || String(last.finishedAt || '') > String(app.last.finishedAt || ''))) await app.saveResult(last);
     })();
@@ -129,18 +191,17 @@ function RemoteProvider({ children }) {
     setProgress({ phase: 'start', message: 'Đang gửi lệnh tới máy tính công ty…' });
     const fail = (message) => ({ ok: false, status: 'ERROR', message, criteria: prepared.criteria, finishedAt: new Date().toISOString(), coverage: { text: '' }, counts: { fetched: 0, unique: 0, match: 0, insufficient: 0, outOfRange: 0 }, tenders: [] });
     try {
-      const start = await remote.api('/api/search', { method: 'POST', body: { criteria } });
-      if (start.status === 409) return { ok: false, status: 'BUSY', message: JOB_ERRORS.BUSY };
-      if (start.status === 401) return fail(pageFromStatus(key, start).message);
-      if (start.status !== 202 || !start.json?.jobId) return fail(pageFromStatus(key, { status: 0 }).message);
+      const start = await api('/api/search', { method: 'POST', body: { criteria } });
+      if (start.status === 409 && start.json?.code === 'BUSY') return { ok: false, status: 'BUSY', message: JOB_ERRORS.BUSY };
+      if (start.status !== 202 || !start.json?.jobId) return fail(pageFromStatus(key, start, linkRef.current).message);
       const jobId = start.json.jobId;
       let misses = 0;
       for (;;) {
         await wait(1000);
-        const j = await remote.api(`/api/job?id=${encodeURIComponent(jobId)}`);
-        if (j.status === 0) { if (++misses > 45) return fail('Mất kết nối với máy tính công ty giữa chừng. Mở lại trang sau ít phút — kết quả vẫn được giữ trên máy tính.'); continue; }
+        const j = await api(`/api/job?id=${encodeURIComponent(jobId)}`);
+        if (j.status === 0 || j.status === 502) { if (++misses > 45) return fail('Mất kết nối với máy tính công ty giữa chừng. Mở lại app sau ít phút — kết quả vẫn được giữ trên máy tính.'); continue; }
         misses = 0;
-        if (j.status === 404) return fail('Cầu nối trên máy tính vừa khởi động lại. Quét lại mã QR rồi tra lại.');
+        if (j.status === 404) return fail('Cầu nối trên máy tính vừa khởi động lại giữa lượt tra. Tra lại.');
         const s = j.json || {};
         if (s.state === 'done' && s.result) return { ...s.result, source: 'pc' };
         if (s.state === 'error') {
@@ -152,9 +213,9 @@ function RemoteProvider({ children }) {
           pagesRead: p.pagesRead ?? 0, totalPages: p.totalPages ?? null, totalElements: p.serverTotal ?? null });
       }
     } finally { setRunning(false); }
-  }, [key, remote]);
+  }, [key, api]);
 
-  const cancel = useCallback(async () => { cancelled.current = true; await remote.api('/api/cancel', { method: 'POST', body: {} }); }, [remote]);
+  const cancel = useCallback(async () => { cancelled.current = true; await api('/api/cancel', { method: 'POST', body: {} }); }, [api]);
 
   /** Thêm hạn nộp vào Lịch iPhone: form POST → máy tính trả tệp .ics → Safari hỏi "Thêm vào Lịch". */
   const calendar = useCallback((t) => {
@@ -166,6 +227,8 @@ function RemoteProvider({ children }) {
       description: [t.displayCode, t.investorName ? `Chủ đầu tư: ${t.investorName}` : '', t.price ? `Giá gói thầu: ${Number(t.price).toLocaleString('vi-VN')} đ` : ''].filter(Boolean).join('\n'),
       url: t.detailUrl || ''
     };
+    // Địa chỉ cố định: biểu mẫu thường không đặt được tiêu đề → đích đã kiểm nằm ở trường "t".
+    if (linkRef.current.kind === 'relay') fields.t = linkRef.current.target;
     const form = document.createElement('form');
     form.method = 'POST';
     form.action = '/api/ics';
@@ -180,11 +243,21 @@ function RemoteProvider({ children }) {
     return true;
   }, [key]);
 
+  /** "Cài lên màn hình chính": iOS lấy địa chỉ ĐANG MỞ làm địa chỉ của biểu tượng — đặt khoá vào
+   *  phần sau dấu # trong lúc cài (biểu tượng mới tự có khoá), xong thì xoá khỏi thanh địa chỉ. */
+  const installMode = useCallback((on) => {
+    try {
+      if (on && key) window.history.replaceState(null, '', `${window.location.pathname}#k=${key}`);
+      else window.history.replaceState(null, '', window.location.pathname + window.location.search);
+    } catch { /* không đổi được địa chỉ */ }
+  }, [key]);
+
   const value = useMemo(() => ({
     mode: 'remote', sourceLabel: 'Máy tính công ty', coreVersion: EXTENSION_VERSION,
-    page, running, progress, run, cancel, calendar,
-    reloadPage: () => { void refresh(); }, showPage: () => {}, pageVisible: false
-  }), [page, running, progress, run, cancel, calendar, refresh]);
+    page, running, progress, run, cancel, calendar, connection, hasKey: Boolean(key), installMode,
+    standalone: isStandalone(), applyKeyFromText,
+    reloadPage: () => { void locate().then(() => refresh()); }, showPage: () => {}, pageVisible: false
+  }), [page, running, progress, run, cancel, calendar, connection, key, installMode, locate, refresh]);
   return <EgpContext.Provider value={value}><View style={styles.root}>{children}</View></EgpContext.Provider>;
 }
 

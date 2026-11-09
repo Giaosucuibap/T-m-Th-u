@@ -78,12 +78,30 @@ export function ago(iso, now = Date.now()) {
 }
 
 /** Chuỗi tiêu chí ngắn gọn để hiện trên thẻ lịch sử. */
+/** Giá trong tiêu chí: 0, trống, "0" hay mức trần 1e15 nghĩa là KHÔNG đặt (máy tính lưu giá trống thành "0"). */
+export function priceOrNull(value) {
+  const n = Number(value);
+  return Number.isFinite(n) && n > 0 && n < 1e15 ? n : null;
+}
+
+/** "Tỉnh Lâm Đồng; Tỉnh Lâm Đồng" → "Tỉnh Lâm Đồng". */
+export function dedupeLocation(value) {
+  const seen = new Set();
+  return String(value ?? '').split(/\s*;\s*/).map((s) => s.trim()).filter((s) => {
+    const k = s.toLowerCase();
+    if (!s || seen.has(k)) return false;
+    seen.add(k);
+    return true;
+  }).join('; ');
+}
+
 export function criteriaSummary(c = {}) {
   const parts = [];
   if (c.province) parts.push(c.province);
   if (c.category) parts.push({ XL: 'Xây lắp', TV: 'Tư vấn', HH: 'Hàng hóa', PTV: 'Phi tư vấn', HON_HOP: 'Hỗn hợp' }[c.category] || c.category);
   if (c.investor) parts.push(`CĐT: ${c.investor}`);
   if (c.keyword) parts.push(`"${c.keyword}"`);
-  if (c.minPrice || c.maxPrice) parts.push(`${c.minPrice ? formatVndShort(c.minPrice) : '0'} – ${c.maxPrice ? formatVndShort(c.maxPrice) : '∞'}`);
+  const lo = priceOrNull(c.minPrice), hi = priceOrNull(c.maxPrice);
+  if (lo || hi) parts.push(`${lo ? formatVndShort(lo) : '0'} – ${hi ? formatVndShort(hi) : '∞'}`);
   return parts.join(' · ') || 'Mọi gói thầu';
 }

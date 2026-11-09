@@ -18,3 +18,8 @@ native-agent/*.exe.sha256
 native-agent/web/
 
 canary-result.json
+
+# Địa chỉ cố định (4.21.0): bản dựng giao diện và cấu hình sinh tự động khi triển khai.
+relay/build/
+relay/.wrangler.jsonc
+relay/.wrangler/

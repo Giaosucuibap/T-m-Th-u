@@ -87,3 +87,46 @@ Hai tuỳ chọn khác: `-KiemTra` để xem trạng thái, `-Go` để gỡ (ch
 - Link đổi mỗi khi `cloudflared` khởi động lại (máy tính hoặc Chrome khởi động lại, mạng rớt lâu). Tuỳ chọn "Gửi link mới qua Telegram" đỡ phải ra tận máy quét lại mã.
 - Mạng công ty chặn cổng ra 7844 (cả UDP/QUIC lẫn TCP) của Cloudflare thì đường hầm không lên. Trang Link điện thoại sẽ báo "đang chạy lại".
 - Máy có tệp `%USERPROFILE%\.cloudflared\config.yml` thì đường hầm nhanh không chạy. Tệp cài có cảnh báo trường hợp này.
+
+## Địa chỉ cố định (4.21.0) — `relay/src/worker.js`
+
+Đường hầm nhanh đổi địa chỉ mỗi lần `cloudflared` khởi động lại. Worker Cloudflare của chủ phần mềm
+cho **một địa chỉ không đổi** (`https://<tên>.<tài-khoản>.workers.dev`):
+
+```
+iPhone/iPad (app trên màn hình chính) ──▶ https://thau.<tài-khoản>.workers.dev   (Worker: giao diện + chuyển tiếp)
+                                              │  /api/* chỉ tới ĐÚNG đường hầm đã đăng ký (con trỏ trong KV)
+                                              ▼
+                                   https://<ngẫu-nhiên>.trycloudflare.com ──▶ GiaoSuCuiBap.DienThoai.exe ──▶ tiện ích ──▶ e-GP
+```
+
+| Lệnh | Ai gọi | Nội dung |
+|---|---|---|
+| `POST /_gscb/claim` | tiện ích (một lần) | `{code, ts, publicKey (JWK P-256), sig}`. Đúng mã ghép nối (Worker chỉ giữ SHA-256 của mã: bí mật `CLAIM_CODE_HASH`) và chữ ký ECDSA trên `gscb-claim\|code\|ts\|x\|y` thì lưu khoá công khai làm chủ, xoá con trỏ cũ. Sai mã quá 20 lần trong 1 giờ thì khoá ghép nối. |
+| `POST /_gscb/register` | tiện ích (mỗi khi đường hầm hoặc khoá đổi) | `{url, ts, keySig, sig}`. `sig` = ECDSA của máy đã ghép trên `gscb-register\|url\|ts\|keySig`; `url` phải là `https://*.trycloudflare.com`; `ts` lệch tối đa 15 phút, không lùi so với con trỏ hiện tại. |
+| `GET /_gscb/pointer` | trang iPhone | `{url, ts, keySig}`. Trang tự kiểm `keySig = HMAC-SHA256(khoá điện thoại, "gscb-pointer\|url\|ts")`. Sai thì báo "khoá đã cũ — quét lại mã" và không gửi lệnh. |
+| `/api/*` | trang iPhone | Kèm `X-GSCB-Target` là đích trang đã kiểm. Worker chỉ chuyển tiếp khi đích trùng con trỏ hiện tại (không thì `409 STALE_TARGET`, trang hỏi lại con trỏ). Chỉ mang theo `X-GSCB-Key` và kiểu nội dung. Đường hầm đóng hoặc máy phục vụ tắt thì trả `502 PC_OFFLINE` kèm thời điểm đăng ký. `POST /api/ics` (biểu mẫu) mang đích ở trường `t`. |
+| `GET /_gscb/health` | kiểm tra | `{version, claimed, pointerAgeSec}`. |
+| còn lại | Safari | Giao diện (Workers Static Assets, ứng dụng một trang) kèm CSP `connect-src 'self'`, `frame-ancestors 'none'`, `X-Frame-Options: DENY`. `public/sw.js` lưu giao diện để mở khi mất mạng; không lưu `/api/` hay `/_gscb/`. |
+
+Hai lớp bảo vệ khoá điện thoại:
+
+1. Chỉ máy đã ghép (giữ khoá riêng trong `chrome.storage.local`) mới đổi được con trỏ.
+2. Điện thoại tự kiểm chữ ký con trỏ bằng khoá của mình trước khi gửi lệnh, và Worker chỉ chuyển tiếp tới
+   đích điện thoại đã kiểm. Kể cả khi tài khoản Cloudflare hay kho KV bị chiếm, khoá vẫn không đi tới máy lạ.
+
+Cài lên màn hình chính iOS: biểu tượng lấy địa chỉ đang mở, và app trên màn hình chính có kho dữ liệu riêng,
+tách khỏi Safari. Vì vậy mục "Cài lên màn hình chính" tạm đặt `#k=<khoá>` lên thanh địa chỉ trong lúc cài,
+rồi xoá đi khi bấm "Xong". App mở từ màn hình chính đọc khoá một lần, lưu lại, rồi xoá khỏi thanh địa chỉ.
+
+Triển khai: `CLOUDFLARE_API_TOKEN=… node relay/trien-khai.mjs --tai-khoan-con <tên>`. Lệnh này dựng giao
+diện, tạo kho KV, triển khai, rồi in mã ghép nối **một lần**. Cập nhật giao diện về sau thì thêm
+`--chi-cap-nhat` (giữ mã cũ).
+
+Chế độ thử của cầu nối:
+
+- `--fake-tunnel <url>`: báo đường hầm "up" với địa chỉ cho trước, không chạy cloudflared.
+- `--port <n>`: cổng cố định.
+
+Hai cờ này dùng cho `tools/test/phone-relay.mjs`. Bài thử đó chạy đúng mã Worker trong Node qua
+`tools/test/relay-sim.mjs`, rồi chạy trang bằng WebKit cỡ iPhone và iPad qua `tools/test/webkit-driver.mjs`.

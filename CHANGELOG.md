@@ -2,6 +2,86 @@
 
 Tài liệu này ghi lại các thay đổi quan trọng của Giáo Sư Cùi Bắp. Cấu trúc tham khảo [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) và phiên bản tuân theo cách đánh số ngữ nghĩa ở mức sản phẩm.
 
+## [4.21.0] — 2026-11-09
+
+**App "Cùi Bắp" trên iPhone và iPad, địa chỉ cố định.** Biểu tượng trên màn hình chính, quét mã một lần cho
+mỗi máy; máy tính công ty khởi động lại thì app tự tìm lại máy tính. Hướng dẫn: `HUONG-DAN-4.21.0.md`. Giao
+thức: mục "Địa chỉ cố định" trong `native-agent/DIEN-THOAI-GIAO-THUC.md`. Triển khai: `relay/README.md`.
+
+### Có gì
+- **Địa chỉ cố định** `https://thau.<tên>.workers.dev`: một Cloudflare Worker (`relay/src/worker.js`) chạy
+  trên tài khoản Cloudflare miễn phí của chủ phần mềm.
+  - Phát giao diện iPhone/iPad, nên app mở được cả khi máy tính công ty đang tắt.
+  - Giữ "con trỏ" tới đường hầm `….trycloudflare.com` hiện tại của máy tính, chuyển `/api/*` tới đúng đường
+    hầm đó.
+  - Máy tính hay Chrome khởi động lại thì đường hầm đổi; tiện ích tự đăng ký đường hầm mới, thử lại sau 1, 2,
+    5, 10, 30 phút nếu lỗi. Điện thoại không phải quét lại mã.
+- **Ghép nối một lần** ở **Hệ thống › Link điện thoại**, mục "Địa chỉ cố định — không phải quét lại mã":
+  nhập địa chỉ và mã ghép nối 8 ký tự, bấm Ghép nối. Mã QR trên trang chuyển sang địa chỉ cố định. Có nút Bỏ
+  ghép.
+- **App trên màn hình chính** (ứng dụng web cài được):
+  - Tab Thông tin có mục "Cài thành app trên màn hình chính", hướng dẫn từng bước cho iPhone và iPad. Khoá
+    được gắn tạm vào địa chỉ trong lúc "Thêm vào MH chính", rồi gỡ ra.
+  - Mục "Dán link kết nối" cho biểu tượng đã cài mà chưa có khoá.
+  - `sw.js` giữ vỏ app và tệp tĩnh. Mất mạng vẫn mở được, xem được kết quả gần nhất và gói theo dõi. Lệnh
+    `/api/` và `/_gscb/` không bao giờ lưu đệm.
+- **iPad**: bố cục 2 cột (tiêu chí bên trái, danh sách bên phải) khi màn hình rộng từ 900 điểm; trang chi
+  tiết và các tab căn giữa trên máy tính bảng. **iPhone**: tìm xong tự cuộn tới kết quả.
+- Báo trạng thái rõ: máy tính tắt (kèm "lần cuối thấy máy tính" theo giờ Việt Nam), khoá đã cũ, máy tính
+  chưa báo địa chỉ, mất mạng. Mở lại app từ nền thì tự kiểm lại kết nối.
+- `relay/trien-khai.mjs`: dựng giao diện, tạo kho KV, đăng ký tên workers.dev, triển khai Worker, sinh mã
+  ghép nối và in ra **một lần**.
+
+### Sửa lỗi (thấy trên ảnh chụp iPhone thật với e-GP thật, bản 4.20.0)
+- Thẻ kết quả hiện **"0 đ – 0 đ"** khi không nhập khoảng giá. Nguyên nhân: bản lưu lượt tra đổi ô giá trống
+  thành chuỗi `"0"`. Nay giá chỉ hiện khi lớn hơn 0, sửa ở cả tiện ích lẫn app.
+- Địa điểm lặp **"Tỉnh Lâm Đồng; Tỉnh Lâm Đồng"**: gộp trùng, giữ thứ tự.
+
+### An toàn
+- Mã ghép nối 8 ký tự (bảng chữ Crockford: chữ O và số 0 như nhau). Worker chỉ giữ SHA-256 của mã, dưới
+  dạng bí mật. Sai 20 lần trong một giờ thì khoá ghép nối một giờ.
+- Lúc ghép, tiện ích sinh cặp khoá ECDSA P-256. Khoá riêng nằm trong `chrome.storage.local`, không rời máy
+  tính; trang Link điện thoại không bao giờ nhận khoá riêng.
+- Đăng ký đường hầm phải có chữ ký ECDSA của máy tính đã ghép, đồng hồ lệch không quá ±15 phút, không nhận
+  bản cũ hơn con trỏ hiện tại (chống phát lại). Chỉ nhận `https://<tên>.trycloudflare.com`, trừ
+  `api.trycloudflare.com`.
+- Con trỏ còn mang `keySig` = HMAC-SHA256 (khoá điện thoại, địa chỉ đường hầm, thời điểm), do máy tính ký.
+  Điện thoại tự kiểm `keySig`, rồi gửi lệnh kèm `X-GSCB-Target`. Worker chỉ chuyển tiếp khi đích trùng con
+  trỏ hiện tại, nên không thành máy chuyển tiếp mở. Kẻ sửa được kho KV cũng không lừa được điện thoại gửi
+  lệnh tới máy lạ, vì không có khoá điện thoại để ký con trỏ.
+- Nói thẳng: Worker chạy trên tài khoản của chủ phần mềm và thấy lệnh đi qua, gồm cả tiêu đề `X-GSCB-Key`.
+  Ở 4.20.0, đường hầm trycloudflare cũng kết thúc TLS tại Cloudflare. Giữ kín mật khẩu tài khoản Cloudflare
+  như giữ kín khoá.
+- Trang tĩnh có CSP `script-src 'self'`, `frame-ancestors 'none'`, `X-Frame-Options: DENY`. Thân lệnh tối đa
+  64 KB.
+
+### Kiểm thử
+- `tests/relay-421.test.mjs`, 7 bài. Chạy chính mã Worker trong Node với kho KV giả:
+  - trang tĩnh và CSP;
+  - ghép nối: mã sai, khoá sau 20 lần;
+  - đăng ký: chữ ký sai, đồng hồ lệch, phát lại, địa chỉ lạ;
+  - chuyển tiếp chỉ tới đường hầm hiện tại; báo máy tính tắt;
+  - **runtime thật của tiện ích** ghép và đăng ký qua Worker, điện thoại tự kiểm chữ ký;
+  - nhận diện link trực tiếp và mất mạng.
+- `tools/test/phone-relay.mjs`, đầu-cuối, 9/9. Chrome thật nạp tiện ích, native messaging thật khởi động cầu
+  nối, Worker chạy giả lập trên https, e-GP giả lập:
+  - ghép nối, từ chối mã sai;
+  - điện thoại tra qua địa chỉ cố định (115 gói), chỉ nói chuyện với địa chỉ cố định;
+  - máy tính "khởi động lại" sang đường hầm mới: điện thoại tự nối lại, không quét mã;
+  - máy tính tắt rồi bật lại; đổi khoá thì khoá cũ hết hiệu lực;
+  - **WebKit 2.52.6, nhân của Safari**, cỡ iPhone 390×844 và iPad Pro 1024×1366: tìm gói, tự cuộn tới kết
+    quả trên iPhone, 2 cột trên iPad;
+  - không trang nào ra e-GP thật.
+- CI Linux chạy thêm bài đầu-cuối này, cài `webkit2gtk-driver`, lưu ảnh chụp iPhone/iPad.
+
+### Giới hạn
+- **Chưa chạy trên iPhone hay iPad thật qua địa chỉ cố định.** Phần link trực tiếp 4.20.0 đã chạy thật trên
+  iPhone với e-GP thật (Lâm Đồng, xây lắp, 124 gói).
+- Vỏ Safari thật (nút Chia sẻ, "Thêm vào MH chính", vuốt cuộn) không giả lập được.
+- Cần tài khoản Cloudflare miễn phí và một lần triển khai. Gói miễn phí: 100.000 lượt gọi mỗi ngày.
+- Máy tính công ty vẫn là máy tra e-GP. Tắt hẳn thì không tra mới được.
+- Chưa có thông báo đẩy; gói mới vẫn báo qua Telegram. Chưa lên App Store.
+
 ## [4.20.0] — 2026-11-08
 
 **Link điện thoại.** iPhone tra gói thầu bằng Safari, không cài gì: máy tính công ty (Chrome + tiện ích)

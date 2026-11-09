@@ -74,6 +74,8 @@ internal static class DienThoai {
   static int Port;
   static TcpListener Listener;
   static bool NoTunnel;
+  static string FakeTunnel = "";   // chi de kiem thu: bao duong ham "up" voi dia chi nay, khong chay cloudflared
+  static int FixedPort;            // chi de kiem thu: cong co dinh (mac dinh 0 = ngau nhien)
   static volatile bool Stopping;
   static bool TunnelStarted;
   static string TunnelState = "starting";
@@ -91,6 +93,8 @@ internal static class DienThoai {
       if (args[i] == "--no-tunnel") NoTunnel = true;
       else if (args[i] == "--web" && i + 1 < args.Length) WebRoot = args[++i];
       else if (args[i] == "--log" && i + 1 < args.Length) LogPath = args[++i];
+      else if (args[i] == "--fake-tunnel" && i + 1 < args.Length) FakeTunnel = args[++i];
+      else if (args[i] == "--port" && i + 1 < args.Length) { int p; if (Int32.TryParse(args[++i], NumberStyles.None, CultureInfo.InvariantCulture, out p) && p > 0 && p < 65536) FixedPort = p; }
     }
     string baseDir = AppDomain.CurrentDomain.BaseDirectory;
     WebRoot = Path.GetFullPath(WebRoot.Length > 0 ? WebRoot : Path.Combine(baseDir, "web"));
@@ -100,7 +104,7 @@ internal static class DienThoai {
     Stream input = Console.OpenStandardInput();
     Output = Console.OpenStandardOutput();
     try {
-      Listener = new TcpListener(IPAddress.Loopback, 0);
+      Listener = new TcpListener(IPAddress.Loopback, FixedPort);
       Listener.Start();
       Port = ((IPEndPoint)Listener.LocalEndpoint).Port;
     } catch (Exception e) {
@@ -154,7 +158,8 @@ internal static class DienThoai {
       }
       SendReady();
       if (startTunnel) {
-        if (NoTunnel) SetTunnel("off", "http://127.0.0.1:" + Port, "NO_TUNNEL");
+        if (FakeTunnel.Length > 0) SetTunnel("up", FakeTunnel, "");
+        else if (NoTunnel) SetTunnel("off", "http://127.0.0.1:" + Port, "NO_TUNNEL");
         else { Thread t = new Thread(TunnelLoop); t.IsBackground = true; t.Start(); }
       }
       return;

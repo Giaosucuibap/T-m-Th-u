@@ -7,10 +7,12 @@ import { T, Notice, TenderRow } from '../../ui/kit.js';
 import { color, size, space } from '../../ui/theme.js';
 import { vnParts, formatDateTimeVn } from '../../core/format.js';
 import { REMINDER_KIND } from '../../notify';
+import { useLayout } from '../../ui/layout.js';
 
 export default function WatchScreen() {
   const app = useApp();
   const router = useRouter();
+  const layout = useLayout();
   const now = Date.now();
   const list = useMemo(() => {
     const all = Object.values(app.watch || {});
@@ -24,7 +26,7 @@ export default function WatchScreen() {
     <FlatList
       data={list}
       keyExtractor={(t) => t.key}
-      contentContainerStyle={styles.content}
+      contentContainerStyle={[styles.content, layout.centered && { width: '100%', maxWidth: 760, alignSelf: 'center' }]}
       ListHeaderComponent={
         <View style={{ gap: space.md, marginBottom: space.md }}>
           <Notice tone="info" title="Nhắc hạn nộp hồ sơ">

@@ -1,12 +1,13 @@
 /* MÀN HÌNH TÌM GÓI THẦU — tiêu chí → tra trên e-GP → danh sách đã chấm điểm. */
-import { useEffect, useMemo, useState } from 'react';
-import { FlatList, Keyboard, Pressable, StyleSheet, View } from 'react-native';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { FlatList, Keyboard, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useEgp, PLATFORM_NOTE } from '../../egp/EgpProvider';
 import { useApp } from '../../state/AppState';
 import { T, Card, Button, Chip, Field, Badge, Notice, ProgressBar, TenderRow } from '../../ui/kit.js';
 import { color, size, space, radius } from '../../ui/theme.js';
 import { ago, criteriaSummary } from '../../core/format.js';
+import { useLayout } from '../../ui/layout.js';
 
 const PROVINCE_CHIPS = ['Lâm Đồng', 'Đồng Nai', 'Khánh Hòa', 'Đắk Lắk', 'Gia Lai', 'Quảng Ngãi'];
 const CATEGORY_CHIPS = [['', 'Tất cả'], ['XL', 'Xây lắp'], ['TV', 'Tư vấn'], ['HH', 'Hàng hóa'], ['PTV', 'Phi tư vấn'], ['HON_HOP', 'Hỗn hợp']];
@@ -42,6 +43,9 @@ export default function SearchScreen() {
   const [advanced, setAdvanced] = useState(false);
   const [error, setError] = useState(null);
   const [view, setView] = useState('MATCH');
+  const layout = useLayout();
+  const listRef = useRef(null);
+  const formBottom = useRef(0);
 
   // Nạp tiêu chí lần trước (hoặc tiêu chí chọn lại từ Lịch sử ở màn Thông tin).
   useEffect(() => {
@@ -65,7 +69,9 @@ export default function SearchScreen() {
     if (r.status === 'INVALID' || r.status === 'BUSY') { setError({ field: r.field, message: r.message }); return; }
     await app.saveResult(r);
     setView(r.counts?.match ? 'MATCH' : 'ALL');
-    if (r.status === 'ERROR') setError({ message: r.message });
+    if (r.status === 'ERROR') { setError({ message: r.message }); return; }
+    // iPhone (1 cột): tra xong tự cuộn qua phần tiêu chí tới kết quả, khỏi phải vuốt tay.
+    if (!layout.twoColumn && formBottom.current > 0) setTimeout(() => listRef.current?.scrollToOffset?.({ offset: Math.max(0, formBottom.current - space.sm), animated: true }), 120);
   }
 
   const p = egp.progress;
@@ -75,7 +81,7 @@ export default function SearchScreen() {
   const header = (
     <View style={{ gap: space.lg }}>
       <PageStatus egp={egp} />
-      <Card>
+      <Card onLayout={(e) => { const l = e.nativeEvent.layout; formBottom.current = l.y + l.height; }}>
         <T weight="semibold" style={styles.h2}>Tiêu chí</T>
         <View style={{ gap: space.sm }}>
           <Field label="Tỉnh/thành" value={form.province} onChangeText={set('province')} placeholder="Ví dụ: Lâm Đồng; Khánh Hòa"
@@ -156,17 +162,39 @@ export default function SearchScreen() {
     </View>
   );
 
+  const renderItem = ({ item }) => <TenderRow tender={item} watched={Boolean(app.watch[item.key])} onPress={() => router.push({ pathname: '/goi/[key]', params: { key: item.key } })} />;
+  const empty = result && !egp.running && result.tenders?.length && view === 'MATCH'
+    ? <Notice tone="info">{'Không có gói nào khớp đủ tiêu chí. Bấm "Tất cả" để xem các gói e-GP trả về kèm lý do không khớp.'}</Notice> : null;
+
+  // iPad ngang / màn hình rộng: tiêu chí bên trái, danh sách gói bên phải (không phải cuộn qua form).
+  if (layout.twoColumn) {
+    return (
+      <View style={[styles.split, layout.centered]}>
+        <ScrollView style={{ width: layout.sideWidth, flexGrow: 0 }} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">{header}</ScrollView>
+        <FlatList
+          style={{ flex: 1 }}
+          data={egp.running ? [] : tenders}
+          keyExtractor={(t) => t.key}
+          renderItem={renderItem}
+          ItemSeparatorComponent={() => <View style={{ height: space.md }} />}
+          ListEmptyComponent={empty || <Notice tone="info">{egp.running ? 'Đang tra cứu… danh sách gói hiện ở đây khi xong.' : 'Danh sách gói thầu hiện ở đây sau khi tra.'}</Notice>}
+          contentContainerStyle={[styles.content, { paddingLeft: 0 }]}
+        />
+      </View>
+    );
+  }
+
   return (
     <FlatList
+      ref={listRef}
       data={egp.running ? [] : tenders}
       keyExtractor={(t) => t.key}
       ListHeaderComponent={header}
       ListHeaderComponentStyle={{ marginBottom: space.md }}
-      renderItem={({ item }) => <TenderRow tender={item} watched={Boolean(app.watch[item.key])} onPress={() => router.push({ pathname: '/goi/[key]', params: { key: item.key } })} />}
+      renderItem={renderItem}
       ItemSeparatorComponent={() => <View style={{ height: space.md }} />}
-      ListEmptyComponent={result && !egp.running && result.tenders?.length && view === 'MATCH'
-        ? <Notice tone="info">{'Không có gói nào khớp đủ tiêu chí. Bấm "Tất cả" để xem các gói e-GP trả về kèm lý do không khớp.'}</Notice> : null}
-      contentContainerStyle={styles.content}
+      ListEmptyComponent={empty}
+      contentContainerStyle={[styles.content, layout.centered]}
       keyboardShouldPersistTaps="handled"
       keyboardDismissMode="on-drag"
     />
@@ -192,6 +220,7 @@ function Seg({ active, label, onPress }) {
 
 const styles = StyleSheet.create({
   content: { padding: space.lg, paddingBottom: 40 },
+  split: { flex: 1, flexDirection: 'row' },
   h2: { fontSize: size.lg, color: color.ink },
   label: { fontSize: size.sm, color: color.text2 },
   muted: { fontSize: size.base, color: color.text2 },

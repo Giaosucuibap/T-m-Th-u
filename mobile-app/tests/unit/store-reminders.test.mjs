@@ -3,7 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createStore, memoryStorage, compactTender, LIMITS } from '../../src/core/store.js';
 import { planReminders, createReminders, IOS_PENDING_LIMIT } from '../../src/core/reminders.js';
-import { formatVndShort, formatVndFull, formatDateTimeVn, timeLeft, criteriaSummary } from '../../src/core/format.js';
+import { formatVndShort, formatVndFull, formatDateTimeVn, timeLeft, criteriaSummary, priceOrNull, dedupeLocation } from '../../src/core/format.js';
 
 const NOW = Date.parse('2026-11-08T03:00:00.000Z'); // 10:00 giờ Việt Nam
 const tender = (key, closeIso, extra = {}) => ({ key, notifyNo: key.split('::')[0], displayCode: `${key.split('::')[0]}-00`, bidName: `Gói ${key}`, closeDate: closeIso, price: 5e9, rawText: 'x'.repeat(4000), ...extra });
@@ -78,4 +78,16 @@ test('định dạng tiền và giờ Việt Nam không phụ thuộc múi giờ
   assert.equal(timeLeft(new Date(NOW + 10 * 86400000).toISOString(), NOW).text, 'Còn 10 ngày');
   assert.equal(timeLeft(new Date(NOW - 1).toISOString(), NOW).state, 'closed');
   assert.equal(criteriaSummary({ province: 'Lâm Đồng', category: 'XL', minPrice: 3e9 }), 'Lâm Đồng · Xây lắp · 3 tỷ – ∞');
+});
+
+test('4.21.0 — lỗi thấy trên iPhone thật: giá trống không hiện "0 đ – 0 đ"; địa điểm không lặp', () => {
+  // Máy tính lưu lượt tra qua safeRunForBackup: giá trống thành CHUỖI "0".
+  assert.equal(criteriaSummary({ province: 'Lâm Đồng', category: 'XL', minPrice: '0', maxPrice: '0' }), 'Lâm Đồng · Xây lắp');
+  assert.equal(criteriaSummary({ province: 'Lâm Đồng', minPrice: 0, maxPrice: 1e15 }), 'Lâm Đồng');
+  assert.equal(criteriaSummary({ province: 'Lâm Đồng', minPrice: '3000000000', maxPrice: '0' }), 'Lâm Đồng · 3 tỷ – ∞');
+  for (const v of ['', '0', 0, null, undefined, -5, 'abc', 1e15]) assert.equal(priceOrNull(v), null, String(v));
+  assert.equal(priceOrNull('50000000000'), 5e10);
+  assert.equal(dedupeLocation('Tỉnh Lâm Đồng; Tỉnh Lâm Đồng'), 'Tỉnh Lâm Đồng');
+  assert.equal(dedupeLocation('Xã Đơn Dương, Tỉnh Lâm Đồng;  tỉnh lâm đồng ; Tỉnh Lâm Đồng'), 'Xã Đơn Dương, Tỉnh Lâm Đồng; tỉnh lâm đồng');
+  assert.equal(dedupeLocation(''), '');
 });

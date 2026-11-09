@@ -2,7 +2,7 @@
   "expo": {
     "name": "Giáo Sư Cùi Bắp",
     "slug": "giao-su-cui-bap",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "scheme": "gscb",
     "orientation": "portrait",
     "icon": "./assets/icon.png",

@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { View } from 'react-native';
+import { Platform, View } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -19,6 +19,14 @@ export default function RootLayout() {
   const router = useRouter();
 
   const ready = fontsLoaded || Boolean(fontError);
+
+  // Bản web (Safari, app trên màn hình chính): service worker giữ giao diện để mở tức thì và
+  // mở được khi mất mạng (public/sw.js). Chỉ trên https — trang thử cục bộ http không đăng ký.
+  useEffect(() => {
+    if (Platform.OS !== 'web' || typeof navigator === 'undefined' || !('serviceWorker' in navigator)) return;
+    if (window.location.protocol !== 'https:') return;
+    navigator.serviceWorker.register('/sw.js').catch(() => {});
+  }, []);
 
   useEffect(() => {
     if (!ready) return undefined;

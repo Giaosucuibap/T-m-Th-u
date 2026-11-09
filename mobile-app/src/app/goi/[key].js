@@ -5,15 +5,17 @@ import { useLocalSearchParams } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import { useApp } from '../../state/AppState';
 import { useEgp } from '../../egp/EgpProvider';
+import { useLayout } from '../../ui/layout.js';
 import { T, Card, Button, Badge, Notice, KeyValue } from '../../ui/kit.js';
 import { color, size, space, gateTone, scoreTone } from '../../ui/theme.js';
-import { formatVndFull, formatVndShort, formatDateTimeVn, timeLeft } from '../../core/format.js';
+import { formatVndFull, formatVndShort, formatDateTimeVn, timeLeft, dedupeLocation } from '../../core/format.js';
 import { isEgpUrl } from '../../core/egp/egp-host.js';
 
 export default function TenderDetail() {
   const { key } = useLocalSearchParams();
   const app = useApp();
   const egp = useEgp();
+  const layout = useLayout();
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState(null);
   const tender = app.findTender(String(key || ''));
@@ -57,7 +59,7 @@ export default function TenderDetail() {
   }
 
   return (
-    <ScrollView contentContainerStyle={styles.content}>
+    <ScrollView contentContainerStyle={[styles.content, layout.centered && { width: '100%', maxWidth: 760, alignSelf: 'center' }]}>
       <Card>
         <View style={styles.head}>
           <View style={[styles.score, { backgroundColor: tone.bg }]}>
@@ -97,7 +99,7 @@ export default function TenderDetail() {
         <KeyValue k="Thời điểm đóng thầu" v={formatDateTimeVn(tender.closeDate)} strong />
         {tender.previousCloseDate ? <KeyValue k="Hạn cũ (trước khi đổi)" v={formatDateTimeVn(tender.previousCloseDate)} /> : null}
         <KeyValue k="Ngày đăng" v={formatDateTimeVn(tender.publicDate)} />
-        <KeyValue k="Địa điểm" v={tender.location || 'Chưa rõ'} />
+        <KeyValue k="Địa điểm" v={dedupeLocation(tender.location) || 'Chưa rõ'} />
         {tender.contractType ? <KeyValue k="Loại hợp đồng" v={tender.contractType} /> : null}
         {tender.bidForm ? <KeyValue k="Hình thức" v={`${tender.bidForm}${tender.isInternet === true ? ' · qua mạng' : ''}`} /> : null}
         <T style={styles.small}>Nguồn: Hệ thống mạng đấu thầu quốc gia (e-GP). Hồ sơ chính thức luôn xem trên e-GP.</T>
