@@ -237,6 +237,7 @@ test('CI Linux chạy bài đầu-cuối địa chỉ cố định với WebKit 
   const install = app.indexOf('webkit2gtk-driver matchbox-window-manager');
   const run = app.indexOf('tools/test/phone-relay.mjs');
   assert.ok(install > 0 && run > install, 'cài WebKit trước khi chạy bài đầu-cuối');
+  assert.match(app, /runs-on: ubuntu-24\.04\r?\n/, 'job app ghim Ubuntu 24.04: 26.04 không có gói webkit2gtk-driver');
   assert.match(app.slice(install, run), /GSCB_REQUIRE_WEBKIT: '1'/);
   assert.ok(app.includes('test-results/phone-relay/*.png'), 'lưu ảnh chụp iPhone/iPad');
   assert.match(read('tools/test/phone-relay.mjs'), /process\.env\.GSCB_REQUIRE_WEBKIT/);

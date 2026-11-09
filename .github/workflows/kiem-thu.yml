@@ -56,7 +56,9 @@ jobs:
 
   app-di-dong:
     name: App di động (lõi, cầu nối e-GP giả lập, đóng gói iOS/web, giao diện cỡ iPhone, WebKit iPhone/iPad)
-    runs-on: ubuntu-latest
+    # Ghim 24.04: ubuntu-latest (26.04) không còn gói webkit2gtk-driver (WebKitWebDriver + MiniBrowser
+    # của WebKitGTK 4.1) mà bài nhân Safari cần; mọi bước của job đã kiểm trên Ubuntu 24.04.5.
+    runs-on: ubuntu-24.04
     timeout-minutes: 45
     defaults:
       run:
