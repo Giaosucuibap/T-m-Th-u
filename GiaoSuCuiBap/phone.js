@@ -61,6 +61,10 @@ function render(s) {
   $('pl-relay-form').classList.toggle('hidden', Boolean(s?.relay?.claimed));
   $('pl-relay-paired').classList.toggle('hidden', !s?.relay?.claimed);
   $('pl-qr-title').textContent = s?.relay?.claimed ? 'Địa chỉ cố định — quét MỘT LẦN bằng camera iPhone / iPad' : 'Quét mã này bằng camera iPhone';
+  // Hướng dẫn theo đúng chế độ: link trực tiếp (đổi khi khởi động lại) hay địa chỉ cố định (cài biểu tượng được).
+  $('pl-steps-direct').classList.toggle('hidden', Boolean(s?.relay?.claimed));
+  $('pl-steps-relay').classList.toggle('hidden', !s?.relay?.claimed);
+  $('pl-tg-relay-note').classList.toggle('hidden', !s?.relay?.claimed);
   $('pl-tg').checked = s?.telegram === true;
   $('pl-tg-status').textContent = telegramText(s);
   if (link && link !== shownLink && typeof window.qrcode === 'function') {

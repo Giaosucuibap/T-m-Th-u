@@ -5,17 +5,22 @@
   <p>Máy tính này làm <b>máy tra e-GP</b> cho điện thoại: iPhone chỉ cần mở một đường link trong Safari — không cài ứng dụng nào. Lệnh tìm từ điện thoại chạy đúng luồng <b>Tìm gói thầu</b> của tiện ích trên máy này, rồi kết quả hiện trên điện thoại.</p>
   <div id="pl-status" class="notice" role="status">Đang đọc trạng thái…</div>
   <div class="row" style="margin-top:10px"><button id="pl-toggle" class="btn" type="button">Bật link điện thoại</button><button id="pl-rotate" class="btn light" type="button">Đổi khoá (link cũ hết hiệu lực)</button></div>
-  <p class="muted small">Máy tính và Chrome phải đang bật (trạm săn chạy nền giúp việc này). Dữ liệu chỉ đi giữa máy tính này và điện thoại của anh qua đường hầm https của Cloudflare; khoá nằm trong mã QR, không gửi lên máy chủ nào.</p>
+  <p class="muted small">Máy tính và Chrome phải đang bật (trạm săn chạy nền giúp việc này). Dữ liệu đi giữa máy tính này và điện thoại của anh bằng https, qua hạ tầng Cloudflare (đường hầm, và địa chỉ cố định nếu đã ghép). Khoá nằm trong mã QR; điện thoại gửi khoá kèm mỗi lệnh để máy tính này kiểm, ai không có mã QR thì không tra được.</p>
 </section>
 <section class="card hidden" id="pl-qr-card" aria-labelledby="pl-qr-title" style="margin-top:14px">
   <h2 id="pl-qr-title">Quét mã này bằng camera iPhone</h2>
   <img id="pl-qr" alt="Mã QR mở link điện thoại" width="296" height="296" style="image-rendering:pixelated;border:1px solid var(--line);border-radius:12px;background:#fff">
   <p class="small">Hoặc mở link: <a id="pl-link" target="_blank" rel="noopener noreferrer"></a></p>
   <div class="row"><button id="pl-copy" class="btn light" type="button">Chép link</button></div>
-  <ol class="small">
+  <ol class="small" id="pl-steps-direct">
     <li>Mở <b>Camera</b> trên iPhone, hướng vào mã QR, bấm dòng thông báo hiện ra → Safari mở trang tra cứu.</li>
     <li>Link đổi khi máy tính hoặc Chrome khởi động lại — khi đó quét mã mới, hoặc bật <b>Nhận link mới qua Telegram</b> bên dưới để link mới tự về điện thoại.</li>
-    <li>Không cần "Thêm vào MH chính": biểu tượng đó giữ link cũ, sẽ hỏng khi link đổi.</li>
+    <li>Chưa nên "Thêm vào MH chính": biểu tượng đó giữ link cũ, sẽ hỏng khi link đổi. Ghép <b>địa chỉ cố định</b> bên dưới thì cài được.</li>
+  </ol>
+  <ol class="small hidden" id="pl-steps-relay">
+    <li>Mở <b>Camera</b> trên iPhone hoặc iPad, hướng vào mã QR, bấm dòng thông báo hiện ra → Safari mở app.</li>
+    <li>Trong app: tab <b>Thông tin</b> → <b>Cài thành app trên màn hình chính</b> → làm theo từng bước (nút Chia sẻ → "Thêm vào MH chính").</li>
+    <li>Địa chỉ này không đổi: máy tính hay Chrome khởi động lại, app tự tìm lại máy tính, không phải quét lại mã.</li>
   </ol>
   <p class="muted small">Ai có link này đều tra được bằng máy tính của anh. Đừng gửi link cho người ngoài; lỡ gửi thì bấm <b>Đổi khoá</b>.</p>
 </section>
@@ -31,11 +36,12 @@
     <div class="row" style="margin-top:10px"><button id="pl-relay-pair" class="btn" type="button">Ghép nối</button></div>
   </div>
   <div class="row hidden" id="pl-relay-paired" style="margin-top:10px"><button id="pl-relay-unpair" class="btn light" type="button">Bỏ ghép địa chỉ cố định</button></div>
-  <p class="muted small">Địa chỉ và mã ghép nối do người bảo trì đưa khi tạo địa chỉ cố định (miễn phí, đứng tên anh trên Cloudflare). Khoá truy cập vẫn chỉ nằm trong mã QR, không gửi lên Cloudflare.</p>
+  <p class="muted small">Địa chỉ và mã ghép nối do người bảo trì đưa khi tạo địa chỉ cố định (miễn phí, đứng tên anh trên Cloudflare). Địa chỉ cố định chỉ chuyển lệnh tới máy tính đã ghép; điện thoại tự kiểm chữ ký của máy tính này trước khi gửi lệnh.</p>
 </section>
 <section class="card hidden" id="pl-tg-card" aria-labelledby="pl-tg-title" style="margin-top:14px">
   <h2 id="pl-tg-title">Nhận link mới qua Telegram</h2>
   <p>Mỗi lần máy tính hoặc Chrome khởi động lại, link đổi. Bật mục này để tiện ích tự nhắn link mới vào Telegram của anh (dùng Bot Token và Chat ID ở trang <a href="options.html">Cấu hình</a>) — ở công trường cũng mở được, không phải về văn phòng quét mã.</p>
+  <p class="small hidden" id="pl-tg-relay-note"><b>Đã có địa chỉ cố định</b> nên link không đổi khi máy tính khởi động lại; không cần mục này nữa, có thể tắt.</p>
   <label class="checkline"><input id="pl-tg" type="checkbox"><b>Gửi link mới qua Telegram</b></label>
   <div id="pl-tg-status" class="small" role="status"></div>
   <p class="muted small">Chỉ gửi vào <b>chat riêng</b> giữa anh và bot (Chat ID là số dương); Chat ID của nhóm hoặc kênh bị từ chối, vì ai đọc được tin nhắn đều tra được bằng máy tính công ty.</p>

@@ -105,6 +105,9 @@ try {
     await ext.click('#pl-toggle');
     await until(async () => (await send('PHONE_LINK_STATE'))?.tunnel?.state === 'up', 30000, 'đường hầm (giả) lên');
     await ext.waitForSelector('#pl-relay-card:not(.hidden)');
+    await ext.waitForSelector('#pl-qr-card:not(.hidden)');
+    assert.equal(await ext.isVisible('#pl-steps-direct'), true, 'chưa ghép: hướng dẫn link trực tiếp');
+    assert.equal(await ext.isVisible('#pl-steps-relay'), false, 'chưa ghép: chưa hướng dẫn cài biểu tượng');
     await ext.fill('#pl-relay-url', relay.url);
     await ext.fill('#pl-relay-code', 'AAAA-AAAA');
     await ext.click('#pl-relay-pair');
@@ -117,6 +120,11 @@ try {
     assert.equal(s.directLink.replace(/\/#k=.*$/, ''), tunnel.url);
     assert.equal(JSON.parse(await relay.kv.get('pointer')).url, tunnel.url);
     await ext.getByText(/Đã ghép .* điện thoại tự tìm thấy máy tính này/).waitFor({ timeout: 10000 });
+    // Đã ghép: hướng dẫn chuyển sang cài biểu tượng; không còn "link đổi khi khởi động lại"; Telegram ghi rõ không cần.
+    assert.equal(await ext.isVisible('#pl-steps-relay'), true, 'đã ghép: hướng dẫn cài biểu tượng');
+    assert.equal(await ext.isVisible('#pl-steps-direct'), false, 'đã ghép: ẩn hướng dẫn link trực tiếp');
+    assert.equal(await ext.isVisible('#pl-tg-relay-note'), true, 'đã ghép: Telegram ghi rõ không cần nữa');
+    await ext.evaluate(() => { document.activeElement?.blur?.(); window.scrollTo(0, 0); });
     await ext.screenshot({ path: path.join(OUT, '1-tien-ich-dia-chi-co-dinh.png'), fullPage: true });
   });
 

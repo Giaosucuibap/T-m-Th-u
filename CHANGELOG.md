@@ -38,6 +38,10 @@ thức: mục "Địa chỉ cố định" trong `native-agent/DIEN-THOAI-GIAO-TH
 - Địa điểm lặp **"Tỉnh Lâm Đồng; Tỉnh Lâm Đồng"**: gộp trùng, giữ thứ tự.
 - Tab Thông tin trên Safari luôn ghi **"bản 1.0.0"**, vì bản web không có `Constants.expoConfig` nên rơi về số
   dự phòng. Nay lấy từ một hằng số (`src/core/version.js`); bài kiểm thử chặn lệch với `app.json`.
+- Trang Link điện thoại ghi "khoá … không gửi lên máy chủ nào", rồi "không gửi lên Cloudflare". Câu này **chưa
+  đúng**: điện thoại gửi khoá kèm mỗi lệnh, đi ngang Cloudflare tới máy tính. Đã sửa câu chữ cho đúng.
+- Đã ghép địa chỉ cố định mà trang vẫn hướng dẫn "link đổi khi khởi động lại" và "không cần Thêm vào MH chính".
+  Nay hướng dẫn đổi theo chế độ, mục Telegram ghi rõ không cần nữa. Bài đầu-cuối kiểm cả hai chế độ.
 
 ### An toàn
 - Mã ghép nối 8 ký tự (bảng chữ Crockford: chữ O và số 0 như nhau). Worker chỉ giữ SHA-256 của mã, dưới
