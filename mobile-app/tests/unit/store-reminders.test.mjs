@@ -91,3 +91,13 @@ test('4.21.0 — lỗi thấy trên iPhone thật: giá trống không hiện "0
   assert.equal(dedupeLocation('Xã Đơn Dương, Tỉnh Lâm Đồng;  tỉnh lâm đồng ; Tỉnh Lâm Đồng'), 'Xã Đơn Dương, Tỉnh Lâm Đồng; tỉnh lâm đồng');
   assert.equal(dedupeLocation(''), '');
 });
+
+test('4.21.0: số phiên bản ở tab Thông tin lấy từ một hằng số, khớp app.json (bản web không có Constants.expoConfig)', async () => {
+  const { APP_VERSION } = await import('../../src/core/version.js');
+  const fs = await import('node:fs');
+  const app = JSON.parse(fs.readFileSync(new URL('../../app.json', import.meta.url), 'utf8'));
+  assert.equal(APP_VERSION, app.expo.version);
+  const info = fs.readFileSync(new URL('../../src/app/(tabs)/thong-tin.js', import.meta.url), 'utf8');
+  assert.match(info, /const version = APP_VERSION;/);
+  assert.doesNotMatch(info, /\|\| '1\.0\.0'/, 'không còn số dự phòng cứng');
+});

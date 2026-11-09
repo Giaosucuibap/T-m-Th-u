@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { Alert, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useRouter } from 'expo-router';
-import Constants from 'expo-constants';
+import { APP_VERSION } from '../../core/version.js';
 import { useEgp } from '../../egp/EgpProvider';
 import { useApp } from '../../state/AppState';
 import { T, Card, Button, Badge, Notice, Field } from '../../ui/kit.js';
@@ -30,7 +30,7 @@ export default function InfoScreen() {
   const egp = useEgp();
   const app = useApp();
   const router = useRouter();
-  const version = Constants.expoConfig?.version || '1.0.0';
+  const version = APP_VERSION;
   const layout = useLayout();
 
   function rerun(row) {

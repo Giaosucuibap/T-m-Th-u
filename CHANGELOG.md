@@ -36,6 +36,8 @@ thức: mục "Địa chỉ cố định" trong `native-agent/DIEN-THOAI-GIAO-TH
 - Thẻ kết quả hiện **"0 đ – 0 đ"** khi không nhập khoảng giá. Nguyên nhân: bản lưu lượt tra đổi ô giá trống
   thành chuỗi `"0"`. Nay giá chỉ hiện khi lớn hơn 0, sửa ở cả tiện ích lẫn app.
 - Địa điểm lặp **"Tỉnh Lâm Đồng; Tỉnh Lâm Đồng"**: gộp trùng, giữ thứ tự.
+- Tab Thông tin trên Safari luôn ghi **"bản 1.0.0"**, vì bản web không có `Constants.expoConfig` nên rơi về số
+  dự phòng. Nay lấy từ một hằng số (`src/core/version.js`); bài kiểm thử chặn lệch với `app.json`.
 
 ### An toàn
 - Mã ghép nối 8 ký tự (bảng chữ Crockford: chữ O và số 0 như nhau). Worker chỉ giữ SHA-256 của mã, dưới
