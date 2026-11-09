@@ -32,13 +32,21 @@ iPhone / iPad (biểu tượng "Cùi Bắp") ──▶ địa chỉ cố định
    - **Account Resources**: chọn tài khoản của anh.
    - **Zone Resources**: để **All zones**.
    - Bấm **Continue to summary**, rồi **Create Token**, rồi **Copy**.
-3. Dán token vào **ô bảo mật** em gửi trong cuộc trò chuyện. Em không nhìn thấy token; token được lưu riêng
-   cho môi trường làm việc này.
+3. Đưa token cho môi trường làm việc, **không dán vào khung chat**. Chọn một trong hai cách:
+   - em gửi **ô bảo mật** trong cuộc trò chuyện, anh dán token vào đó;
+   - hoặc anh tự thêm: trên thanh tiêu đề cuộc trò chuyện, mở menu môi trường **"Tìm Thầu"**, bấm **Edit**,
+     vào mục **Network secrets** (bản app cũ ghi **API credentials**). Thêm một mục với máy chủ
+     `api.cloudflare.com`, kiểu **Bearer**, rồi dán token. Xong anh nhắn em "đã thêm token".
+
+   Cách nào thì em cũng không nhìn thấy token. Token chỉ dùng cho môi trường "Tìm Thầu".
 4. Em triển khai rồi nhắn anh hai thứ:
    - **địa chỉ cố định**, dạng `https://thau.<tên-anh-chọn>.workers.dev`;
    - **mã ghép nối** 8 ký tự, dạng `7KQ2-M9XD`.
 
    Anh giữ mã này như mật khẩu: cài lại máy tính thì cần ghép lại bằng mã này.
+
+**Chưa làm mục B?** Link trực tiếp vẫn chạy như 4.20.0, có thêm các sửa lỗi và bố cục iPad mới. Tuy vậy,
+**chưa nên cài biểu tượng** (mục D): máy tính khởi động lại thì link đổi, biểu tượng cũ hết dùng được.
 
 ## C. Ghép máy tính với địa chỉ cố định (một lần)
 

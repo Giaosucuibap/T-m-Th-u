@@ -58,6 +58,9 @@ const jsDir = path.join(webOut, '_expo', 'static', 'js', 'web');
 if (!fs.existsSync(path.join(webOut, 'index.html')) || !fs.existsSync(jsDir)) fail('bản web dựng ra thiếu index.html hoặc mã.');
 const bundle = fs.readdirSync(jsDir).map((f) => fs.readFileSync(path.join(jsDir, f), 'utf8')).join('\n');
 if (!bundle.includes('X-GSCB-Key') || !bundle.includes('/api/search')) fail('bản web không có mã chế độ máy tính công ty.');
+// 4.21.0: app trên màn hình chính cần sw.js (mở được khi mất mạng) và mã địa chỉ cố định.
+if (!fs.existsSync(path.join(webOut, 'sw.js'))) fail('bản web thiếu sw.js (app trên màn hình chính).');
+if (!bundle.includes('/_gscb/pointer') || !bundle.includes('X-GSCB-Target')) fail('bản web không có mã địa chỉ cố định.');
 let webFiles = 0;
 (function count(d) { for (const e of fs.readdirSync(d, { withFileTypes: true })) e.isDirectory() ? count(path.join(d, e.name)) : webFiles++; })(webOut);
 
