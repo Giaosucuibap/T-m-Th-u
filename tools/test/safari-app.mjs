@@ -543,12 +543,24 @@ numbered('Mở Cùi Bắp ở tab Safari thứ hai', async () => {
   await session({ chaos: 'autoload', label: 'hai-tab' }, async (s) => {
     await step('Tab mở sau giành quyền; tab này tự dừng hẳn (gỡ nền, thôi ghi dữ liệu) và báo rõ cách dùng tiếp', async () => {
       assertFullRun(facts(await s.tbmt()));
-      // Một ngữ cảnh cùng nguồn khác (thay cho tab thứ hai) giành khoá, đúng như lớp vỏ ở tab kia sẽ làm.
-      await s.wk.exec('const f = document.createElement("iframe"); f.id = "tab-kia"; document.body.appendChild(f); f.contentWindow.navigator.locks.request("gscb-safari-dang-chay", { steal: true }, () => new Promise(() => {})); return true;');
+      // Đúng lúc mất quyền, tab này đang NẠP DỞ một trang e-GP và một trang giao diện (cuộc đua mà CI bắt được:
+      // lượt nạp dở chạy tiếp sau khi đã dừng và dựng lại một khung). Rồi một ngữ cảnh cùng nguồn khác (thay cho
+      // tab thứ hai) giành khoá, đúng như lớp vỏ ở tab kia sẽ làm.
+      await s.wk.exec(`const h = window.__GSCB_SAFARI__._hub;
+        for (const tab of h.tabs.list()) h.tabs.reload(tab.id);
+        h.tabs.create({ url: location.origin + '/vi/web/guest/contractor-selection?notifyNo=IB2600455001', active: false });
+        h.ui.navigate('dashboard.html');
+        const f = document.createElement("iframe"); f.id = "tab-kia"; document.body.appendChild(f);
+        f.contentWindow.navigator.locks.request("gscb-safari-dang-chay", { steal: true }, () => new Promise(() => {})); return true;`);
       await s.until(() => s.wk.exec('return window.__GSCB_SAFARI__._hub.retired === true'), 10000, 'tab này nhận ra đã mất quyền');
-      const after = await s.wk.exec('const h = window.__GSCB_SAFARI__._hub; const R = h.ui.shadow; return { frames: R.querySelectorAll("iframe").length, contexts: h.contexts.size, text: R.querySelector(".splash").innerText, shown: !R.querySelector(".splash").classList.contains("gone"), chip: R.querySelector(\'[data-el="chip-text"]\').textContent };');
-      assert.equal(after.frames, 0, 'mọi khung (nền, giao diện, e-GP) đã gỡ');
+      await sleep(2500);                                                 // cho mọi lượt nạp dở kịp chạy nốt
+      const after = await s.wk.exec('const h = window.__GSCB_SAFARI__._hub; const R = h.ui.shadow; return { frames: R.querySelectorAll("iframe").length, contexts: h.contexts.size, tabs: h.tabs.list().filter(t => t.content || t.status !== "complete").length, text: R.querySelector(".splash").innerText, shown: !R.querySelector(".splash").classList.contains("gone"), chip: R.querySelector(\'[data-el="chip-text"]\').textContent };');
+      assert.equal(after.frames, 0, 'mọi khung (nền, giao diện, e-GP) đã gỡ — kể cả khung của lượt nạp đang dở');
       assert.equal(after.contexts, 0);
+      assert.equal(after.tabs, 0, 'không tab ảo nào còn content script hay còn đang nạp');
+      // Đã dừng thì không mở thêm được gì.
+      assert.match(await s.wk.exec('return window.__GSCB_SAFARI__._hub.tabs.create({ url: location.origin + "/vi/web/guest/contractor-selection?render=search", active: false }).then(() => "mở được", (e) => e.message)'), /đã dừng/);
+      assert.equal(await s.wk.exec('window.__GSCB_SAFARI__._hub.ui.navigate("search.html"); return new Promise((r) => setTimeout(() => r(window.__GSCB_SAFARI__._hub.ui.shadow.querySelectorAll("iframe").length), 600));'), 0);
       assert.ok(after.shown && /đang chạy ở một tab Safari khác/.test(after.text) && /tải lại trang rồi chạm dấu trang/.test(after.text), after.text);
       assert.match(after.chip, /tab Safari khác/);
     });

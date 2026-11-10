@@ -4,7 +4,7 @@ Ngày 10/11/2026 · dựng từ tiện ích 4.21.0 · mã nguồn `safari/` · h
 
 > **Về "tổ thẩm định".** Anh yêu cầu em đóng vai một tổ chuyên gia xét duyệt lại phần mềm. Em đã làm đúng việc
 > của một tổ như vậy — soát lại kiến trúc, đọc lại từng tệp, dựng thêm tình huống xấu, đo bằng nhân Safari —
-> và tìm ra 14 lỗi của chính bản em viết (mục 5). Nhưng nói cho đúng: đây vẫn là **người viết tự soát bài của
+> và tìm ra 14 lỗi của chính bản em viết; máy kiểm thử tự động (CI) bắt thêm lỗi thứ 15 (mục 5). Nhưng nói cho đúng: đây vẫn là **người viết tự soát bài của
 > mình**, không thay được một bên thứ ba độc lập, và không thay được **một lần chạy trên iPad thật**.
 
 ## 1. Kết luận
@@ -92,7 +92,7 @@ Ngoài ra: **24 bài kiểm thử đơn vị** mới cho bộ dựng, mã dấu 
 phân loại địa chỉ; toàn bộ bộ kiểm thử của kho **890 bài, 0 hỏng** (12 bài chỉ chạy trên Windows), kể cả khi
 mã nguồn được lấy về kiểu Windows (CRLF).
 
-## 5. Lỗi tổ thẩm định tìm ra trong bản đầu — đã sửa hết
+## 5. Lỗi tìm ra trong bản đầu — đã sửa hết
 
 Phần này em ghi đủ, vì nó cho anh biết bản đầu **chưa** đạt và soát lại đã có ích thế nào.
 
@@ -112,6 +112,7 @@ Phần này em ghi đủ, vì nó cho anh biết bản đầu **chưa** đạt v
 | 12 | Mã dấu trang có ký tự `#` và chữ có dấu | Safari có thể cắt cụt hoặc làm hỏng khi lưu dấu trang | Chỉ ASCII, không `%` `#` `"` + bài kiểm |
 | 13 | Dựng trên Windows và Linux ra **hai tệp khác nhau** (23 tệp của tác giả lưu CRLF) | CI Windows hỏng; không biết tệp nào là đúng | Chuẩn hoá ký tự xuống dòng |
 | 14 | Sự kiện "tải xong" đến muộn của trang cũ; tài nguyên phụ treo; tệp rất lớn | Lượt tra cứu chạy sớm hoặc chờ hết hạn; iPad hết bộ nhớ | Ba chốt riêng |
+| 15 | **Do CI bắt được sau lần đẩy đầu**, không phải do em soát ra: tab đã nhường quyền cho tab khác mà còn một lượt nạp trang e-GP đang dở thì lượt đó chạy tiếp và **dựng lại một khung** | Tab "đã dừng" vẫn còn một trang e-GP sống ngầm | Dừng là dừng hẳn: huỷ mọi lượt nạp dở, bỏ hẹn giờ, từ chối mở thêm; bài kiểm nay diễn đúng cuộc đua đó (lớp vỏ cũ hỏng 100%, bản sửa đạt 5/5 lần) |
 
 ## 6. Rủi ro còn lại — xếp theo mức nghiêm trọng
 

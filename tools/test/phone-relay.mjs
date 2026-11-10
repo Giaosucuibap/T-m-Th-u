@@ -82,6 +82,12 @@ const until = async (fn, ms = 30000, what = 'điều kiện') => {
   for (;;) { const v = await fn(); if (v) return v; if (Date.now() > end) throw new Error(`Hết hạn chờ: ${what}`); await new Promise((r) => setTimeout(r, 300)); }
 };
 
+/* Chụp màn hình một tab Chromium: LUÔN đưa tab ra phía trước đã. Tiện ích vừa cài tự mở trang
+   "Bắt đầu sử dụng" ở một tab mới, vào lúc không đoán trước được; tab cần chụp mà bị đẩy ra sau
+   thì Chromium không vẽ khung hình cho nó và lệnh chụp treo tới hết hạn (đã gặp trên CI:
+   "page.screenshot: Timeout 30000ms exceeded"; đo lại: tab bị che chụp chậm hơn ~30 lần). */
+const shot = async (page, options) => { await page.bringToFront(); await page.screenshot(options); };
+
 const ctx = await chromium.launchPersistentContext(UD, {
   headless: false, ignoreHTTPSErrors: true,
   args: [`--disable-extensions-except=${EXT}`, `--load-extension=${EXT}`, '--no-sandbox', '--disable-dev-shm-usage', '--no-first-run',
@@ -125,7 +131,7 @@ try {
     assert.equal(await ext.isVisible('#pl-steps-direct'), false, 'đã ghép: ẩn hướng dẫn link trực tiếp');
     assert.equal(await ext.isVisible('#pl-tg-relay-note'), true, 'đã ghép: Telegram ghi rõ không cần nữa');
     await ext.evaluate(() => { document.activeElement?.blur?.(); window.scrollTo(0, 0); });
-    await ext.screenshot({ path: path.join(OUT, '1-tien-ich-dia-chi-co-dinh.png'), fullPage: true });
+    await shot(ext, { path: path.join(OUT, '1-tien-ich-dia-chi-co-dinh.png'), fullPage: true });
   });
 
   await step('iPhone mở địa chỉ cố định → tìm gói → kết quả; mọi lệnh chỉ đi qua địa chỉ cố định', async () => {
@@ -139,7 +145,7 @@ try {
     await phone.getByText(/^Khớp tiêu chí \(\d+\)$/).waitFor({ timeout: 180000 });
     assert.equal(await phone.getByText(/^Khớp tiêu chí \(\d+\)$/).textContent(), 'Khớp tiêu chí (115)');
     await phone.getByText('Lâm Đồng · Xây lắp', { exact: true }).waitFor({ timeout: 5000 });   // không còn "0 đ – 0 đ"
-    await phone.screenshot({ path: path.join(OUT, '2-iphone-ket-qua-qua-dia-chi-co-dinh.png') });
+    await shot(phone, { path: path.join(OUT, '2-iphone-ket-qua-qua-dia-chi-co-dinh.png') });
     assert.deepEqual([...phoneHosts], [new URL(relay.url).host], 'điện thoại không biết địa chỉ thật của máy tính');
     assert.ok(relay.forwarded.some((f) => f.url.startsWith(`${tunnel.url}/api/search`)), 'lệnh tìm đi qua Worker tới đúng đường hầm');
   });
@@ -169,7 +175,7 @@ try {
     await until(async () => !(await send('PHONE_LINK_STATE')).enabled, 10000, 'tắt link');
     await phone.getByText(/Máy tính công ty đang tắt, Chrome đang tắt hoặc mất mạng/).waitFor({ timeout: 20000 });
     await phone.getByText(/^Khớp tiêu chí \(115\)$/).waitFor({ timeout: 2000 });
-    await phone.screenshot({ path: path.join(OUT, '3-iphone-may-tinh-tat.png') });
+    await shot(phone, { path: path.join(OUT, '3-iphone-may-tinh-tat.png') });
     tunnel = newTunnel();
     relay.setTunnel(tunnel.host, tunnel.base);
     await ext.click('#pl-toggle');
@@ -183,7 +189,7 @@ try {
     await phone.getByText('Bắt đầu cài', { exact: true }).click();
     await phone.getByText(/Thêm vào MH chính/).waitFor({ timeout: 5000 });
     assert.match(phone.url(), /#k=[A-Za-z0-9_-]{32}$/, 'đang cài: biểu tượng mới sẽ mang khoá');
-    await phone.screenshot({ path: path.join(OUT, '4-iphone-cai-man-hinh-chinh.png'), fullPage: true });
+    await shot(phone, { path: path.join(OUT, '4-iphone-cai-man-hinh-chinh.png'), fullPage: true });
     await phone.getByText('Xong', { exact: true }).click();
     await until(async () => !phone.url().includes('#k='), 5000, 'xoá khoá khỏi thanh địa chỉ');
     await phone.getByText('Tìm gói', { exact: true }).click();

@@ -169,6 +169,7 @@ function createTabs(layer) {
    * phải trang thì lưu tệp và giữ nguyên trang cũ.
    */
   async function load(rec, url, request = null) {
+    if (hub.retired) return;
     const seq = ++rec.seq;
     url = sameOriginEgp(url);
     clearInterval(rec.watch); rec.watch = null;
@@ -193,7 +194,8 @@ function createTabs(layer) {
       } else html = await response.text();
     } catch (error) { failure = `Không tải được trang e-GP: ${error?.message || error}`; }
     const frame = await framePromise;
-    if (seq !== rec.seq) { frame.remove(); return; }
+    // Trong lúc chờ: tab đã bị đóng / được giao trang khác, hoặc cả phần mềm ở tab Safari này đã dừng.
+    if (seq !== rec.seq || hub.retired) { frame.remove(); return; }
     if (!failure && !file && !isEgpUrl(finalUrl)) failure = 'Trang e-GP chuyển hướng ra ngoài; không dựng được trong khung.';
     if (!failure && !file && !finalUrl.startsWith(`${HERE}/`)) failure = `e-GP chuyển sang ${new URL(finalUrl).host}; hãy mở Cùi Bắp trên đúng địa chỉ đó.`;
     if (failure) {
@@ -302,7 +304,9 @@ function createTabs(layer) {
   const isExtension = (url) => String(url).startsWith(`${EXT_ORIGIN}/`) || (String(url).startsWith(`${HERE}${VIRT}`));
   const uiInfo = () => ({ id: hub.ui.tabId, index: 0, windowId: 1, url: hub.ui.currentUrl(), title: 'Giáo Sư Cùi Bắp', status: 'complete', active: true, highlighted: true, pinned: false, incognito: false });
 
+  const STOPPED = 'Cùi Bắp ở tab Safari này đã dừng (đang chạy ở tab khác).';
   async function create(props) {
+    if (hub.retired) throw new Error(STOPPED);
     const url = String(props.url || 'about:blank');
     if (isExtension(url)) { hub.ui.navigate(url); return uiInfo(); }
     if (url === 'about:blank' || isEgpUrl(url)) {
@@ -319,6 +323,7 @@ function createTabs(layer) {
     return { id: nextId++, index: 99, windowId: 1, url, status: 'complete', active: true };
   }
   async function update(tabId, props) {
+    if (hub.retired) throw new Error(STOPPED);
     if (tabId === hub.ui.tabId) { if (props.url) hub.ui.navigate(String(props.url)); return uiInfo(); }
     const rec = tabs.get(tabId);
     if (!rec) throw new Error(`No tab with id: ${tabId}.`);
@@ -366,9 +371,14 @@ function createTabs(layer) {
     const rec = tabs.get(tabId);
     if (rec && rec.kind !== 'top') void load(rec, liveUrl(rec));
   }
+  /** Dừng hẳn mọi tab ảo: gỡ khung, bỏ content script, và vô hiệu MỌI lượt nạp trang còn đang dở
+   *  (lượt nạp dở thấy số thứ tự đã đổi thì tự gỡ khung nó vừa tạo). */
+  function shutdown() {
+    for (const rec of tabs.values()) { rec.seq++; rec.pending = false; rec.status = 'complete'; teardown(rec); }
+  }
 
   return {
-    state, create, update, get, query, remove, reload, info, adoptTop,
+    state, create, update, get, query, remove, reload, info, adoptTop, shutdown,
     list: () => [...tabs.values()].map((rec) => ({ id: rec.id, kind: rec.kind, url: liveUrl(rec), status: rec.status, hosted: rec.hosted, content: Boolean(rec.ctx), error: rec.error })),
     frames: () => [...tabs.values()].filter((rec) => rec.frame).map((rec) => rec.frame),
     openExternal

@@ -75,8 +75,10 @@ function claimSingleInstance() {
 }
 function retire() {
   if (hub.retired) return;
-  hub.retired = true;
+  hub.retired = true;                       // từ đây mọi lượt nạp trang / dựng trang còn dở tự huỷ khi chạy tiếp
   hub.store?.freeze();
+  hub.alarms?.stop();
+  hub.tabs?.shutdown();
   for (const ctx of [...hub.contexts]) dropContext(ctx);
   for (const frame of [...hub.ui.shadow.querySelectorAll('iframe')]) { try { frame.remove(); } catch { /* đã gỡ */ } }
   hub.ui.halt('Cùi Bắp đang chạy ở một tab Safari khác', 'Mỗi lúc chỉ một tab được chạy để dữ liệu không ghi đè nhau. Về tab kia để dùng tiếp; muốn dùng ở tab này thì tải lại trang rồi chạm dấu trang Cùi Bắp.');

@@ -62,6 +62,12 @@ const step = async (name, fn) => {
   catch (e) { results.push({ name, ok: false, error: String(e?.stack || e) }); console.log(`  HỎNG ${name}: ${String(e?.message || e).split('\n')[0]}`); }
 };
 
+/* Chụp màn hình một tab Chromium: LUÔN đưa tab ra phía trước đã. Tiện ích vừa cài tự mở trang
+   "Bắt đầu sử dụng" ở một tab mới, vào lúc không đoán trước được; tab cần chụp mà bị đẩy ra sau
+   thì Chromium không vẽ khung hình cho nó và lệnh chụp treo tới hết hạn (đã gặp trên CI:
+   "page.screenshot: Timeout 30000ms exceeded"; đo lại: tab bị che chụp chậm hơn ~30 lần). */
+const shot = async (page, options) => { await page.bringToFront(); await page.screenshot(options); };
+
 const ctx = await chromium.launchPersistentContext(UD, {
   headless: false,
   args: [`--disable-extensions-except=${EXT}`, `--load-extension=${EXT}`, '--no-sandbox', '--disable-dev-shm-usage', '--no-first-run',
@@ -102,7 +108,7 @@ try {
     // Mục "Nhận link mới qua Telegram" hiện khi link đang bật, mặc định tắt (link có khoá).
     await ext.waitForSelector('#pl-tg-card:not(.hidden)');
     assert.equal(await ext.isChecked('#pl-tg'), false, 'gửi Telegram mặc định tắt');
-    await ext.screenshot({ path: path.join(OUT, '1-trang-link-dien-thoai.png'), fullPage: true });
+    await shot(ext, { path: path.join(OUT, '1-trang-link-dien-thoai.png'), fullPage: true });
   });
 
   const base = () => link.replace(/\/#k=.*$/, '');
@@ -130,20 +136,20 @@ try {
     await phone.goto(link);
     await phone.getByText('Máy tính công ty: Đã kết nối').waitFor({ timeout: 20000 });
     assert.doesNotMatch(phone.url(), /#k=/, 'khoá phải được xoá khỏi thanh địa chỉ');
-    await phone.screenshot({ path: path.join(OUT, '2-dien-thoai-ket-noi.png') });
+    await shot(phone, { path: path.join(OUT, '2-dien-thoai-ket-noi.png') });
     await phone.getByText('Tìm trên e-GP', { exact: true }).click();
     await phone.getByText(/^Khớp tiêu chí \(\d+\)$/).waitFor({ timeout: 180000 });
     const label = await phone.getByText(/^Khớp tiêu chí \(\d+\)$/).textContent();
     assert.equal(label, 'Khớp tiêu chí (115)', 'e-GP giả lập: 137 gói, 22 gói Hàng hóa ngoài tiêu chí Xây lắp');
     await phone.getByText('Đã lấy đủ').waitFor({ timeout: 5000 });
-    await phone.screenshot({ path: path.join(OUT, '3-dien-thoai-ket-qua.png') });
+    await shot(phone, { path: path.join(OUT, '3-dien-thoai-ket-qua.png') });
     assert.ok(mockLog.join('').includes('locations.provCode'), 'tiện ích phải gửi bộ lọc tỉnh lên e-GP');
   });
 
   await step('Chi tiết gói → Thêm vào Lịch iPhone trả tệp .ics có 3 lời nhắc', async () => {
     await phone.locator('text=/\\(gói số \\d\\)$/').first().click();
     await phone.getByText('Thêm vào Lịch iPhone (nhắc 3 lần)').waitFor({ timeout: 10000 });
-    await phone.screenshot({ path: path.join(OUT, '4-dien-thoai-chi-tiet.png') });
+    await shot(phone, { path: path.join(OUT, '4-dien-thoai-chi-tiet.png') });
     // Bắt phản hồi trước khi trang chuyển đi (Safari mở tệp .ics thành màn "Thêm vào Lịch").
     let captured = null;
     await phone.route('**/api/ics', async (route) => {

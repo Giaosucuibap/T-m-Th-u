@@ -185,7 +185,9 @@ function createAlarms(store) {
     return had;
   }
   function clearAll() { for (const name of [...alarms.keys()]) clear(name); return true; }
-  return { load, start, create, clear, clearAll, get: (name) => alarms.get(String(name ?? '')), all: () => [...alarms.values()] };
+  /** Tab này thôi chạy: bỏ mọi hẹn giờ (báo thức đã lưu vẫn nằm trong kho cho tab đang chạy). */
+  function stop() { started = false; for (const timer of timers.values()) clearTimeout(timer); timers.clear(); }
+  return { load, start, stop, create, clear, clearAll, get: (name) => alarms.get(String(name ?? '')), all: () => [...alarms.values()] };
 }
 
 /* --------------------------------------------------------------------- tải tệp */
