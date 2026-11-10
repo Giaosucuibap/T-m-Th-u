@@ -1,9 +1,50 @@
 // Controlled fixtures for pure acceptance logic. These are NOT live e-GP rows.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { PROVINCES, PROBE_VERSION, validateSourceQuery, sanitizeSourcePage, validateProbeReport, describeSourceShape, createSourceRequestGate, sanitizeProvinceOptionLabels, describeRequestPagination, describeSourceResponseMetadata, describeSourceFilters } from '../source-probe.mjs';
+import { PROVINCES, PROBE_VERSION, validateSourceQuery, sanitizeSourcePage, validateProbeReport, describeSourceShape, createSourceRequestGate, sanitizeProvinceOptionLabels, describeRequestPagination, describeSourceResponseMetadata, describeSourceFilters, readSourceResponse } from '../source-probe.mjs';
 
 const clone = value => structuredClone(value);
+
+test('body reads distinguish unavailable, empty, invalid JSON, JSON null and valid JSON without leaking raw data', async () => {
+  const cases = [
+    { body: '', code: 'SOURCE_EMPTY_BODY', parseStatus: 'EMPTY_BODY', bytes: 0 },
+    { body: '  \n', code: 'SOURCE_EMPTY_BODY', parseStatus: 'EMPTY_BODY', bytes: 3 },
+    { body: '<html>SECRET_FIXTURE_HTML</html>', code: 'SOURCE_INVALID_JSON', parseStatus: 'INVALID_JSON' },
+    { body: 'null', code: 'SOURCE_JSON_NULL', parseStatus: 'JSON_NULL', bytes: 4 },
+    { body: '{}', ok: true, parseStatus: 'JSON_OBJECT', bytes: 2 },
+    { bodyError: true, code: 'SOURCE_BODY_UNAVAILABLE', parseStatus: 'BODY_UNAVAILABLE', bytes: null }
+  ];
+  for (const item of cases) {
+    let finished = false;
+    const response = {
+      headerValue: async name => { assert.equal(name, 'content-type'); return 'application/json; SECRET_FIXTURE_HEADER'; },
+      finished: async () => { finished = true; return null; },
+      body: async () => { assert.equal(finished, true); if (item.bodyError) throw new Error('SECRET_FIXTURE_BODY_ERROR'); return Buffer.from(item.body); }
+    };
+    const result = await readSourceResponse(response);
+    assert.equal(result.ok, !!item.ok);
+    assert.equal(result.code, item.code);
+    assert.equal(result.diagnostic.parseStatus, item.parseStatus);
+    assert.equal(result.diagnostic.contentType, 'application/json');
+    if ('bytes' in item) assert.equal(result.diagnostic.bodyBytes, item.bytes);
+    assert.equal(JSON.stringify(result.diagnostic).includes('SECRET_FIXTURE'), false);
+    assert.equal(JSON.stringify(result.diagnostic).includes('<html>'), false);
+  }
+});
+
+test('a failed transfer never attempts to parse a missing body or reports successful JSON null', async () => {
+  let bodyCalled = false;
+  const result = await readSourceResponse({
+    headerValue: async () => 'text/html',
+    finished: async () => new Error('SECRET_FIXTURE_TRANSFER'),
+    body: async () => { bodyCalled = true; return Buffer.from('null'); }
+  });
+  assert.equal(bodyCalled, false);
+  assert.equal(result.code, 'SOURCE_BODY_UNAVAILABLE');
+  assert.equal(result.diagnostic.transferStatus, 'FAILED');
+  assert.equal(result.diagnostic.bodyBytes, null);
+  assert.equal(JSON.stringify(result).includes('SECRET_FIXTURE'), false);
+});
 
 test('filter diagnostics retain only allowed province codes, enums and dates without relaxing the source gate', () => {
   const body = requestFor();

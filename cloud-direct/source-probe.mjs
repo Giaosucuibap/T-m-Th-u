@@ -100,6 +100,48 @@ export function describeSourceResponseMetadata(data) {
     contentType: valueType(content), contentLength: Array.isArray(content) ? content.length : null, publicIdentities: identities };
 }
 
+/** Read the exact matched response; never turn a body/read/parse failure into null. */
+export async function readSourceResponse(response) {
+  const diagnostic = { contentType: 'unavailable', bodyBytes: null, transferStatus: 'NOT_FINISHED', parseStatus: 'NOT_READ' };
+  try {
+    const raw = await response.headerValue('content-type');
+    const mime = typeof raw === 'string' ? raw.split(';', 1)[0].trim().toLowerCase() : '';
+    diagnostic.contentType = ['application/json', 'text/json', 'text/plain', 'text/html', 'application/octet-stream'].includes(mime)
+      ? mime : mime ? 'other' : 'missing';
+  } catch { /* Do not copy header errors or any other header. */ }
+  try {
+    const completionError = await response.finished();
+    if (completionError) throw new Error('SOURCE_TRANSFER_FAILED');
+    diagnostic.transferStatus = 'FINISHED';
+  } catch {
+    diagnostic.transferStatus = 'FAILED'; diagnostic.parseStatus = 'BODY_UNAVAILABLE';
+    return { ok: false, code: 'SOURCE_BODY_UNAVAILABLE', diagnostic };
+  }
+  let body;
+  try {
+    body = await response.body();
+    if (!(body instanceof Uint8Array)) throw new Error('SOURCE_BODY_UNAVAILABLE');
+  } catch {
+    diagnostic.parseStatus = 'BODY_UNAVAILABLE';
+    return { ok: false, code: 'SOURCE_BODY_UNAVAILABLE', diagnostic };
+  }
+  diagnostic.bodyBytes = body.byteLength;
+  const text = Buffer.from(body).toString('utf8');
+  if (text.trim() === '') {
+    diagnostic.parseStatus = 'EMPTY_BODY';
+    return { ok: false, code: 'SOURCE_EMPTY_BODY', diagnostic };
+  }
+  let data;
+  try { data = JSON.parse(text); }
+  catch {
+    diagnostic.parseStatus = 'INVALID_JSON';
+    return { ok: false, code: 'SOURCE_INVALID_JSON', diagnostic };
+  }
+  diagnostic.parseStatus = `JSON_${valueType(data).toUpperCase()}`;
+  if (data === null) return { ok: false, code: 'SOURCE_JSON_NULL', diagnostic };
+  return { ok: true, data, diagnostic };
+}
+
 /** Read-only correlation: accept only the requested public UI scope and page. */
 export function validateSourceQuery(body, provinceKey, { mode = 'open', expectedPage = 0, nowMs = Date.now() } = {}) {
   const province = PROVINCES[provinceKey];
@@ -410,24 +452,42 @@ async function setSourceCheckbox(page, id, labelText, desired) {
   if (await input.isChecked() !== desired) raise('SOURCE_CONTROL_NOT_SET');
 }
 
+async function waitForStableSourceCheckbox(page, id, desired, remaining) {
+  const deadline = Date.now() + Math.min(3000, remaining());
+  const input = page.locator(`#${id}`);
+  let stableSince = null;
+  while (Date.now() < deadline && !page.isClosed()) {
+    const checked = await input.isChecked({ timeout: Math.max(1, Math.min(500, deadline - Date.now())) }).catch(() => null);
+    if (checked === desired) {
+      stableSince ??= Date.now();
+      if (Date.now() - stableSince >= 350) return;
+    } else stableSince = null;
+    await new Promise(resolve => setTimeout(resolve, 75));
+  }
+  raise('SOURCE_CONTROL_NOT_SET');
+}
+
 // Official vue.antd.min.css fetched 2026-11-10 uses the legacy Ant Vue
 // selection__placeholder/search__field/dropdown-menu-item/choice__content
 // classes. Do not substitute modern Ant classes without source evidence.
-async function chooseProvinceThroughUI(page, provinceKey, mode, markStep = () => {}) {
+async function chooseProvinceThroughUI(page, provinceKey, mode, markStep = () => {}, remaining = () => 30000) {
   const province = PROVINCES[provinceKey];
   const label = new RegExp(`^\\s*${province.label.replace(/\s+/g, '\\s+')}\\s*$`);
+  const loadBudget = () => Math.max(1, Math.min(30000, remaining()));
   markStep('open_advanced_form');
-  await page.locator('.egp-hero__advbtn:visible').first().click();
+  await page.locator('.egp-hero__advbtn:visible').first().click({ timeout: loadBudget() });
   markStep('wait_advanced_form');
-  await page.locator('.content__footer__btn:visible').filter({ hasText: /^Tìm kiếm$/ }).waitFor();
+  await page.locator('.content__footer__btn:visible').filter({ hasText: /^Tìm kiếm$/ }).waitFor({ timeout: loadBudget() });
   // The footer is present in raw HTML. Wait for an actual Vue-rendered control
   // before changing a v-model checkbox, so initial mounting cannot reset it.
   markStep('wait_rendered_advanced_form');
-  await page.locator('.ant-select-selection__placeholder').filter({ hasText: /^\s*Tỉnh\/\s*Thành phố\s*$/ }).waitFor();
+  await page.locator('.ant-select-selection__placeholder').filter({ hasText: /^\s*Tỉnh\/\s*Thành phố\s*$/ }).waitFor({ timeout: loadBudget() });
+  // Public loadCatList().then calls loadLocalStorage(), which can replace the
+  // form after Ant mounting. The XL label is rendered from that loaded catalog.
+  markStep('wait_field_catalog');
+  await page.locator('label[for="XL"]:visible').filter({ hasText: /^\s*Xây lắp\s*$/ }).waitFor({ timeout: loadBudget() });
   markStep('set_current_locations');
   await setSourceCheckbox(page, 'is_old_locations', /Địa bàn hành chính/, false);
-  markStep('set_requested_notice_status');
-  await setSourceCheckbox(page, 'is_not_publish_tbmt', /Chỉ tìm kiếm/, mode === 'open');
   markStep('check_blank_investor');
   const owner = page.getByPlaceholder(/Nhập tên\/mã định danh của CĐT/);
   if (await owner.count() !== 1 || await owner.inputValue() !== '') raise('SOURCE_INVESTOR_NOT_EMPTY');
@@ -442,7 +502,7 @@ async function chooseProvinceThroughUI(page, provinceKey, mode, markStep = () =>
   const option = page.locator('.ant-select-dropdown:visible .ant-select-dropdown-menu-item')
     .filter({ hasText: label });
   markStep('wait_province_catalog');
-  await option.waitFor();
+  await option.waitFor({ timeout: loadBudget() });
   markStep('locate_province_search');
   const search = control.locator('input.ant-select-search__field');
   if (await search.count() !== 1) raise('SOURCE_SELECTOR_CHANGED');
@@ -463,6 +523,10 @@ async function chooseProvinceThroughUI(page, provinceKey, mode, markStep = () =>
   markStep('verify_blank_ward');
   const ward = page.locator('.ant-select-selection__placeholder').filter({ hasText: /^\s*Xã\/\s*Phường\s*$/ });
   if (await ward.count() !== 1) raise('SOURCE_WARD_NOT_EMPTY');
+  markStep('set_requested_notice_status');
+  await setSourceCheckbox(page, 'is_not_publish_tbmt', /Chỉ tìm kiếm/, mode === 'open');
+  markStep('wait_stable_notice_status');
+  await waitForStableSourceCheckbox(page, 'is_not_publish_tbmt', mode === 'open', remaining);
   markStep('source_form_ready');
 }
 
@@ -477,6 +541,7 @@ async function safeUiDiagnostics(page, provinceKey, uiStep) {
     visibleOldLocationsCheckbox: page.locator('#is_old_locations:visible'),
     openNoticeCheckbox: page.locator('#is_not_publish_tbmt'),
     visibleOpenNoticeCheckbox: page.locator('#is_not_publish_tbmt:visible'),
+    loadedFieldCatalogLabel: page.locator('label[for="XL"]:visible').filter({ hasText: /^\s*Xây lắp\s*$/ }),
     visibleAdvancedSearchButtons: page.locator('.content__footer__btn:visible').filter({ hasText: /^Tìm kiếm$/ }),
     visibleAntSelects: page.locator('.ant-select:visible'),
     legacyProvincePlaceholder: page.locator('.ant-select-selection__placeholder').filter({ hasText: /^\s*Tỉnh\/\s*Thành phố\s*$/ }),
@@ -541,16 +606,19 @@ async function captureUiSearch(page, action, provinceKey, mode, expectedPage, re
   const query = validateSourceQuery(response.request().postDataJSON(), provinceKey, { mode, expectedPage });
   if (!query.ok) raise(query.code, { search: gate.snapshot() });
   if (!response.ok()) raise(codeForHttp(response.status()), { httpStatus: response.status(), search: gate.snapshot() });
-  const data = await response.json().catch(() => null);
+  const decoded = await readSourceResponse(response);
+  if (!decoded.ok) raise(decoded.code, { responseBody: decoded.diagnostic, search: gate.snapshot() });
+  const data = decoded.data;
   // Numeric responses trigger a source "try again" overlay. They are not a
   // list with zero records and do not prove a successful CAPTCHA validation.
-  if (typeof data === 'number') raise('SOURCE_REJECTED', { search: gate.snapshot() });
+  if (typeof data === 'number') raise('SOURCE_REJECTED', { responseBody: decoded.diagnostic, search: gate.snapshot() });
   const safe = sanitizeSourcePage(data, { provinceKey, query });
-  if (!safe.ok) raise(safe.code, { sourceShape: describeSourceShape(data), sourceMetadata: describeSourceResponseMetadata(data), search: gate.snapshot() });
+  if (!safe.ok) raise(safe.code, { sourceShape: describeSourceShape(data), sourceMetadata: describeSourceResponseMetadata(data),
+    responseBody: decoded.diagnostic, search: gate.snapshot() });
   const stop = await sourceStopReason(page);
   if (stop) raise(stop);
   return { query, data, receipt: { ...safe.receipt, httpStatus: response.status(), receivedAt: new Date().toISOString(),
-    requestCorrelation: gate.snapshot(), sourceMetadata: describeSourceResponseMetadata(data) } };
+    requestCorrelation: gate.snapshot(), sourceMetadata: describeSourceResponseMetadata(data), responseBody: decoded.diagnostic } };
 }
 
 /** Reusable bounded browser job. Caller supplies a normal Playwright Browser. */
@@ -591,7 +659,7 @@ export async function probeProvince(browser, provinceKey, { mode = 'open', maxPa
     const navigation = await page.goto(SOURCE_URL, { waitUntil: 'domcontentloaded', timeout: Math.min(30_000, remaining()) });
     if (navigation && !navigation.ok()) raise(codeForHttp(navigation.status()));
     result.stage = 'choose_province_in_source_ui';
-    await chooseProvinceThroughUI(page, provinceKey, mode, step => { result.uiStep = step; });
+    await chooseProvinceThroughUI(page, provinceKey, mode, step => { result.uiStep = step; }, remaining);
     result.uiProvinceSelected = true;
     result.investorAndWardBlank = true;
     const seen = new Set();
@@ -600,7 +668,15 @@ export async function probeProvince(browser, provinceKey, { mode = 'open', maxPa
       if (stopCode) raise(stopCode);
       result.stage = index === 0 ? 'source_ui_search' : 'source_ui_next_page';
       const action = index === 0
-        ? () => page.locator('.content__footer__btn:visible').filter({ hasText: /^Tìm kiếm$/ }).click()
+        ? async () => {
+            // Check the actual controls immediately before the click, after all
+            // form/catalog interactions; the emitted payload is still gated.
+            const openChecked = await page.locator('#is_not_publish_tbmt').isChecked();
+            const oldLocationsChecked = await page.locator('#is_old_locations').isChecked();
+            result.sourceFormBeforeClick = { openNoticesChecked: openChecked, oldLocationsChecked };
+            if (openChecked !== (mode === 'open') || oldLocationsChecked) raise('SOURCE_CONTROL_NOT_SET');
+            await page.locator('.content__footer__btn:visible').filter({ hasText: /^Tìm kiếm$/ }).click();
+          }
         : async () => {
             const next = page.locator('.el-pagination .btn-next:visible').first();
             await next.waitFor();
