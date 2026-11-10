@@ -20,7 +20,7 @@ const SEARCH_PATH = '/o/egp-portal-contractor-selection-v2/services/smart/search
 // These are NOT a declaration that every historic predecessor is included.
 export const PROVINCES = Object.freeze({
   lam_dong: Object.freeze({ name: 'Lâm Đồng', label: 'Tỉnh Lâm Đồng', currentCode: '68', sourceCodes: ['68', '703'] }),
-  dong_nai: Object.freeze({ name: 'Đồng Nai', label: 'Tỉnh Đồng Nai', currentCode: '75', sourceCodes: ['75', '707'] }),
+  dong_nai: Object.freeze({ name: 'Đồng Nai', label: 'Thành phố Đồng Nai', currentCode: '75', sourceCodes: ['75'] }),
   ha_noi: Object.freeze({ name: 'Hà Nội', label: 'Thành phố Hà Nội', currentCode: '01', sourceCodes: ['01', '101'] })
 });
 
@@ -264,36 +264,85 @@ async function setSourceCheckbox(page, id, labelText, desired) {
   if (await input.isChecked() !== desired) raise('SOURCE_CONTROL_NOT_SET');
 }
 
-async function chooseProvinceThroughUI(page, provinceKey, mode) {
+// Official vue.antd.min.css fetched 2026-11-10 uses the legacy Ant Vue
+// selection__placeholder/search__field/dropdown-menu-item/choice__content
+// classes. Do not substitute modern Ant classes without source evidence.
+async function chooseProvinceThroughUI(page, provinceKey, mode, markStep = () => {}) {
   const province = PROVINCES[provinceKey];
+  const label = new RegExp(`^\\s*${province.label.replace(/\s+/g, '\\s+')}\\s*$`);
+  markStep('open_advanced_form');
   await page.locator('.egp-hero__advbtn:visible').first().click();
+  markStep('wait_advanced_form');
   await page.locator('.content__footer__btn:visible').filter({ hasText: /^Tìm kiếm$/ }).waitFor();
+  markStep('set_current_locations');
   await setSourceCheckbox(page, 'is_old_locations', /Địa bàn hành chính/, false);
+  markStep('set_requested_notice_status');
   await setSourceCheckbox(page, 'is_not_publish_tbmt', /Chỉ tìm kiếm/, mode === 'open');
+  markStep('check_blank_investor');
   const owner = page.getByPlaceholder(/Nhập tên\/mã định danh của CĐT/);
   if (await owner.count() !== 1 || await owner.inputValue() !== '') raise('SOURCE_INVESTOR_NOT_EMPTY');
   const procurer = page.getByPlaceholder(/Nhập tên\/mã định danh của BMT/);
   if (await procurer.count() && await procurer.inputValue() !== '') raise('SOURCE_INVESTOR_NOT_EMPTY');
-  const place = page.locator('.ant-select-selection-placeholder').filter({ hasText: /^Tỉnh\/ Thành phố$/ });
+  markStep('locate_province_control');
+  const place = page.locator('.ant-select-selection__placeholder').filter({ hasText: /^\s*Tỉnh\/\s*Thành phố\s*$/ });
   const control = page.locator('.ant-select:visible').filter({ has: place });
   if (await control.count() !== 1) raise('SOURCE_SELECTOR_CHANGED');
+  markStep('open_province_control');
   await control.click();
-  const search = control.locator('input[role="combobox"]');
+  markStep('locate_province_search');
+  const search = control.locator('input.ant-select-search__field');
   if (await search.count() !== 1) raise('SOURCE_SELECTOR_CHANGED');
+  markStep('type_province_search');
   await search.fill(province.name);
-  const option = page.locator('.ant-select-dropdown:visible .ant-select-item-option')
-    .filter({ has: page.locator('.ant-select-item-option-content').filter({ hasText: new RegExp(`^${province.label}$`) }) });
+  markStep('locate_province_option');
+  const option = page.locator('.ant-select-dropdown:visible .ant-select-dropdown-menu-item')
+    .filter({ hasText: label });
   await option.waitFor();
   if (await option.count() !== 1) raise('SOURCE_PROVINCE_AMBIGUOUS');
+  markStep('select_province_option');
   await option.click();
   await page.keyboard.press('Escape');
+  markStep('verify_province_selection');
   // Keep a stable selected control, because its empty placeholder has disappeared.
   const selection = page.locator('.ant-select:visible').filter({
-    has: page.locator('.ant-select-selection-item').filter({ hasText: new RegExp(`^${province.label}$`) })
+    has: page.locator('.ant-select-selection__choice__content').filter({ hasText: label })
   });
   if (await selection.count() !== 1) raise('SOURCE_CONTROL_NOT_SET');
-  const ward = page.locator('.ant-select-selection-placeholder').filter({ hasText: /^Xã\/ Phường$/ });
+  markStep('verify_blank_ward');
+  const ward = page.locator('.ant-select-selection__placeholder').filter({ hasText: /^\s*Xã\/\s*Phường\s*$/ });
   if (await ward.count() !== 1) raise('SOURCE_WARD_NOT_EMPTY');
+  markStep('source_form_ready');
+}
+
+/** Bounded diagnostics: counts of known controls only, no DOM/values/HTML. */
+async function safeUiDiagnostics(page, provinceKey, uiStep) {
+  if (!page || page.isClosed()) return { uiStep, available: false };
+  const province = PROVINCES[provinceKey];
+  const known = {
+    oldLocationsCheckbox: page.locator('#is_old_locations'),
+    openNoticeCheckbox: page.locator('#is_not_publish_tbmt'),
+    visibleAdvancedSearchButtons: page.locator('.content__footer__btn:visible').filter({ hasText: /^Tìm kiếm$/ }),
+    visibleAntSelects: page.locator('.ant-select:visible'),
+    legacyProvincePlaceholder: page.locator('.ant-select-selection__placeholder').filter({ hasText: /^\s*Tỉnh\/\s*Thành phố\s*$/ }),
+    modernProvincePlaceholder: page.locator('.ant-select-selection-placeholder').filter({ hasText: /^\s*Tỉnh\/\s*Thành phố\s*$/ }),
+    legacyWardPlaceholder: page.locator('.ant-select-selection__placeholder').filter({ hasText: /^\s*Xã\/\s*Phường\s*$/ }),
+    modernWardPlaceholder: page.locator('.ant-select-selection-placeholder').filter({ hasText: /^\s*Xã\/\s*Phường\s*$/ }),
+    legacyVisibleSearchInputs: page.locator('input.ant-select-search__field:visible'),
+    visibleComboboxInputs: page.locator('input[role="combobox"]:visible'),
+    visibleLegacyOptions: page.locator('.ant-select-dropdown:visible .ant-select-dropdown-menu-item'),
+    visibleModernOptions: page.locator('.ant-select-dropdown:visible .ant-select-item-option'),
+    provinceOptionKnownLabel: page.locator('.ant-select-dropdown:visible').getByText(province.label, { exact: true }),
+    unrenderedProvinceTemplate: page.locator('a-select[placeholder="Tỉnh/ Thành phố"]'),
+    ownerInputs: page.getByPlaceholder(/Nhập tên\/mã định danh của CĐT/),
+    procurerInputs: page.getByPlaceholder(/Nhập tên\/mã định danh của BMT/)
+  };
+  let timer;
+  try {
+    const counts = Promise.all(Object.entries(known).map(async ([name, locator]) => [name, Math.min(1000, await locator.count())]));
+    const entries = await Promise.race([counts, new Promise(resolve => { timer = setTimeout(() => resolve(null), 1000); })]);
+    return entries ? { uiStep, available: true, counts: Object.fromEntries(entries) } : { uiStep, available: false };
+  } catch { return { uiStep, available: false }; }
+  finally { clearTimeout(timer); }
 }
 
 function codeForHttp(status) {
@@ -371,7 +420,7 @@ export async function probeProvince(browser, provinceKey, { mode = 'open', maxPa
     const navigation = await page.goto(SOURCE_URL, { waitUntil: 'domcontentloaded', timeout: Math.min(30_000, remaining()) });
     if (navigation && !navigation.ok()) raise(codeForHttp(navigation.status()));
     result.stage = 'choose_province_in_source_ui';
-    await chooseProvinceThroughUI(page, provinceKey, mode);
+    await chooseProvinceThroughUI(page, provinceKey, mode, step => { result.uiStep = step; });
     result.uiProvinceSelected = true;
     result.investorAndWardBlank = true;
     const seen = new Set();
@@ -416,6 +465,9 @@ export async function probeProvince(browser, provinceKey, { mode = 'open', maxPa
     result.status = stopCode || (error instanceof ProbeError ? error.code
       : error?.name === 'TimeoutError' ? 'SOURCE_UI_TIMEOUT' : 'PROBE_RUNTIME_ERROR');
     if (error instanceof ProbeError && error.diagnostic) result.diagnostic = error.diagnostic;
+    if (result.stage === 'choose_province_in_source_ui') {
+      result.diagnostic = { ...result.diagnostic, ui: await safeUiDiagnostics(page, provinceKey, result.uiStep) };
+    }
     result.partialDataRetained = result.receivedCount > 0;
   } finally {
     clearTimeout(timer); clearInterval(watcher);

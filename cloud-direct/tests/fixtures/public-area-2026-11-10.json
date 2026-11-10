@@ -1,0 +1,46 @@
+{
+  "purpose": "Public geography regression witness; not tender-search results",
+  "provenance": {
+    "observedAt": "2026-11-10T04:10:53.217822+00:00",
+    "url": "https://muasamcong.mof.gov.vn/o/egp-portal-contractor-selection-v2/services/get/area",
+    "method": "POST",
+    "sourceBodySha256": "426154022c7b69b54fceb42cfa34cd7d7777ce988bbd0acb6cf71036bccbf9bd"
+  },
+  "areas": [
+    {
+      "code": "01",
+      "name": "Thành phố Hà Nội",
+      "status": 1
+    },
+    {
+      "code": "101",
+      "name": "Thành phố Hà Nội",
+      "status": 0
+    },
+    {
+      "code": "68",
+      "name": "Tỉnh Lâm Đồng",
+      "status": 1
+    },
+    {
+      "code": "703",
+      "name": "Tỉnh Lâm Đồng",
+      "status": 0
+    },
+    {
+      "code": "707",
+      "name": "Tỉnh Bình Phước",
+      "status": 0
+    },
+    {
+      "code": "713",
+      "name": "Tỉnh Đồng Nai",
+      "status": 0
+    },
+    {
+      "code": "75",
+      "name": "Thành phố Đồng Nai",
+      "status": 1
+    }
+  ]
+}
