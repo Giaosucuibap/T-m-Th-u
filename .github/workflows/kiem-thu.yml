@@ -1,8 +1,8 @@
 # ============================================================================
 #  KIỂM THỬ TỰ ĐỘNG — chạy mỗi lần đẩy mã và mỗi PR
 #
-#  Bốn việc, chạy song song (việc thứ tư — app di động và Link điện thoại — ở job
-#  app-di-dong):
+#  Bốn việc, chạy song song (việc thứ tư — app di động, Link điện thoại và BẢN CHẠY
+#  THẲNG TRÊN SAFARI cho iPad/iPhone — ở job app-di-dong):
 #    1. Linux   : toàn bộ bộ kiểm thử + chạy lại các ca ngày/giá ở 4 múi giờ.
 #    2. Windows : toàn bộ bộ kiểm thử, GỒM 10 bài cầu nối E-HSMT và 7 bài cầu nối
 #                 Link điện thoại (4.20.0) chỉ chạy đúng nghĩa
@@ -47,6 +47,9 @@ jobs:
           node-version: 22
       - run: npm test
       - run: npm run test:tz
+      # Dấu trang trên iPad tải safari/dist/cuibap.js thẳng từ kho: tệp đó phải luôn khớp mã nguồn.
+      - name: Bản Safari trong kho khớp mã nguồn (safari/dist)
+        run: node safari/build.mjs --check
       - name: Bộ kiểm thử trên bản xuống dòng CRLF (như máy Windows)
         run: |
           mkdir -p "$RUNNER_TEMP/crlf" && git ls-files -z | xargs -0 cp --parents -t "$RUNNER_TEMP/crlf"
@@ -55,7 +58,7 @@ jobs:
           node --test tests/*.test.mjs
 
   app-di-dong:
-    name: App di động (lõi, cầu nối e-GP giả lập, đóng gói iOS/web, giao diện cỡ iPhone, WebKit iPhone/iPad)
+    name: App di động + bản Safari (lõi, cầu nối e-GP giả lập, đóng gói iOS/web, giao diện cỡ iPhone, WebKit iPhone/iPad)
     # Ghim 24.04: ubuntu-latest (26.04) không còn gói webkit2gtk-driver (WebKitWebDriver + MiniBrowser
     # của WebKitGTK 4.1) mà bài nhân Safari cần; mọi bước của job đã kiểm trên Ubuntu 24.04.5.
     runs-on: ubuntu-24.04
@@ -84,7 +87,7 @@ jobs:
           openssl req -x509 -newkey rsa:2048 -nodes -days 2 \
             -keyout tools/test/certs/key.pem -out tools/test/certs/cert.pem \
             -subj "/CN=muasamcong.mpi.gov.vn" \
-            -addext "subjectAltName=DNS:muasamcong.mpi.gov.vn,IP:127.0.0.1"
+            -addext "subjectAltName=DNS:muasamcong.mpi.gov.vn,DNS:muasamcong.mof.gov.vn,IP:127.0.0.1"
       - name: Cầu nối app ↔ e-GP giả lập — mã tiêm thật của app trong Chromium (gồm chế độ khó tính, bấm Dừng)
         run: node tests/browser/connector.mjs
       - name: Cài thư viện app
@@ -121,6 +124,16 @@ jobs:
         env:
           GSCB_REQUIRE_WEBKIT: '1'
         run: xvfb-run -a node tools/test/phone-relay.mjs "$PWD/GiaoSuCuiBap" "$RUNNER_TEMP/app-web-remote"
+      # Bản chạy thẳng trên Safari: TOÀN BỘ tiện ích chạy ngay trong tab muasamcong của iPad/iPhone,
+      # không cần máy tính. Bài này chạy ĐÚNG MÃ DẤU TRANG người dùng cài (tải tệp từ
+      # "raw.githubusercontent.com" đã ánh xạ về máy chủ thử), trên WebKit cỡ iPad và iPhone, và
+      # đối chiếu từng mã TBMT với tiện ích Chrome thật chạy cùng dữ liệu. 14 kịch bản: e-GP cấm
+      # nhúng khung, e-GP tải lại trang, e-GP chống nhúng, e-GP cấm eval, mất mạng tới GitHub…
+      - name: Cùi Bắp chạy thẳng trên Safari — dấu trang thật, WebKit cỡ iPad 1024×1366 và iPhone 390×844, đối chứng tiện ích Chrome
+        working-directory: .
+        env:
+          GSCB_REQUIRE_WEBKIT: '1'
+        run: xvfb-run -a node tools/test/safari-app.mjs
       - name: Lưu ảnh màn hình app
         if: always()
         uses: actions/upload-artifact@v4
@@ -130,6 +143,8 @@ jobs:
             ${{ runner.temp }}/app-shots
             test-results/phone-link/*.png
             test-results/phone-relay/*.png
+            test-results/safari-app/*.png
+            test-results/safari-app/*.log
           if-no-files-found: ignore
 
   windows:

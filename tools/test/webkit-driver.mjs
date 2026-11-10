@@ -31,7 +31,8 @@ async function freeDisplay() {
   throw new Error('Không còn số màn hình Xvfb trống');
 }
 
-export async function openWebKit(device) {
+/** options.args: thêm tham số cho MiniBrowser (vd. --proxy=…, --ignore-tls-errors). */
+export async function openWebKit(device, options = {}) {
   const d = typeof device === 'string' ? DEVICES[device] : device;
   const display = await freeDisplay();
   const xvfb = spawn('Xvfb', [`:${display}`, '-screen', '0', `${d.width}x${d.height}x24`, '-nolisten', 'tcp'], { stdio: 'ignore' });
@@ -51,7 +52,7 @@ export async function openWebKit(device) {
   for (let i = 0; i < 60; i++) { try { await fetch(`http://127.0.0.1:${port}/status`); break; } catch { await sleep(150); } }
   const s = await wd('POST', '/session', { capabilities: { alwaysMatch: {
     browserName: 'MiniBrowser', acceptInsecureCerts: true,
-    'webkitgtk:browserOptions': { binary: MINIBROWSER, args: ['--automation', '--full-screen', `--user-agent=${d.ua}`] }
+    'webkitgtk:browserOptions': { binary: MINIBROWSER, args: ['--automation', '--full-screen', `--user-agent=${d.ua}`, ...(options.args || [])] }
   } } });
   const id = s.sessionId;
   const api = {

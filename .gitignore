@@ -1,5 +1,9 @@
 node_modules
 dist/
+# NGOẠI LỆ: bản chạy thẳng trên Safari. Dấu trang trên iPad tải safari/dist/cuibap.js THẲNG
+# TỪ KHO NÀY (raw.githubusercontent.com), nên tệp dựng phải nằm trong git. Bộ kiểm thử
+# (tests/safari-ban-dung.test.mjs) chặn mọi lần tệp này lệch mã nguồn.
+!/safari/dist/
 *.zip
 test-results/
 tools/test/certs/

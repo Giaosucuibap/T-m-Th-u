@@ -2,6 +2,43 @@
 
 Tài liệu này ghi lại các thay đổi quan trọng của Giáo Sư Cùi Bắp. Cấu trúc tham khảo [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) và phiên bản tuân theo cách đánh số ngữ nghĩa ở mức sản phẩm.
 
+## [4.21.0 · bản Safari] — 2026-11-10
+
+**Giáo Sư Cùi Bắp chạy thẳng trên Safari của iPad / iPhone — không cần máy tính, không quét mã, không cài app.**
+Tiện ích Chrome không đổi (vẫn 4.21.0, không phải cài lại gì trên máy tính). Thêm thư mục `safari/`: một dấu
+trang (bookmarklet) nạp toàn bộ tiện ích vào tab muasamcong đang mở. Hướng dẫn: `HUONG-DAN-SAFARI-IPAD.md`.
+Thẩm định: `BAO-CAO-THAM-DINH-SAFARI.md`. Kỹ thuật: `safari/README.md`.
+
+### Có gì
+- **`safari/dist/cuibap.js`** — một tệp duy nhất gói nguyên văn tiện ích (118 mô-đun, 23 trang, phông, biểu
+  tượng) cùng lớp mô phỏng `chrome.*`. Dấu trang tải tệp này từ kho GitHub rồi chạy trong trang muasamcong:
+  - `background.js` chạy trong một khung ẩn; 23 trang giao diện chạy trong khung nhìn thấy;
+  - trang tra cứu và trang chi tiết **thật** của e-GP được dựng trong khung ẩn ("tab ảo"), có `page-hook.js` và
+    `content.js` **nguyên văn** — mọi yêu cầu vẫn do chính trang e-GP phát đi, kèm mã reCAPTCHA của nó.
+- **Dấu trang** (`safari/dist/dau-trang.txt`): một dòng, chỉ ký tự ASCII. Luôn hỏi bản mới nhất; mất mạng tới
+  GitHub thì chạy bản dự phòng đã cất trong IndexedDB; nhánh phát triển không còn thì lấy ở `main`.
+- **Thanh trên cùng** của bản Safari: quay lại, trạng thái nối e-GP, **chuông thông báo** (thay thông báo của hệ
+  điều hành), xem trang e-GP đang điều khiển, **Chẩn đoán** (có nút chép để gửi người bảo trì), Ẩn.
+- **Ba tầng dự phòng** khi e-GP tự chuyển trang: bắt lệnh chuyển trang bằng Navigation API (Safari 26.2+) →
+  bám theo khung tự chuyển (Safari cũ) → chế độ hạn chế dùng chính trang đang mở.
+- Chốt: một tab chạy một lúc; trang muasamcong không tự chuyển trang được khi Cùi Bắp đang hiện; e-GP trả tệp
+  thì lưu tệp; địa chỉ cũ `mpi` được đổi về tên miền của tab.
+
+### Kiểm thử
+- `tools/test/safari-app.mjs`: chạy **đúng mã dấu trang** trong WebKit (nhân Safari) cỡ iPad 1024×1366 và iPhone
+  390×844 — 14 kịch bản, 41 phép kiểm. Số liệu tìm gói trùng **từng mã TBMT** với tiện ích Chrome thật.
+- `tests/safari-ban-dung.test.mjs`: 24 bài — tệp dựng khớp mã nguồn, `content.js`/`page-hook.js` nguyên văn,
+  mã dấu trang an toàn và chạy đúng trong 10 tình huống, hàm phân loại địa chỉ không nhận tên miền giả.
+- CI: job Linux kiểm `safari/dist` khớp mã nguồn; job app chạy bài WebKit (bắt buộc có WebKit).
+
+### Giới hạn — nói thẳng
+- **Chưa chạy trên iPad thật và chưa chạy với trang muasamcong thật.** Mọi kết quả ở trên là với nhân Safari
+  trên Linux và trang e-GP giả lập.
+- Không có: Tải E-HSMT bằng một nút và Link điện thoại (cần cầu nối trên Windows); chạy nền khi đóng tab;
+  thông báo đẩy của hệ điều hành.
+- Phải chạm dấu trang sau mỗi lần tải lại trang. Dữ liệu nằm trong Safari, cùng nguồn với trang e-GP; Safari có
+  thể dọn dữ liệu của trang lâu không mở.
+
 ## [4.21.0] — 2026-11-09
 
 **App "Cùi Bắp" trên iPhone và iPad, địa chỉ cố định.** Biểu tượng trên màn hình chính, quét mã một lần cho

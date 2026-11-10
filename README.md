@@ -2,6 +2,8 @@
 
 Bản 4.21.0 biến Link điện thoại thành **app "Cùi Bắp" trên iPhone và iPad**: biểu tượng trên màn hình chính, mở toàn màn hình, iPad có bố cục 2 cột. App dùng **địa chỉ cố định** (Cloudflare Worker miễn phí trên tài khoản của chủ phần mềm, thư mục `relay/`), nên mỗi máy chỉ quét mã một lần; máy tính công ty khởi động lại thì app tự tìm lại máy tính. Mất mạng vẫn mở app xem kết quả và gói theo dõi đã lưu. Sửa hai lỗi thấy trên iPhone thật: "0 đ – 0 đ" khi không nhập giá và địa điểm lặp. Đọc `HUONG-DAN-4.21.0.md` trước khi cập nhật.
 
+**Mới (10/11/2026) — chạy thẳng trên Safari của iPad / iPhone, không cần máy tính.** Một dấu trang nạp toàn bộ tiện ích vào tab muasamcong: đủ 23 màn hình, dữ liệu vẫn do chính trang e-GP trả về. Tiện ích trên Chrome không đổi. Bản này **chưa được chạy trên iPad thật và trang muasamcong thật** — đọc `HUONG-DAN-SAFARI-IPAD.md` (cài 3 phút, kiểm 2 phút) và `BAO-CAO-THAM-DINH-SAFARI.md`. Mã nguồn: `safari/`.
+
 ## Ghi chú các bản trước
 
 ### 4.20.0

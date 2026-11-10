@@ -168,6 +168,22 @@ function datasetFor(env) {
   const type = filters.find((f) => f.fieldName === 'type');
   const values = [].concat(type?.fieldValues || []).join(',');
   let data = values.includes('es-plan-project-p') ? PLANS : ALL;
+  /* Tra nhà thầu trúng thầu: e-GP thật lọc đúng theo `winningCode` ("vn" + mã số thuế).
+     Trả 7 gói có kết quả mang đúng mã đó, 2 gói trong số ấy là liên danh. */
+  const winning = filters.find((f) => f.fieldName === 'winningCode' && f.searchType === 'in');
+  if (winning && [].concat(winning.fieldValues || []).length) {
+    const code = String([].concat(winning.fieldValues)[0]);
+    data = Array.from({ length: 7 }, (_, i) => {
+      const base = record(300 + i);
+      return { ...base, stepCode: 'notify-contractor-step-4-kqlcnt', statusForNotify: 'DXT',
+        winningCode: i % 4 === 3 ? [code, 'vn0312345678'] : [code],
+        winningContractorName: i % 4 === 3 ? ['CÔNG TY TNHH XÂY LẮP THỬ NGHIỆM', 'CÔNG TY CP THỦY LỢI MIỀN NAM'] : ['CÔNG TY TNHH XÂY LẮP THỬ NGHIỆM'],
+        ventureName: i % 4 === 3 ? 'Liên danh Thử Nghiệm – Miền Nam' : '',
+        bidWinningPrice: [Math.round(base.bidPrice * (0.93 + i * 0.008))],
+        decisionDate: new Date(Date.now() - (i + 2) * 86400000).toISOString(),
+        publicDateKqlcnt: new Date(Date.now() - (i + 1) * 86400000).toISOString() };
+    });
+  }
   /* honordate: lọc THẬT theo publicDate (epoch ms) — mô phỏng e-GP lọc đúng.
      datelie  : lọc nhưng LẶNG LẼ bỏ sót gói mới nhất — mô phỏng e-GP hiểu
                 sai trường ngày; phần mềm phải tự phát hiện khi đối soát. */
@@ -202,7 +218,17 @@ function datasetFor(env) {
  *   sidemulti   : …và một yêu cầu ĐẾM gộp nhiều truy vấn (mảng 2 phần tử).
  *   slowfire=N  : yêu cầu chính rời trình duyệt chậm N ms sau thao tác (luồng
  *                 chính trang e-GP mới bận) — cùng side tái hiện lỗi 4.17.1.
- *   wrap        : phản hồi bọc thêm lớp {success,data:{page}}. */
+ *   wrap        : phản hồi bọc thêm lớp {success,data:{page}}.
+ *   xfo=1|2     : mọi TRANG kèm X-Frame-Options (1 = DENY — mặc định của Liferay,
+ *                 2 = SAMEORIGIN) — để thử bản Safari dựng trang e-GP trong khung.
+ *   reload      : bấm "Tìm kiếm" thì trang CHUYỂN TRANG sang ?render=index (màn
+ *                 hình kết quả), như e-GP thật thường làm; không còn tìm tại chỗ.
+ *   bust        : trang có mã "chống nhúng khung" kiểu cũ — thấy mình nằm trong khung
+ *                 thì tìm cách chuyển cả cửa sổ cấp cao nhất sang địa chỉ của mình.
+ *   csp         : mọi TRANG kèm Content-Security-Policy cấm eval / new Function
+ *                 (vẫn cho script nội tuyến và blob:).
+ *   nobranch    : raw.githubusercontent.com giả báo 404 cho mọi nhánh trừ `main`
+ *                 (nhánh phát triển đã bị xoá sau khi gộp). */
 const SHAPE = (String(process.env.MOCK_CHAOS || '').match(/shape=([a-z]+)/) || [])[1] || '';
 const CHAOS = Object.fromEntries(String(process.env.MOCK_CHAOS || '').split(',').filter(Boolean)
   .map((part) => { const [k, v] = part.split('='); return [k.trim(), v === undefined ? true : Number(v)]; }));
@@ -211,7 +237,10 @@ const chaosRandom = () => { chaosSeed = (chaosSeed * 1103515245 + 12345) % 21474
 if (Object.keys(CHAOS).length) console.log('[mock] CHẾ ĐỘ KHÓ TÍNH:', JSON.stringify(CHAOS));
 const PAGE_HTML = fs.readFileSync(path.join(HERE, 'mock-page.html'), 'utf8')
   .replace('<script>', `<script>window.__CHAOS=${JSON.stringify({ early: Boolean(CHAOS.early), busy: Boolean(CHAOS.busy), autoload: Boolean(CHAOS.autoload),
-    side: Boolean(CHAOS.side), sidemulti: Boolean(CHAOS.sidemulti), slowfire: Number(CHAOS.slowfire) || 0, shape: SHAPE })};</script>\n<script>`);
+    side: Boolean(CHAOS.side), sidemulti: Boolean(CHAOS.sidemulti), slowfire: Number(CHAOS.slowfire) || 0, shape: SHAPE, reload: Boolean(CHAOS.reload), bust: Boolean(CHAOS.bust) })};</script>\n<script>`);
+/** Tiêu đề của mọi trang HTML: thêm X-Frame-Options khi bật xfo, CSP cấm eval khi bật csp. */
+const pageHeaders = () => ({ 'content-type': 'text/html;charset=UTF-8', ...(CHAOS.xfo ? { 'x-frame-options': CHAOS.xfo === 2 ? 'SAMEORIGIN' : 'DENY' } : {}),
+  ...(CHAOS.csp ? { 'content-security-policy': "script-src 'self' 'unsafe-inline' blob:" } : {}) });
 
 const server = https.createServer(
   {
@@ -221,18 +250,32 @@ const server = https.createServer(
   (req, res) => {
     const url = new URL(req.url, 'https://muasamcong.mpi.gov.vn');
 
+    /* raw.githubusercontent.com giả: bài thử bản Safari ánh xạ tên miền đó về đây, để DẤU
+       TRANG THẬT tải safari/dist/cuibap.js đúng như trên iPad (văn bản thuần, cho mọi nguồn
+       đọc). MOCK_BUNDLE = đường dẫn tệp cần phát. */
+    if (/^raw\.githubusercontent\.com(?::\d+)?$/i.test(req.headers.host || '')) {
+      const ok = /\/safari\/dist\/cuibap\.js$/.test(url.pathname) && process.env.MOCK_BUNDLE && (!CHAOS.nobranch || /\/main\/safari\//.test(url.pathname));
+      console.log(`[mock] RAW ${url.pathname} -> ${ok ? 200 : 'KHÔNG CÓ'}`);
+      res.writeHead(ok ? 200 : 404, { 'content-type': 'text/plain; charset=utf-8', 'access-control-allow-origin': '*', 'x-content-type-options': 'nosniff', 'cache-control': 'max-age=300' });
+      res.end(ok ? fs.readFileSync(process.env.MOCK_BUNDLE) : '404: Not Found');
+      return;
+    }
+
     /* mutable: /__mock/mutate thêm 2 gói TBMT mới đăng và đổi giá 1 gói —
        để thử nhãn Mới/Đổi giữa hai lượt tìm cùng tiêu chí. */
     /* Telegram giả: kịch bản trỏ api.telegram.org về đây để đọc ĐÚNG tin phần
        mềm gửi đi, không bao giờ nhắn ra ngoài. */
     if (/^\/bot[^/]+\/sendMessage$/.test(url.pathname)) {
+      // Một TRANG WEB (bản Safari) gọi Telegram chịu luật CORS. Giả lập trường hợp xấu nhất:
+      // máy chủ KHÔNG trả lời câu "hỏi trước" (preflight) — phần mềm phải gửi kiểu không cần hỏi.
+      if (req.method === 'OPTIONS') { console.log('[mock] TELEGRAM HỎI TRƯỚC (preflight) — từ chối'); res.writeHead(403, { 'content-type': 'text/plain' }); res.end('no preflight'); return; }
       let body = '';
       req.on('data', (c) => (body += c));
       req.on('end', () => {
         let text = '';
         try { text = JSON.parse(body).text || ''; } catch { text = new URLSearchParams(body).get('text') || ''; }
         console.log(`[mock] TELEGRAM ${JSON.stringify(text)}`);
-        res.writeHead(200, { 'content-type': 'application/json' });
+        res.writeHead(200, { 'content-type': 'application/json', 'access-control-allow-origin': '*' });
         res.end(JSON.stringify({ ok: true, result: { message_id: 1 } }));
       });
       return;
@@ -308,6 +351,14 @@ const server = https.createServer(
 
     // Trình duyệt tự xin favicon. Nếu để 404 thì kịch bản đếm nó thành LỖI, và
     // một lỗi 404 THẬT sẽ núp ngay sau nó mà không ai để ý.
+    /* Một tệp đính kèm (PDF) mà e-GP trả thẳng cho trình duyệt — để thử: trang trong khung
+       chuyển tới địa chỉ tệp thì bản Safari phải LƯU TỆP chứ không được dựng nó thành trang. */
+    if (url.pathname === '/o/egp-portal-contractor-selection-v2/tep-dinh-kem') {
+      console.log('[mock] TỆP đính kèm được tải');
+      res.writeHead(200, { 'content-type': 'application/pdf', 'content-disposition': 'attachment; filename="HSMT-IB2600000001.pdf"' });
+      res.end(Buffer.from('%PDF-1.4\n% tep gia lap\n'));
+      return;
+    }
     if (url.pathname === '/favicon.ico') {
       res.writeHead(204);
       res.end();
@@ -345,7 +396,7 @@ const server = https.createServer(
         const no = url.searchParams.get('notifyNo') || '';
         const coDuLieu = (Number(no.replace(/\D/g, '').slice(-1)) % 2) === 0;
         console.log(`[mock] chi tiết ${no} — ${coDuLieu ? 'CÓ' : 'KHÔNG'} trả nhà thầu`);
-        res.writeHead(200, { 'content-type': 'text/html;charset=UTF-8' });
+        res.writeHead(200, pageHeaders());
         res.end(`<!doctype html><meta charset=utf-8><title>Biên bản ${no}</title>
           <body><h1>Biên bản mở thầu ${no}</h1>
           <script>${coDuLieu ? `
@@ -353,7 +404,7 @@ const server = https.createServer(
             x.open('POST', '${LOT_OPEN}'); x.send('{}');` : ''}</script></body>`);
         return;
       }
-      const gui = () => { res.writeHead(200, { 'content-type': 'text/html;charset=UTF-8' }); res.end(PAGE_HTML); };
+      const gui = () => { res.writeHead(200, pageHeaders()); res.end(PAGE_HTML); };
       console.log(`[mock] PAGE host=${req.headers.host || ''} ${url.pathname}${CHAOS.pageslow ? ` (chậm ${CHAOS.pageslow} ms)` : ''}`);
       if (CHAOS.pageslow) setTimeout(gui, CHAOS.pageslow); else gui();
       return;
