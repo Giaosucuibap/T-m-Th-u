@@ -53,7 +53,7 @@ ngay trong tab muasamcong — để toàn bộ tiện ích Chrome chạy **nguy�
 
 ```
 tab Safari: trang muasamcong
- └─ lớp vỏ (1.775 dòng. safari/src)
+ └─ lớp vỏ (khoảng 1.800 dòng, safari/src)
      ├─ khung NỀN        background.js nguyên văn + chrome.* mô phỏng
      ├─ khung GIAO DIỆN  23 trang của tiện ích, nguyên văn
      └─ khung e-GP ẩn    trang tra cứu / chi tiết THẬT của muasamcong, có content script nguyên văn
