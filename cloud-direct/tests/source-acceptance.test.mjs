@@ -1,9 +1,33 @@
 // Controlled fixtures for pure acceptance logic. These are NOT live e-GP rows.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { PROVINCES, PROBE_VERSION, validateSourceQuery, sanitizeSourcePage, validateProbeReport, describeSourceShape, createSourceRequestGate, sanitizeProvinceOptionLabels, describeRequestPagination, describeSourceResponseMetadata } from '../source-probe.mjs';
+import { PROVINCES, PROBE_VERSION, validateSourceQuery, sanitizeSourcePage, validateProbeReport, describeSourceShape, createSourceRequestGate, sanitizeProvinceOptionLabels, describeRequestPagination, describeSourceResponseMetadata, describeSourceFilters } from '../source-probe.mjs';
 
 const clone = value => structuredClone(value);
+
+test('filter diagnostics retain only allowed province codes, enums and dates without relaxing the source gate', () => {
+  const body = requestFor();
+  const filters = body[0].query[0].filters;
+  filters.find(filter => filter.fieldName === 'locations.provCode').fieldValues = ['68', '703', 606, 715, 'SECRET_FIXTURE_CODE'];
+  filters.push({ fieldName: 'bidCloseDate', searchType: 'range', from: '2026-11-10T12:10:00.000Z', to: 1_800_000_000_000 });
+  filters.push({ fieldName: 'investorName', searchType: 'in', fieldValues: ['SECRET_FIXTURE_OWNER'] });
+  filters.push({ fieldName: 'SECRET_FIXTURE_FIELD', searchType: 'SECRET_FIXTURE_OPERATION', fieldValues: ['SECRET_FIXTURE_VALUE'] });
+  filters.push({ fieldName: 'statusForNotify', searchType: 'SECRET_FIXTURE_OPERATION', fieldValues: ['DHT', 'SECRET_FIXTURE_STATUS'], from: 'SECRET_FIXTURE_DATE' });
+  body[0].query[0].keyWord = 'SECRET_FIXTURE_KEYWORD';
+  const diagnostic = describeSourceFilters(body);
+  const province = diagnostic.filters.find(filter => filter.fieldName === 'locations.provCode');
+  assert.deepEqual(province.fieldValues, ['68', '703', 606, 715]);
+  assert.equal(province.omittedValueCount, 1);
+  assert.equal(diagnostic.filters.filter(filter => filter.fieldName === 'bidCloseDate').length, 2);
+  assert.equal(diagnostic.omittedFilterCount, 2);
+  const status = diagnostic.filters.find(filter => filter.fieldName === 'statusForNotify');
+  assert.equal(status.searchType, 'UNRECOGNIZED');
+  assert.deepEqual(status.fieldValues, ['DHT']);
+  assert.equal(JSON.stringify(diagnostic).includes('SECRET_FIXTURE'), false);
+  assert.equal(JSON.stringify(diagnostic).includes('investorName'), false);
+  body[0].query[0].keyWord = '';
+  assert.equal(validateSourceQuery(body, 'lam_dong').code, 'SOURCE_PROVINCE_MISMATCH');
+});
 
 test('canonical source pagination strings normalize without a zero-to-one index shift', () => {
   const body = requestFor();

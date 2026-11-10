@@ -44,6 +44,41 @@ export function describeRequestPagination(body) {
   return { payloadType: valueType(body), pageNumber: numericMetadata(payload?.pageNumber), pageSize: numericMetadata(payload?.pageSize) };
 }
 
+/** Diagnostic whitelist only. This does not broaden query acceptance. */
+export function describeSourceFilters(body) {
+  const query = Array.isArray(body) && isObject(body[0]) && Array.isArray(body[0].query) ? body[0].query[0] : undefined;
+  const filters = isObject(query) && Array.isArray(query.filters) ? query.filters : [];
+  const knownFields = new Set(['type', 'caseKHKQ', 'locations.provCode', 'locations.districtCode', 'locations.wardCode',
+    'bidCloseDate', 'publicDate', 'publicDateKqlcnt', 'stepCode', 'statusForNotify']);
+  const knownOperations = new Set(['in', 'not_in', 'range']);
+  const knownValues = new Set(['es-notify-contractor', 'es-plan-project', 'es-contractor-selection-result',
+    '0', '1', 'DHT', 'DHTBMT', 'DHKQLCNT', 'DXT', 'CNTTT', 'KCNTTT', 'VHH', 'KCN', 'DC']);
+  const date = value => {
+    const result = { type: valueType(value), empty: empty(value) };
+    if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?(?:Z|[+-]\d{2}:\d{2})$/.test(value)
+        && Number.isFinite(Date.parse(value))) result.isoValue = value;
+    if (typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 && value <= Date.UTC(2200, 0, 1)) result.epochValue = value;
+    return result;
+  };
+  const selected = filters.filter(filter => isObject(filter) && knownFields.has(filter.fieldName));
+  return {
+    queryType: valueType(query), filtersType: valueType(isObject(query) ? query.filters : undefined),
+    filterCount: filters.length, knownFilterCount: selected.length, omittedFilterCount: filters.length - selected.length,
+    filters: selected.slice(0, 20).map(filter => {
+      const values = Array.isArray(filter.fieldValues) ? filter.fieldValues : [];
+      const retained = values.slice(0, 100).filter(value => {
+        if (typeof value === 'string' && /^\d{2,3}$/.test(value)) return true;
+        if (typeof value === 'number' && Number.isInteger(value) && value >= 10 && value <= 999) return true;
+        if (filter.fieldName.startsWith('locations.')) return false;
+        return (typeof value === 'string' && knownValues.has(value)) || value === 0 || value === 1;
+      });
+      return { fieldName: filter.fieldName, searchType: knownOperations.has(filter.searchType) ? filter.searchType : 'UNRECOGNIZED',
+        fieldValuesType: valueType(filter.fieldValues), fieldValuesCount: Array.isArray(filter.fieldValues) ? values.length : null,
+        fieldValues: retained, omittedValueCount: values.length - retained.length, from: date(filter.from), to: date(filter.to) };
+    })
+  };
+}
+
 /** Bounded metadata only; malformed strings and arbitrary keys are omitted. */
 export function describeSourceResponseMetadata(data) {
   const page = isObject(data) && isObject(data.page) ? data.page : undefined;
@@ -266,7 +301,7 @@ export function createSourceRequestGate(provinceKey, { mode = 'open', expectedPa
     endpointPath: SEARCH_PATH, actionStarted: false, actionCompleted: false,
     requestEventsBeforeAction: 0, requestEventsAfterAction: 0,
     timingUnavailableEvents: 0, initializedTimingBeforeActionEvents: 0,
-    payloadAcceptedEvents: 0, payloadRejectedEvents: 0, payloadRejectionCodes: [], requestPagination: [],
+    payloadAcceptedEvents: 0, payloadRejectedEvents: 0, payloadRejectionCodes: [], requestPagination: [], requestFilters: [],
     responseEventsAfterAction: 0, matchedResponseEvents: 0,
     responseStatuses: [], requestFailedEvents: 0
   };
@@ -289,6 +324,7 @@ export function createSourceRequestGate(provinceKey, { mode = 'open', expectedPa
       try {
         const body = request.postDataJSON();
         if (diagnostic.requestPagination.length < 3) diagnostic.requestPagination.push(describeRequestPagination(body));
+        if (diagnostic.requestFilters.length < 3) diagnostic.requestFilters.push(describeSourceFilters(body));
         query = validateSourceQuery(body, provinceKey, { mode, expectedPage });
       }
       catch { query = fail('SOURCE_QUERY_SCHEMA'); }
@@ -310,7 +346,7 @@ export function createSourceRequestGate(provinceKey, { mode = 'open', expectedPa
       if (actionStartedAt !== null && isSearchRequest(request)) diagnostic.requestFailedEvents++;
     },
     snapshot() { return { ...diagnostic, payloadRejectionCodes: [...diagnostic.payloadRejectionCodes], responseStatuses: [...diagnostic.responseStatuses],
-      requestPagination: structuredClone(diagnostic.requestPagination) }; }
+      requestPagination: structuredClone(diagnostic.requestPagination), requestFilters: structuredClone(diagnostic.requestFilters) }; }
   };
 }
 
