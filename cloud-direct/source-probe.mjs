@@ -30,6 +30,40 @@ const unique = values => [...new Set(values)];
 const fail = code => ({ ok: false, code });
 const empty = value => value === undefined || value === null || value === '' || (Array.isArray(value) && value.length === 0);
 const sameSet = (a, b) => a.length === b.length && a.every(item => b.includes(item));
+const sourceInteger = (value, max = 1_000_000_000) => {
+  // The source restores currentPage with localStorage.getItem, preserving "0".
+  // Accept that canonical decimal representation without changing index base.
+  const parsed = typeof value === 'string' && /^(?:0|[1-9]\d*)$/.test(value) ? Number(value) : value;
+  return safeInt(parsed, max) ? parsed : null;
+};
+const valueType = value => value === undefined ? 'missing' : value === null ? 'null' : Array.isArray(value) ? 'array' : typeof value;
+const numericMetadata = value => ({ type: valueType(value), numericValue: sourceInteger(value) });
+
+export function describeRequestPagination(body) {
+  const payload = Array.isArray(body) && isObject(body[0]) ? body[0] : undefined;
+  return { payloadType: valueType(body), pageNumber: numericMetadata(payload?.pageNumber), pageSize: numericMetadata(payload?.pageSize) };
+}
+
+/** Bounded metadata only; malformed strings and arbitrary keys are omitted. */
+export function describeSourceResponseMetadata(data) {
+  const page = isObject(data) && isObject(data.page) ? data.page : undefined;
+  const content = page?.content;
+  const identities = Array.isArray(content) ? content.slice(0, 3).map(row => {
+    const item = {};
+    if (!isObject(row)) return item;
+    if (typeof row.notifyNo === 'string' && /^(?:IB|DC)\d{6,24}(?:-\d{1,5})?$/.test(row.notifyNo)) item.notifyNo = row.notifyNo;
+    if ((typeof row.notifyVersion === 'string' && /^\d{1,5}$/.test(row.notifyVersion))
+        || (typeof row.notifyVersion === 'number' && safeInt(row.notifyVersion, 99999))) item.notifyVersion = row.notifyVersion;
+    if (['es-notify-contractor', 'es-plan-project', 'es-contractor-selection-result'].includes(row.type)) item.type = row.type;
+    if (Array.isArray(row.locations)) item.provinceCodes = unique(row.locations.map(location => isObject(location) ? location.provCode : null)
+      .filter(code => typeof code === 'string' && /^\d{2,3}$/.test(code))).slice(0, 10);
+    return item;
+  }) : [];
+  return { rootType: valueType(data), pageType: valueType(page),
+    currentPage: numericMetadata(page?.currentPage), pageSize: numericMetadata(page?.pageSize),
+    totalElements: numericMetadata(page?.totalElements), totalPages: numericMetadata(page?.totalPages),
+    contentType: valueType(content), contentLength: Array.isArray(content) ? content.length : null, publicIdentities: identities };
+}
 
 /** Read-only correlation: accept only the requested public UI scope and page. */
 export function validateSourceQuery(body, provinceKey, { mode = 'open', expectedPage = 0, nowMs = Date.now() } = {}) {
@@ -37,8 +71,9 @@ export function validateSourceQuery(body, provinceKey, { mode = 'open', expected
   if (!province || !['open', 'all'].includes(mode) || !safeInt(expectedPage, 2)) return fail('INVALID_PROBE_SCOPE');
   if (!Array.isArray(body) || body.length !== 1 || !isObject(body[0])) return fail('SOURCE_QUERY_SCHEMA');
   const payload = body[0];
-  if (!safeInt(payload.pageNumber, 2) || payload.pageNumber !== expectedPage) return fail('SOURCE_PAGE_MISMATCH');
-  if (!Number.isInteger(payload.pageSize) || payload.pageSize < 1 || payload.pageSize > 50) return fail('SOURCE_PAGE_SIZE_UNEXPECTED');
+  const pageNumber = sourceInteger(payload.pageNumber, 2), pageSize = sourceInteger(payload.pageSize, 50);
+  if (pageNumber === null || pageNumber !== expectedPage) return fail('SOURCE_PAGE_MISMATCH');
+  if (pageSize === null || pageSize < 1) return fail('SOURCE_PAGE_SIZE_UNEXPECTED');
   if (!Array.isArray(payload.query) || payload.query.length !== 1) return fail('SOURCE_QUERY_SCHEMA');
   const query = payload.query[0];
   if (!isObject(query) || query.index !== 'es-contractor-selection' || !Array.isArray(query.filters)) return fail('SOURCE_QUERY_SCHEMA');
@@ -80,7 +115,7 @@ export function validateSourceQuery(body, provinceKey, { mode = 'open', expected
   if (filters.some(filter => !allowed.has(filter.fieldName)
       && (!empty(filter.fieldValues) || !empty(filter.from) || !empty(filter.to)))) return fail('SOURCE_EXTRA_FILTER');
   return { ok: true, code: 'QUERY_VERIFIED', provinceCodes: [...provinceCodes].sort(),
-    pageSize: payload.pageSize, pageNumber: payload.pageNumber, mode,
+    pageSize, pageNumber, mode,
     scope: 'official_ui_selected_province', historicalPredecessorCoverage: 'not_established' };
 }
 
@@ -231,7 +266,7 @@ export function createSourceRequestGate(provinceKey, { mode = 'open', expectedPa
     endpointPath: SEARCH_PATH, actionStarted: false, actionCompleted: false,
     requestEventsBeforeAction: 0, requestEventsAfterAction: 0,
     timingUnavailableEvents: 0, initializedTimingBeforeActionEvents: 0,
-    payloadAcceptedEvents: 0, payloadRejectedEvents: 0, payloadRejectionCodes: [],
+    payloadAcceptedEvents: 0, payloadRejectedEvents: 0, payloadRejectionCodes: [], requestPagination: [],
     responseEventsAfterAction: 0, matchedResponseEvents: 0,
     responseStatuses: [], requestFailedEvents: 0
   };
@@ -251,7 +286,11 @@ export function createSourceRequestGate(provinceKey, { mode = 'open', expectedPa
         return;
       }
       let query;
-      try { query = validateSourceQuery(request.postDataJSON(), provinceKey, { mode, expectedPage }); }
+      try {
+        const body = request.postDataJSON();
+        if (diagnostic.requestPagination.length < 3) diagnostic.requestPagination.push(describeRequestPagination(body));
+        query = validateSourceQuery(body, provinceKey, { mode, expectedPage });
+      }
       catch { query = fail('SOURCE_QUERY_SCHEMA'); }
       if (query.ok) { eligible.add(request); diagnostic.payloadAcceptedEvents++; }
       else {
@@ -270,7 +309,8 @@ export function createSourceRequestGate(provinceKey, { mode = 'open', expectedPa
     observeFailure(request) {
       if (actionStartedAt !== null && isSearchRequest(request)) diagnostic.requestFailedEvents++;
     },
-    snapshot() { return { ...diagnostic, payloadRejectionCodes: [...diagnostic.payloadRejectionCodes], responseStatuses: [...diagnostic.responseStatuses] }; }
+    snapshot() { return { ...diagnostic, payloadRejectionCodes: [...diagnostic.payloadRejectionCodes], responseStatuses: [...diagnostic.responseStatuses],
+      requestPagination: structuredClone(diagnostic.requestPagination) }; }
   };
 }
 
@@ -321,8 +361,11 @@ async function setSourceCheckbox(page, id, labelText, desired) {
   const input = page.locator(`#${id}`);
   if (await input.count() !== 1) raise('SOURCE_SELECTOR_CHANGED');
   if (await input.isChecked() !== desired) {
-    // The source styles its checkbox input; use its actual visible label.
-    await page.locator(`label[for="${id}"]:visible`).filter({ hasText: labelText }).click();
+    if (await input.isVisible()) await input.setChecked(desired);
+    else {
+      // Hidden styled inputs are operated through their actual visible label.
+      await page.locator(`label[for="${id}"]:visible`).filter({ hasText: labelText }).click();
+    }
     // Vue can apply the label-triggered checked state on its next render.
     // Observe the DOM state after this single click; never toggle it twice.
     await page.waitForFunction(({ id, desired }) => document.getElementById(id)?.checked === desired,
@@ -341,6 +384,10 @@ async function chooseProvinceThroughUI(page, provinceKey, mode, markStep = () =>
   await page.locator('.egp-hero__advbtn:visible').first().click();
   markStep('wait_advanced_form');
   await page.locator('.content__footer__btn:visible').filter({ hasText: /^Tìm kiếm$/ }).waitFor();
+  // The footer is present in raw HTML. Wait for an actual Vue-rendered control
+  // before changing a v-model checkbox, so initial mounting cannot reset it.
+  markStep('wait_rendered_advanced_form');
+  await page.locator('.ant-select-selection__placeholder').filter({ hasText: /^\s*Tỉnh\/\s*Thành phố\s*$/ }).waitFor();
   markStep('set_current_locations');
   await setSourceCheckbox(page, 'is_old_locations', /Địa bàn hành chính/, false);
   markStep('set_requested_notice_status');
@@ -391,7 +438,9 @@ async function safeUiDiagnostics(page, provinceKey, uiStep) {
     advancedEntryLinks: page.locator('.egp-hero__advbtn'),
     visibleAdvancedEntryLinks: page.locator('.egp-hero__advbtn:visible'),
     oldLocationsCheckbox: page.locator('#is_old_locations'),
+    visibleOldLocationsCheckbox: page.locator('#is_old_locations:visible'),
     openNoticeCheckbox: page.locator('#is_not_publish_tbmt'),
+    visibleOpenNoticeCheckbox: page.locator('#is_not_publish_tbmt:visible'),
     visibleAdvancedSearchButtons: page.locator('.content__footer__btn:visible').filter({ hasText: /^Tìm kiếm$/ }),
     visibleAntSelects: page.locator('.ant-select:visible'),
     legacyProvincePlaceholder: page.locator('.ant-select-selection__placeholder').filter({ hasText: /^\s*Tỉnh\/\s*Thành phố\s*$/ }),
@@ -461,10 +510,11 @@ async function captureUiSearch(page, action, provinceKey, mode, expectedPage, re
   // list with zero records and do not prove a successful CAPTCHA validation.
   if (typeof data === 'number') raise('SOURCE_REJECTED', { search: gate.snapshot() });
   const safe = sanitizeSourcePage(data, { provinceKey, query });
-  if (!safe.ok) raise(safe.code, { sourceShape: describeSourceShape(data), search: gate.snapshot() });
+  if (!safe.ok) raise(safe.code, { sourceShape: describeSourceShape(data), sourceMetadata: describeSourceResponseMetadata(data), search: gate.snapshot() });
   const stop = await sourceStopReason(page);
   if (stop) raise(stop);
-  return { query, data, receipt: { ...safe.receipt, httpStatus: response.status(), receivedAt: new Date().toISOString(), requestCorrelation: gate.snapshot() } };
+  return { query, data, receipt: { ...safe.receipt, httpStatus: response.status(), receivedAt: new Date().toISOString(),
+    requestCorrelation: gate.snapshot(), sourceMetadata: describeSourceResponseMetadata(data) } };
 }
 
 /** Reusable bounded browser job. Caller supplies a normal Playwright Browser. */

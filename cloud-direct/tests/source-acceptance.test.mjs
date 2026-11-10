@@ -1,9 +1,42 @@
 // Controlled fixtures for pure acceptance logic. These are NOT live e-GP rows.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { PROVINCES, PROBE_VERSION, validateSourceQuery, sanitizeSourcePage, validateProbeReport, describeSourceShape, createSourceRequestGate, sanitizeProvinceOptionLabels } from '../source-probe.mjs';
+import { PROVINCES, PROBE_VERSION, validateSourceQuery, sanitizeSourcePage, validateProbeReport, describeSourceShape, createSourceRequestGate, sanitizeProvinceOptionLabels, describeRequestPagination, describeSourceResponseMetadata } from '../source-probe.mjs';
 
 const clone = value => structuredClone(value);
+
+test('canonical source pagination strings normalize without a zero-to-one index shift', () => {
+  const body = requestFor();
+  body[0].pageNumber = '0'; body[0].pageSize = '10';
+  const query = validateSourceQuery(body, 'lam_dong');
+  assert.equal(query.ok, true);
+  assert.equal(query.pageNumber, 0);
+  assert.equal(query.pageSize, 10);
+  for (const invalid of ['', '00', ' 0', '+0', '-0', '0.0', '0e0', '2x', null, {}, 0.5]) {
+    body[0].pageNumber = invalid;
+    assert.equal(validateSourceQuery(body, 'lam_dong').ok, false);
+  }
+  body[0].pageNumber = '1';
+  assert.equal(validateSourceQuery(body, 'lam_dong').code, 'SOURCE_PAGE_MISMATCH');
+  body[0].pageNumber = '2';
+  assert.equal(validateSourceQuery(body, 'lam_dong', { expectedPage: 2 }).pageNumber, 2);
+});
+
+test('pagination and response diagnostics expose only approved numeric metadata and public identity fields', () => {
+  const request = describeRequestPagination([{ pageNumber: '0', pageSize: '10', token: 'SECRET_FIXTURE_QUERY' }]);
+  assert.deepEqual(request.pageNumber, { type: 'string', numericValue: 0 });
+  assert.deepEqual(request.pageSize, { type: 'string', numericValue: 10 });
+  const raw = pageFor([{ ...rowFor(1), notifyNo: 'IB2600000001-00', bidName: 'SECRET_FIXTURE_NAME',
+    token: 'SECRET_FIXTURE_ROW', locations: [{ provCode: '68' }, { provCode: 'SECRET_FIXTURE_PROVINCE' }] }]);
+  raw.page.currentPage = '0';
+  raw.page.extra = 'SECRET_FIXTURE_PAGE';
+  const response = describeSourceResponseMetadata(raw);
+  assert.deepEqual(response.currentPage, { type: 'string', numericValue: 0 });
+  assert.equal(response.publicIdentities[0].notifyNo, 'IB2600000001-00');
+  assert.deepEqual(response.publicIdentities[0].provinceCodes, ['68']);
+  assert.equal(JSON.stringify({ request, response }).includes('SECRET_FIXTURE'), false);
+  assert.equal(sanitizeSourcePage(raw, { provinceKey: 'lam_dong', query: validateSourceQuery(requestFor(), 'lam_dong') }).ok, false);
+});
 
 function sourceRequest(body, { startTime = 0, url = 'https://muasamcong.mof.gov.vn/o/egp-portal-contractor-selection-v2/services/smart/search?token=SECRET_FIXTURE_QUERY' } = {}) {
   return { url: () => url, method: () => 'POST', timing: () => ({ startTime }), postDataJSON: () => body };
