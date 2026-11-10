@@ -1,0 +1,53 @@
+name: Direct Safari - source acceptance probe
+
+on:
+  push:
+    branches:
+      - codex/direct-safari-source-20261110
+    paths:
+      - cloud-direct/**
+      - .github/workflows/direct-safari-source.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: direct-source-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  source-gate:
+    name: Source UI / ${{ matrix.browser }} on Linux
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [chromium, webkit]
+    defaults:
+      run:
+        working-directory: cloud-direct
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: cloud-direct/package-lock.json
+      - name: Install locked dependencies
+        run: npm ci --ignore-scripts
+      - name: Check bounded validation logic
+        run: node --test tests/*.test.mjs
+      - name: Install browser and supported OS dependencies
+        run: npx --no-install playwright install --with-deps ${{ matrix.browser }}
+      - name: Search through normal source UI
+        run: node source-probe.mjs --browser ${{ matrix.browser }} --output artifacts/source-${{ matrix.browser }}.json
+      - name: Retain sanitized evidence
+        if: always()
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4
+        with:
+          name: source-acceptance-${{ matrix.browser }}
+          path: cloud-direct/artifacts/*.json
+          if-no-files-found: warn
+          retention-days: 7

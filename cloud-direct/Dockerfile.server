@@ -1,0 +1,12 @@
+FROM node:24-bookworm-slim
+ENV NODE_ENV=production PLAYWRIGHT_BROWSERS_PATH=/ms-playwright PORT=10000
+WORKDIR /app
+COPY cloud-direct/package.json cloud-direct/package-lock.json ./
+RUN npm ci --ignore-scripts --include=dev \
+    && npx --no-install playwright install --with-deps chromium \
+    && useradd --create-home --uid 10001 sourceworker \
+    && chmod -R a+rX /ms-playwright
+COPY cloud-direct/source-probe.mjs cloud-direct/server.mjs ./
+USER sourceworker
+EXPOSE 10000
+CMD ["node", "server.mjs"]

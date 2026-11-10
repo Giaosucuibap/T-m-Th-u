@@ -1,0 +1,28 @@
+# One-shot source-acceptance runner. This is not a web application/server.
+# Build from the repository root:
+#   docker build -f cloud-direct/Dockerfile.prototype -t egp-source-probe .
+# Prototype only: the container has not been built or production-qualified here.
+FROM node:24-bookworm-slim
+
+ENV NODE_ENV=production
+ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+ENV CI=true
+
+WORKDIR /app
+
+# The lockfile pins the actual Playwright package. Installing its own browsers
+# avoids an unverified mismatch with a prebuilt Playwright image tag.
+COPY cloud-direct/package.json cloud-direct/package-lock.json ./
+RUN npm ci --ignore-scripts --include=dev
+RUN ./node_modules/.bin/playwright install --with-deps chromium webkit
+
+COPY --chown=node:node cloud-direct/source-probe.mjs ./source-probe.mjs
+
+# The probe may write its bounded, sanitized receipt under the working directory.
+# Do not put source cookies, browser profiles, auth state or tokens in the image.
+RUN chown -R node:node /app /ms-playwright
+USER node
+
+# No EXPOSE/HTTP healthcheck: this process performs its bounded probe and exits.
+ENTRYPOINT ["node", "source-probe.mjs"]
+CMD ["--browser", "chromium", "--output", "artifacts/source-chromium.json"]
