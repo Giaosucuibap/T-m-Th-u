@@ -220,6 +220,69 @@ function isSearchRequest(request) {
   } catch { return false; }
 }
 
+/** Correlate by a new request event and validated payload, across navigation.
+ * Playwright 1.65 initializes Request.timing().startTime to 0; the Response
+ * constructor populates it later. That value cannot gate the request event.
+ */
+export function createSourceRequestGate(provinceKey, { mode = 'open', expectedPage = 0 } = {}) {
+  const eligible = new WeakSet();
+  let actionStartedAt = null;
+  const diagnostic = {
+    endpointPath: SEARCH_PATH, actionStarted: false, actionCompleted: false,
+    requestEventsBeforeAction: 0, requestEventsAfterAction: 0,
+    timingUnavailableEvents: 0, initializedTimingBeforeActionEvents: 0,
+    payloadAcceptedEvents: 0, payloadRejectedEvents: 0, payloadRejectionCodes: [],
+    responseEventsAfterAction: 0, matchedResponseEvents: 0,
+    responseStatuses: [], requestFailedEvents: 0
+  };
+  return {
+    beginAction() { actionStartedAt = Date.now(); diagnostic.actionStarted = true; },
+    completeAction() { diagnostic.actionCompleted = true; },
+    observeRequest(request) {
+      if (!isSearchRequest(request)) return;
+      if (actionStartedAt === null) { diagnostic.requestEventsBeforeAction++; return; }
+      diagnostic.requestEventsAfterAction++;
+      let startTime;
+      try { startTime = request.timing().startTime; } catch { /* Timing is diagnostic only. */ }
+      if (!Number.isFinite(startTime) || startTime <= 0) diagnostic.timingUnavailableEvents++;
+      else if (startTime < actionStartedAt) {
+        // A late event with an already-known pre-action initiation is stale.
+        diagnostic.initializedTimingBeforeActionEvents++;
+        return;
+      }
+      let query;
+      try { query = validateSourceQuery(request.postDataJSON(), provinceKey, { mode, expectedPage }); }
+      catch { query = fail('SOURCE_QUERY_SCHEMA'); }
+      if (query.ok) { eligible.add(request); diagnostic.payloadAcceptedEvents++; }
+      else {
+        diagnostic.payloadRejectedEvents++;
+        if (diagnostic.payloadRejectionCodes.length < 5 && !diagnostic.payloadRejectionCodes.includes(query.code)) diagnostic.payloadRejectionCodes.push(query.code);
+      }
+    },
+    acceptsResponse(response) { return eligible.has(response.request()); },
+    observeResponse(response) {
+      if (actionStartedAt === null || !isSearchRequest(response.request())) return;
+      diagnostic.responseEventsAfterAction++;
+      if (eligible.has(response.request())) diagnostic.matchedResponseEvents++;
+      const status = response.status();
+      if (Number.isInteger(status) && status >= 100 && status <= 599 && diagnostic.responseStatuses.length < 5) diagnostic.responseStatuses.push(status);
+    },
+    observeFailure(request) {
+      if (actionStartedAt !== null && isSearchRequest(request)) diagnostic.requestFailedEvents++;
+    },
+    snapshot() { return { ...diagnostic, payloadRejectionCodes: [...diagnostic.payloadRejectionCodes], responseStatuses: [...diagnostic.responseStatuses] }; }
+  };
+}
+
+/** Only bounded public labels for the requested province may be reported. */
+export function sanitizeProvinceOptionLabels(labels, provinceKey) {
+  const province = PROVINCES[provinceKey];
+  if (!province || !Array.isArray(labels)) return [];
+  return unique(labels.slice(0, 40).filter(value => typeof value === 'string').map(value => value.normalize('NFC').replace(/\s+/g, ' ').trim())
+    .filter(value => value.length <= 100 && /^[\p{L}\p{M}\d\s.,()/-]+$/u.test(value)
+      && value.toLocaleLowerCase('vi').includes(province.name.toLocaleLowerCase('vi')))).slice(0, 5);
+}
+
 async function visibleCount(locator) {
   try { return await locator.count(); } catch { return 0; }
 }
@@ -260,6 +323,10 @@ async function setSourceCheckbox(page, id, labelText, desired) {
   if (await input.isChecked() !== desired) {
     // The source styles its checkbox input; use its actual visible label.
     await page.locator(`label[for="${id}"]:visible`).filter({ hasText: labelText }).click();
+    // Vue can apply the label-triggered checked state on its next render.
+    // Observe the DOM state after this single click; never toggle it twice.
+    await page.waitForFunction(({ id, desired }) => document.getElementById(id)?.checked === desired,
+      { id, desired }, { timeout: 3000 }).catch(() => raise('SOURCE_CONTROL_NOT_SET'));
   }
   if (await input.isChecked() !== desired) raise('SOURCE_CONTROL_NOT_SET');
 }
@@ -289,14 +356,16 @@ async function chooseProvinceThroughUI(page, provinceKey, mode, markStep = () =>
   if (await control.count() !== 1) raise('SOURCE_SELECTOR_CHANGED');
   markStep('open_province_control');
   await control.click();
+  const option = page.locator('.ant-select-dropdown:visible .ant-select-dropdown-menu-item')
+    .filter({ hasText: label });
+  markStep('wait_province_catalog');
+  await option.waitFor();
   markStep('locate_province_search');
   const search = control.locator('input.ant-select-search__field');
   if (await search.count() !== 1) raise('SOURCE_SELECTOR_CHANGED');
   markStep('type_province_search');
   await search.fill(province.name);
   markStep('locate_province_option');
-  const option = page.locator('.ant-select-dropdown:visible .ant-select-dropdown-menu-item')
-    .filter({ hasText: label });
   await option.waitFor();
   if (await option.count() !== 1) raise('SOURCE_PROVINCE_AMBIGUOUS');
   markStep('select_province_option');
@@ -319,6 +388,8 @@ async function safeUiDiagnostics(page, provinceKey, uiStep) {
   if (!page || page.isClosed()) return { uiStep, available: false };
   const province = PROVINCES[provinceKey];
   const known = {
+    advancedEntryLinks: page.locator('.egp-hero__advbtn'),
+    visibleAdvancedEntryLinks: page.locator('.egp-hero__advbtn:visible'),
     oldLocationsCheckbox: page.locator('#is_old_locations'),
     openNoticeCheckbox: page.locator('#is_not_publish_tbmt'),
     visibleAdvancedSearchButtons: page.locator('.content__footer__btn:visible').filter({ hasText: /^Tìm kiếm$/ }),
@@ -330,6 +401,7 @@ async function safeUiDiagnostics(page, provinceKey, uiStep) {
     legacyVisibleSearchInputs: page.locator('input.ant-select-search__field:visible'),
     visibleComboboxInputs: page.locator('input[role="combobox"]:visible'),
     visibleLegacyOptions: page.locator('.ant-select-dropdown:visible .ant-select-dropdown-menu-item'),
+    visibleDisabledLegacyOptions: page.locator('.ant-select-dropdown:visible .ant-select-dropdown-menu-item-disabled'),
     visibleModernOptions: page.locator('.ant-select-dropdown:visible .ant-select-item-option'),
     provinceOptionKnownLabel: page.locator('.ant-select-dropdown:visible').getByText(province.label, { exact: true }),
     unrenderedProvinceTemplate: page.locator('a-select[placeholder="Tỉnh/ Thành phố"]'),
@@ -338,9 +410,13 @@ async function safeUiDiagnostics(page, provinceKey, uiStep) {
   };
   let timer;
   try {
-    const counts = Promise.all(Object.entries(known).map(async ([name, locator]) => [name, Math.min(1000, await locator.count())]));
-    const entries = await Promise.race([counts, new Promise(resolve => { timer = setTimeout(() => resolve(null), 1000); })]);
-    return entries ? { uiStep, available: true, counts: Object.fromEntries(entries) } : { uiStep, available: false };
+    const read = Promise.all([
+      Promise.all(Object.entries(known).map(async ([name, locator]) => [name, Math.min(1000, await locator.count())])),
+      page.locator('.ant-select-dropdown:visible .ant-select-dropdown-menu-item').filter({ hasText: province.name })
+        .allTextContents().then(labels => sanitizeProvinceOptionLabels(labels, provinceKey))
+    ]);
+    const values = await Promise.race([read, new Promise(resolve => { timer = setTimeout(() => resolve(null), 1000); })]);
+    return values ? { uiStep, available: true, counts: Object.fromEntries(values[0]), requestedProvinceOptionLabels: values[1] } : { uiStep, available: false };
   } catch { return { uiStep, available: false }; }
   finally { clearTimeout(timer); }
 }
@@ -353,33 +429,42 @@ function codeForHttp(status) {
 }
 
 async function captureUiSearch(page, action, provinceKey, mode, expectedPage, remaining) {
-  const eligibleRequests = new Set();
-  let actionStartedAt = Infinity;
-  const onRequest = request => {
-    if (isSearchRequest(request) && request.timing().startTime >= actionStartedAt) eligibleRequests.add(request);
-  };
+  const gate = createSourceRequestGate(provinceKey, { mode, expectedPage });
+  const onRequest = request => gate.observeRequest(request);
+  const onResponse = response => gate.observeResponse(response);
+  const onFailure = request => gate.observeFailure(request);
   page.on('request', onRequest);
+  page.on('response', onResponse);
+  page.on('requestfailed', onFailure);
   let response;
   try {
-    const pending = page.waitForResponse(item => eligibleRequests.has(item.request()), { timeout: Math.min(30_000, remaining()) });
+    const pending = page.waitForResponse(item => gate.acceptsResponse(item), { timeout: Math.min(30_000, remaining()) });
     // Attach a rejection handler immediately in case the click itself fails.
     pending.catch(() => {});
-    actionStartedAt = Date.now();
+    gate.beginAction();
     await action();
+    gate.completeAction();
     response = await pending;
-  } finally { page.off('request', onRequest); }
+  } catch (error) {
+    const diagnostic = gate.snapshot();
+    const code = error instanceof ProbeError ? error.code : error?.name === 'TimeoutError' ? 'SOURCE_UI_TIMEOUT' : 'PROBE_RUNTIME_ERROR';
+    raise(diagnostic.payloadAcceptedEvents === 0 && diagnostic.payloadRejectedEvents > 0
+      ? diagnostic.payloadRejectionCodes[0] : code, { search: diagnostic });
+  } finally {
+    page.off('request', onRequest); page.off('response', onResponse); page.off('requestfailed', onFailure);
+  }
   const query = validateSourceQuery(response.request().postDataJSON(), provinceKey, { mode, expectedPage });
-  if (!query.ok) raise(query.code);
-  if (!response.ok()) raise(codeForHttp(response.status()), { httpStatus: response.status() });
+  if (!query.ok) raise(query.code, { search: gate.snapshot() });
+  if (!response.ok()) raise(codeForHttp(response.status()), { httpStatus: response.status(), search: gate.snapshot() });
   const data = await response.json().catch(() => null);
   // Numeric responses trigger a source "try again" overlay. They are not a
   // list with zero records and do not prove a successful CAPTCHA validation.
-  if (typeof data === 'number') raise('SOURCE_REJECTED');
+  if (typeof data === 'number') raise('SOURCE_REJECTED', { search: gate.snapshot() });
   const safe = sanitizeSourcePage(data, { provinceKey, query });
-  if (!safe.ok) raise(safe.code, { sourceShape: describeSourceShape(data) });
+  if (!safe.ok) raise(safe.code, { sourceShape: describeSourceShape(data), search: gate.snapshot() });
   const stop = await sourceStopReason(page);
   if (stop) raise(stop);
-  return { query, data, receipt: { ...safe.receipt, httpStatus: response.status(), receivedAt: new Date().toISOString() } };
+  return { query, data, receipt: { ...safe.receipt, httpStatus: response.status(), receivedAt: new Date().toISOString(), requestCorrelation: gate.snapshot() } };
 }
 
 /** Reusable bounded browser job. Caller supplies a normal Playwright Browser. */

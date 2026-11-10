@@ -1,9 +1,67 @@
 // Controlled fixtures for pure acceptance logic. These are NOT live e-GP rows.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { PROVINCES, PROBE_VERSION, validateSourceQuery, sanitizeSourcePage, validateProbeReport, describeSourceShape } from '../source-probe.mjs';
+import { PROVINCES, PROBE_VERSION, validateSourceQuery, sanitizeSourcePage, validateProbeReport, describeSourceShape, createSourceRequestGate, sanitizeProvinceOptionLabels } from '../source-probe.mjs';
 
 const clone = value => structuredClone(value);
+
+function sourceRequest(body, { startTime = 0, url = 'https://muasamcong.mof.gov.vn/o/egp-portal-contractor-selection-v2/services/smart/search?token=SECRET_FIXTURE_QUERY' } = {}) {
+  return { url: () => url, method: () => 'POST', timing: () => ({ startTime }), postDataJSON: () => body };
+}
+const sourceResponse = (request, status = 200) => ({ request: () => request, status: () => status });
+
+test('a new source request with Playwright initial startTime zero is accepted; a pre-action request remains excluded', () => {
+  const gate = createSourceRequestGate('lam_dong');
+  const old = sourceRequest(requestFor());
+  gate.observeRequest(old);
+  gate.beginAction();
+  assert.equal(gate.acceptsResponse(sourceResponse(old)), false);
+  const delayedOld = sourceRequest(requestFor(), { startTime: 1 });
+  gate.observeRequest(delayedOld);
+  assert.equal(gate.acceptsResponse(sourceResponse(delayedOld)), false);
+  const fresh = sourceRequest(requestFor());
+  gate.observeRequest(fresh);
+  gate.completeAction();
+  const response = sourceResponse(fresh);
+  gate.observeResponse(response);
+  assert.equal(gate.acceptsResponse(response), true);
+  assert.equal(gate.acceptsResponse(sourceResponse(old)), false);
+  const diagnostic = gate.snapshot();
+  assert.equal(diagnostic.requestEventsBeforeAction, 1);
+  assert.equal(diagnostic.requestEventsAfterAction, 2);
+  assert.equal(diagnostic.timingUnavailableEvents, 1);
+  assert.equal(diagnostic.initializedTimingBeforeActionEvents, 1);
+  assert.equal(diagnostic.payloadAcceptedEvents, 1);
+  assert.equal(diagnostic.matchedResponseEvents, 1);
+  assert.deepEqual(diagnostic.responseStatuses, [200]);
+  assert.equal(JSON.stringify(diagnostic).includes('SECRET_FIXTURE'), false);
+});
+
+test('request-event correlation still rejects a wrong province, page, payload or origin without copying the request', () => {
+  const gate = createSourceRequestGate('lam_dong');
+  gate.beginAction();
+  const requests = [sourceRequest(requestFor('ha_noi')), sourceRequest(requestFor('lam_dong', { pageNumber: 1 })),
+    sourceRequest({ token: 'SECRET_FIXTURE_PAYLOAD' }),
+    sourceRequest(requestFor(), { url: 'https://example.invalid/o/egp-portal-contractor-selection-v2/services/smart/search?token=SECRET_FIXTURE_OTHER' })];
+  for (const request of requests) {
+    gate.observeRequest(request);
+    assert.equal(gate.acceptsResponse(sourceResponse(request)), false);
+  }
+  const diagnostic = gate.snapshot();
+  assert.equal(diagnostic.payloadAcceptedEvents, 0);
+  assert.equal(diagnostic.payloadRejectedEvents, 3);
+  assert.deepEqual(diagnostic.payloadRejectionCodes, ['SOURCE_PROVINCE_MISMATCH', 'SOURCE_PAGE_MISMATCH', 'SOURCE_QUERY_SCHEMA']);
+  assert.equal(JSON.stringify(diagnostic).includes('SECRET_FIXTURE'), false);
+  assert.equal(JSON.stringify(diagnostic).includes('example.invalid'), false);
+});
+
+test('province option diagnostics contain only bounded public labels for the requested province', () => {
+  const labels = ['\n Tỉnh Lâm Đồng\n ', 'Thành phố Hà Nội', 'Tỉnh Lâm Đồng (mới)',
+    'Tỉnh Lâm Đồng https://example.invalid/?token=SECRET_FIXTURE', 'Không có dữ liệu', 'Tỉnh Lâm Đồng'];
+  assert.deepEqual(sanitizeProvinceOptionLabels(labels, 'lam_dong'), ['Tỉnh Lâm Đồng', 'Tỉnh Lâm Đồng (mới)']);
+  assert.deepEqual(sanitizeProvinceOptionLabels(labels, 'unknown'), []);
+  assert.deepEqual(sanitizeProvinceOptionLabels(null, 'lam_dong'), []);
+});
 function requestFor(key = 'lam_dong', { mode = 'open', pageNumber = 0, pageSize = 10 } = {}) {
   const filters = [
     { fieldName: 'type', searchType: 'in', fieldValues: ['es-notify-contractor'] },
