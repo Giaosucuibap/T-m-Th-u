@@ -521,6 +521,9 @@ html[data-touch] .result-card:not(.open) .result-side,html[data-touch] .result-c
 /* Biểu tượng nét trong bốn dòng thông tin của thẻ Kho gói (thay emoji). */
 .result-meta>div{display:flex;align-items:flex-start;gap:7px}
 .result-meta .ico{flex:none;margin-top:3px;color:var(--subtle)}
+/* Ba dòng chủ đầu tư / địa điểm / dự án của thẻ Kế hoạch: cùng bộ biểu tượng nét (trước là emoji 🏛 📍 📁). */
+.plan-line{display:flex;align-items:flex-start;gap:6px}
+.plan-line .ico{flex:none;margin-top:4px;color:var(--subtle)}
 /* Màn cảm ứng: liên kết tên gói trong các danh sách mới đủ cao cho ngón tay. */
 html[data-touch] .watch-event-title a,html[data-touch] .forecast-history li a{display:inline-block;padding:12px 0}
 html[data-touch] .forecast-history summary,html[data-touch] .brief-prompt>summary,html[data-touch] .brief-redo>summary{min-height:44px;display:flex;align-items:center;cursor:pointer}

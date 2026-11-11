@@ -262,7 +262,8 @@ Các lỗi này do chính bộ kiểm thử mới và lượt soát ảnh chụp
     chắn bằng cách làm chậm câu trả lời 0,6 giây (mã cũ hỏng 2/2, mã mới đạt 14/14); nay danh sách được vẽ xong
     rồi dòng báo mới hiện, trong cùng một nhịp, và bài kiểm ghi lại số tin có trong danh sách đúng lúc dòng báo
     đổi (phép này không phụ thuộc máy nhanh hay chậm). Sau đó em chạy **cả 19 kịch bản ở chế độ "mọi lượt đọc chậm thêm
-    0,35 giây"** để tìm lỗi cùng loại ở chỗ khác: 80/80, không còn chỗ nào.
+    0,35 giây"** để tìm lỗi cùng loại ở chỗ khác: 80/80, không còn chỗ nào; rồi năm kịch bản mới nhất với **mọi
+    lệnh** (cả đọc lẫn ghi) chậm thêm 0,25 giây: 39/39.
 
 Mười hai lỗi trên đã sửa và có phép kiểm giữ lại.
 
@@ -292,7 +293,7 @@ muasamcong thật hay không — em không có cách thử; nếu có thì biể
 | Tiêu chí | 4.21.0 | 4.22.0 | Vì sao chưa phải 10 |
 |---|---|---|---|
 | Tính năng | 8,5 | **9,5** | Thiếu AI gọi thẳng, hợp đồng sắp hết hạn |
-| Giao diện | 8,5 | **9** | Trang Kế hoạch còn vài emoji; các trang phân tích đời cũ chưa làm lại bố cục |
+| Giao diện | 8,5 | **9** | Các trang phân tích đời cũ chưa làm lại bố cục; vài nhãn trạng thái trên các trang đó còn dùng emoji (đổi màu khi bật giao diện tối) |
 | Hợp với màn cảm ứng | 5,5 | **9,5** | Mọi số đo đạt; nhưng **chưa có ngón tay thật** chạm vào |
 | Vận hành trên iPad | 5,5 | **7** | Vẫn không chạy nền, không có thông báo của iPad, phải chạm dấu trang mỗi lần mở |
 | Bảo mật và an toàn dữ liệu | 6 | **7,5** | Có kênh ổn định và sao lưu; dữ liệu vẫn chung nguồn với trang e-GP, mã vẫn tải từ GitHub |

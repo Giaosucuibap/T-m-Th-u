@@ -8,6 +8,7 @@ import { hardFilterReason } from '../GiaoSuCuiBap/lib/hard-filter.js';
 import { safeSource } from '../GiaoSuCuiBap/lib/workspace.js';
 import { formatDate, formatMoney } from '../GiaoSuCuiBap/lib/core.js';
 import { TENDER_CATEGORIES, normalizeCategory, categoryLabel } from '../GiaoSuCuiBap/lib/tender-categories.js';
+import { icon } from '../GiaoSuCuiBap/lib/icons.js';
 
 test('Approval order defeats late publication and puts undated plans after every dated plan', () => {
   const rows = [
@@ -66,7 +67,7 @@ function harness() {
   };
   const context = vm.createContext({ document: { getElementById: node }, console, URLSearchParams,
     Date, Intl, location: { search: '' }, initInvestorInput() {}, readInvestorInput: () => ({ ok: true }),
-    coverageText, hardFilterReason, safeSource, formatDate, formatMoney, TENDER_CATEGORIES, normalizeCategory, categoryLabel,
+    coverageText, hardFilterReason, safeSource, formatDate, formatMoney, icon, TENDER_CATEGORIES, normalizeCategory, categoryLabel,
     dedupeKhlcnt, summarizeKhlcnt, khlcntDateRange,
     createWardPicker: () => ({ load: async () => {}, clear() {}, read: () => ({ ward: '' }), set() {} }),
     setInterval: fn => { const id = ++nextTimer; intervals.set(id, fn); return id; }, clearInterval: id => intervals.delete(id),

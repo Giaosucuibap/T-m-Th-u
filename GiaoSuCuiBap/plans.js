@@ -10,6 +10,7 @@ import { coverageText } from './lib/match-gate.js';
 import { hardFilterReason } from './lib/hard-filter.js';
 import { safeSource } from './lib/workspace.js';
 import { formatMoney, formatDate } from './lib/core.js';
+import { icon } from './lib/icons.js';
 import { TENDER_CATEGORIES, normalizeCategory, categoryLabel } from './lib/tender-categories.js';
 import { createWardPicker } from './ward-picker.js';
 import { dedupeKhlcnt, summarizeKhlcnt, khlcntDateRange } from './lib/khlcnt.js';
@@ -249,11 +250,9 @@ function planCard(p) {
           ${p.planTypeLabel ? ` · ${esc(p.planTypeLabel)}` : ''}
           ${p.fields?.length ? ` · ${esc(p.fields.join(', '))}` : ''}
         </div>
-        <div class="muted small" style="margin-top:3px">
-          🏛 ${esc(p.investorName || '—')}${p.investorCode ? ` (${esc(p.investorCode)})` : ''}
-        </div>
-        <div class="muted small">📍 ${esc(p.location || '—')}</div>
-        ${p.projectName ? `<div class="muted small">📁 Dự án: ${esc(p.projectName)}</div>` : ''}
+        <div class="muted small plan-line" style="margin-top:3px">${icon('building', 14)}<span>${esc(p.investorName || '—')}${p.investorCode ? ` (${esc(p.investorCode)})` : ''}</span></div>
+        <div class="muted small plan-line">${icon('pin', 14)}<span>${esc(p.location || '—')}</span></div>
+        ${p.projectName ? `<div class="muted small plan-line">${icon('archive', 14)}<span>Dự án: ${esc(p.projectName)}</span></div>` : ''}
         <div class="muted small" style="margin-top:3px">
           ${packageSummary}
           ${p.investTotal ? ` · TMĐT ${esc(formatMoney(p.investTotal))}` : ''}

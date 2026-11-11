@@ -10,6 +10,7 @@ import {hardFilterReason} from '../GiaoSuCuiBap/lib/hard-filter.js';
 import {safeSource} from '../GiaoSuCuiBap/lib/workspace.js';
 import {formatMoney,formatDate} from '../GiaoSuCuiBap/lib/core.js';
 import {TENDER_CATEGORIES,normalizeCategory,categoryLabel} from '../GiaoSuCuiBap/lib/tender-categories.js';
+import {icon} from '../GiaoSuCuiBap/lib/icons.js';
 import {workbookSheetXml} from './fixtures/multi-investor-export-414.mjs';
 
 const range={from:Date.parse('2026-07-07T05:00:00Z'),to:Date.parse('2026-10-05T05:00:00Z')};
@@ -28,7 +29,7 @@ function ui(lookup){
     if(!nodes.has(id)){const hidden=new Set();nodes.set(id,{value:id==='period'?'90':'',checked:false,disabled:false,textContent:'',innerHTML:'',className:'',classList:{toggle:(key,on)=>on?hidden.add(key):hidden.delete(key),contains:key=>hidden.has(key)},addEventListener(){},checkValidity:()=>true,reportValidity(){}});}
     return nodes.get(id);
   };
-  const context=vm.createContext({document:{getElementById:node},console,URLSearchParams,Date,Intl,location:{search:''},initInvestorInput(){},readInvestorInput:()=>({ok:true}),
+  const context=vm.createContext({document:{getElementById:node},console,URLSearchParams,Date,Intl,location:{search:''},initInvestorInput(){},readInvestorInput:()=>({ok:true}),icon,
     coverageText,hardFilterReason,safeSource,formatDate,formatMoney,TENDER_CATEGORIES,normalizeCategory,categoryLabel,dedupeKhlcnt,summarizeKhlcnt,khlcntDateRange,
     createWardPicker:()=>({load:async()=>{},clear(){},read:()=>({ward:''}),set(){}}),setInterval:()=>1,clearInterval(){},
     chrome:{runtime:{sendMessage:async message=>message.type==='GET_PLAN_STATE'?{ok:true,lookup:structuredClone(lookup),revision:'frozen-view'}:message.type==='AREA_OPTIONS'?{ok:true,provinces:[]}:{ok:true}}}});

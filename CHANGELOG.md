@@ -31,6 +31,7 @@ làm: `BAO-CAO-THAM-DINH-SAFARI.md`, mục "Thẩm định lại sau 4.22.0".
   máy thức (Wake Lock), phiên bản.
 - Ẩn mục chỉ dùng được trên máy tính (Link điện thoại, cầu nối Windows, nút E-HSMT), đổi câu chữ viết cho
   Chrome, bỏ gợi ý phím tắt.
+- Thẻ Kho gói và thẻ Kế hoạch dùng bộ biểu tượng nét thay emoji (emoji đổi màu lạ khi bật giao diện tối).
 
 ### Tính năng mới (Chrome và Safari)
 - **Tìm bằng câu thường** (`lib/nl-query.js`): câu nói → từ khoá, giá, tỉnh, loại gói, chủ đầu tư, hạn đóng
@@ -61,7 +62,8 @@ tài khoản Apple Developer); báo hợp đồng sắp hết hạn (không có 
   Safari mới hơn. Soát tĩnh — không thay được việc chạy trên máy 16.4 thật.
 - `tests/link-dien-thoai-422.test.mjs` chạy đúng `phone.js` trong trang giả: gõ sai mã ghép nối, năm nhịp làm
   mới, dòng báo lỗi còn nguyên. `tools/test/phone-relay.mjs` 9/9, `phone-link.mjs` 7/7.
-- Chạy cả 19 kịch bản Safari ở chế độ "mọi lượt đọc chậm thêm 0,35 giây" (tìm lỗi thứ tự hiển thị): 80/80.
+- Chạy cả 19 kịch bản Safari ở chế độ "mọi lượt đọc chậm thêm 0,35 giây" (tìm lỗi thứ tự hiển thị): 80/80; năm
+  kịch bản mới nhất với mọi lệnh chậm thêm 0,25 giây: 39/39.
 - `tools/test/ui-shots.mjs`: lỗi "Target crashed" lúc nạp dữ liệu là trình duyệt thử nghiệm tự sập ở một tab
   e-GP giả lập (SEGV; 8/24 vòng với 4.22.0, 5/24 với 4.21.0), không phải trang của tiện ích. Kịch bản bỏ qua
   đúng lỗi đó, đếm và ghi vào `bao-cao.json`; trang đang chụp mà sập thì vẫn hỏng như thường.
