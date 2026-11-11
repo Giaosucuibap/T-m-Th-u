@@ -114,10 +114,24 @@ try {
     await ext.waitForSelector('#pl-qr-card:not(.hidden)');
     assert.equal(await ext.isVisible('#pl-steps-direct'), true, 'chưa ghép: hướng dẫn link trực tiếp');
     assert.equal(await ext.isVisible('#pl-steps-relay'), false, 'chưa ghép: chưa hướng dẫn cài biểu tượng');
+    /* Tab "Bắt đầu sử dụng" tiện ích tự mở đã đẩy tab này ra sau: ở tab bị che Chromium chỉ cho chạy khoảng một
+       khung hình mỗi giây, nên mỗi lần Playwright chờ nút "đứng yên" mất ~2 giây (đo: một cú bấm 7,9 giây) và
+       thời điểm bấm bị khoá pha với nhịp làm mới 2 giây của trang. Đưa tab ra trước rồi mới thao tác. */
+    await ext.bringToFront();
     await ext.fill('#pl-relay-url', relay.url);
     await ext.fill('#pl-relay-code', 'AAAA-AAAA');
     await ext.click('#pl-relay-pair');
-    await ext.getByText(/Mã ghép nối không đúng/).waitFor({ timeout: 10000 });
+    const pairStatus = () => ext.textContent('#pl-relay-status').catch(() => '(không đọc được)');
+    await ext.getByText(/Mã ghép nối không đúng/).waitFor({ timeout: 10000 })
+      .catch(async (e) => { throw new Error(`${e.message}\n  dòng trạng thái ghép nối lúc hết hạn: ${JSON.stringify(await pairStatus())}`); });
+    /* 4.22.0 — lỗi thật bắt được trên CI: trang tự làm mới 2 giây một lần và nhịp làm mới GHI ĐÈ dòng báo lỗi
+       (đo: hiện 1,78 giây rồi mất; trên CI có lượt mất trước khi kịp nhìn thấy). Dòng báo lỗi phải CÒN ĐÓ sau
+       hơn một nhịp làm mới, và nút phải bấm lại được. */
+    await ext.waitForTimeout(2600);
+    assert.match(await pairStatus(), /Mã ghép nối không đúng/, 'lỗi ghép nối còn hiện sau một nhịp làm mới của trang');
+    assert.equal(await ext.getAttribute('#pl-relay-status', 'class'), 'notice error');
+    assert.equal(await ext.isEnabled('#pl-relay-pair'), true);
+    assert.equal(await ext.textContent('#pl-relay-pair'), 'Ghép nối');
     await ext.fill('#pl-relay-code', '7kq2-m9xd');
     await ext.click('#pl-relay-pair');
     const s = await until(async () => { const x = await send('PHONE_LINK_STATE'); return x?.relay?.current ? x : null; }, 20000, 'đăng ký đường hầm với địa chỉ cố định');
