@@ -2,6 +2,62 @@
 
 Tài liệu này ghi lại các thay đổi quan trọng của Giáo Sư Cùi Bắp. Cấu trúc tham khảo [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) và phiên bản tuân theo cách đánh số ngữ nghĩa ở mức sản phẩm.
 
+## [4.22.0] — 2026-11-11
+
+**Bản Safari thành phần mềm của iPad thật sự, và tám tính năng mới không cần máy chủ.** Làm theo bản thẩm định
+ngày 11/11/2026 (9 nhược điểm, 10 tính năng đề xuất). Hướng dẫn: `HUONG-DAN-4.22.0.md`. Thẩm định lại sau khi
+làm: `BAO-CAO-THAM-DINH-SAFARI.md`, mục "Thẩm định lại sau 4.22.0".
+
+### Sửa lỗi
+- **Thao tác lùi của Safari làm trắng màn hình.** Mỗi lần đổi màn hình, lớp vỏ thêm một mục vào lịch sử của tab
+  (27 lần đổi: 4 → 31 mục); lùi một bước thì khung giao diện về `about:blank`. Nay khung dùng
+  `location.replace`, và thao tác lùi được bắt thành "về màn hình trước của Cùi Bắp".
+- **Link điện thoại (Chrome trên máy tính): lỗi ghép địa chỉ cố định hiện rồi tự mất.** Trang tự làm mới 2 giây
+  một lần và nhịp làm mới ghi đè dòng "Mã ghép nối không đúng" (đo: hiện 1,78 giây; có lượt mất gần như ngay).
+  Lỗi có từ 4.21.0, bộ kiểm thử trên GitHub bắt được. Nay dòng báo lỗi giữ tới lần bấm "Ghép nối" kế tiếp; các
+  dòng trạng thái chỉ ghi lại khi nội dung đổi (trình đọc màn hình không bị đọc lặp).
+
+### Bản Safari
+- **Phát hành an toàn**: `safari/dist/cuibap.js` là bản ỔN ĐỊNH, chỉ đổi bằng `node safari/build.mjs
+  --phat-hanh`. Có bản mới thì **hỏi trước**; "Để sau" 3 ngày; quay về bản trước và ghim; lần mở dở dang thì
+  hỏi thử lại hay dùng bản kia; tuỳ chọn tự cập nhật.
+- **Màn cảm ứng**: mọi chỗ bấm từ 44 px; thẻ gói thu gọn (iPad 521 → 360 px, iPhone 842 → 470 px), 20 gói một
+  trang, nút "Chi tiết"; giờ đóng thầu ghi trên thẻ; chú thích rê chuột thành chạm để mở. Mọi kiểu nằm sau
+  `html[data-touch]` nên giao diện máy tính không đổi.
+- **Tuỳ chọn**: cỡ hiển thị A−/A+ (90–145%), giao diện tối (đảo màu trên khung + bảng màu tối tính ngược), giữ
+  máy thức (Wake Lock), phiên bản.
+- Ẩn mục chỉ dùng được trên máy tính (Link điện thoại, cầu nối Windows, nút E-HSMT), đổi câu chữ viết cho
+  Chrome, bỏ gợi ý phím tắt.
+
+### Tính năng mới (Chrome và Safari)
+- **Tìm bằng câu thường** (`lib/nl-query.js`): câu nói → từ khoá, giá, tỉnh, loại gói, chủ đầu tư, hạn đóng
+  thầu. Làm bằng luật, không AI; chỉ điền tiêu chí, người dùng bấm mới tìm.
+- **Sao lưu tự động lên Telegram** (`lib/telegram-backup.js`, `lib/runtime-backup.js`): mỗi ngày một tệp an
+  toàn (không token); dữ liệu không đổi thì không gửi; nhập lại được cả `.json` và `.json.gz`.
+- **Theo dõi đối thủ** (`lib/rival-watch.js`, `lib/runtime-rivals.js`): danh sách mã số thuế; báo gói mới dự /
+  mới trúng; tra e-GP có hạn mức (mỗi đối thủ một lần/ngày, mỗi lượt 5), dừng khi bận, khi khoá, khi e-GP đổi
+  cấu trúc.
+- **Gói lặp lại hằng năm** (`lib/recurring.js`, `forecast.html`): cùng chủ đầu tư, tên chỉ khác năm; kỳ dự kiến
+  suy từ các năm trước.
+- **Hồ sơ quyết định** (`brief.html`): thông tin gói; **cạnh tranh theo lịch sử** (`lib/competition.js` — dưới 5
+  mẫu không đưa trung vị, không gọi là xác suất); **đọc E-HSMT bằng AI qua cầu nối không cần khoá API**
+  (`lib/hsmt-ai.js`: soạn câu lệnh, đọc câu trả lời JSON, bảng đối chiếu với năng lực công ty kèm câu trích).
+- **In / Lưu PDF** (`lib/print.js`): Chrome mở hộp thoại in; bản Safari mở bản chụp đứng riêng ở tab mới.
+- **Nhóm chat của phòng**: tin nghiệp vụ gửi thêm vào một nhóm Telegram; tin riêng tư thì không.
+- **Năng lực công ty** thêm mã số thuế, doanh thu bình quân, nguồn lực tài chính.
+
+### Chưa làm (thiếu điều kiện, ghi rõ trong hướng dẫn)
+AI gọi thẳng trong phần mềm (cần khoá API trả phí); email tự động, nhiều tài khoản, app màn hình chính có đồng
+bộ (cần máy chủ / token Cloudflare); chạy nền và thông báo của iPad (cần tiện ích Safari chính thức: máy Mac +
+tài khoản Apple Developer); báo hợp đồng sắp hết hạn (không có dữ liệu thời hạn).
+
+### Kiểm thử
+- `npm test`: 941 bài đạt, 12 bài chỉ chạy trên Windows (thêm 7 tệp `*-422.test.mjs`).
+- `tools/test/safari-app.mjs`: 19 kịch bản, 80 phép kiểm trong WebKit 2.52.6 ở cỡ iPad và iPhone, e-GP giả
+  lập — thêm: thao tác lùi; nâng cấp từ đúng bản 4.21.0 đang phát hành; tuỳ chọn; màn cảm ứng; các tính năng
+  mới (kể cả gửi tệp sao lưu rồi nhập lại chính tệp đó, và nội dung bản in).
+- Chưa kiểm được trên iPad thật và muasamcong thật: xem mục F của hướng dẫn.
+
 ## [4.21.0 · bản Safari] — 2026-11-10
 
 **Giáo Sư Cùi Bắp chạy thẳng trên Safari của iPad / iPhone — không cần máy tính, không quét mã, không cài app.**

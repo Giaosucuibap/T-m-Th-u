@@ -1,7 +1,9 @@
 # Cùi Bắp chạy thẳng trên Safari của iPad / iPhone — không cần máy tính
 
-**Điểm mới.** Toàn bộ phần mềm Giáo Sư Cùi Bắp (đủ 23 màn hình: Tìm gói thầu, Kế hoạch LCNT, Mở thầu, Nhà
-thầu trúng thầu, Kho gói đã lưu, Bộ săn, Phân tích, Cấu hình…) chạy **ngay trong Safari** trên iPad và iPhone.
+**Điểm mới.** Toàn bộ phần mềm Giáo Sư Cùi Bắp (đủ 25 màn hình: Tìm gói thầu, Kế hoạch LCNT, Mở thầu, Nhà
+thầu trúng thầu, Kho gói đã lưu, Hồ sơ quyết định, Bộ săn, Phân tích, Cấu hình…) chạy **ngay trong Safari** trên
+iPad và iPhone. Từ **4.22.0** giao diện được làm lại cho ngón tay và có thêm tám tính năng — xem
+`HUONG-DAN-4.22.0.md`.
 
 - Không cần máy tính công ty đang bật. Không quét mã QR. Không cài thêm app nào.
 - Dữ liệu vẫn do **chính trang muasamcong** trả về cho máy của anh, đúng cơ chế của tiện ích trên Chrome —
@@ -12,12 +14,14 @@ thầu trúng thầu, Kho gói đã lưu, Bộ săn, Phân tích, Cấu hình…
 Safari trên iPad ── tab muasamcong.mof.gov.vn ── chạm dấu trang "Cùi Bắp" ──▶ phần mềm hiện ra ngay trong tab đó
 ```
 
-> **Nói thẳng trước khi anh cài.** Bản này **chưa chạy thử trên iPad thật**, và **chưa thử với trang
-> muasamcong thật** — môi trường làm việc của em không vào được muasamcong (trang chặn địa chỉ nước ngoài) và
-> em không có iPad. Em đã thử kỹ bằng **nhân của Safari (WebKit)** ở đúng cỡ màn hình iPad và iPhone với một
-> trang muasamcong giả lập: 14 kịch bản, 41 phép kiểm, đạt hết (chi tiết ở `BAO-CAO-THAM-DINH-SAFARI.md`).
-> Lần chạy đầu tiên trên iPad của anh chính là lần kiểm chứng thật đầu tiên — mục **F** chỉ cách kiểm trong
-> 2 phút và gửi lại cho em nếu có gì không ổn.
+> **Tình trạng kiểm chứng (11/11/2026).** Anh đã xác nhận bản 4.21.0 **chạy được trên iPad của anh** và giao
+> diện dễ dùng. Về phần em: em **chưa chạy thử trên iPad thật** và **chưa thử với trang muasamcong thật** — môi
+> trường làm việc của em không vào được muasamcong (trang chặn địa chỉ nước ngoài) và em không có iPad. Em cũng
+> chưa nhận được bảng Chẩn đoán từ máy anh, nên **chưa có số đo** tốc độ thật và chưa biết máy đang chạy chế độ
+> đầy đủ hay hạn chế. Phần em tự kiểm được là trong **nhân của Safari (WebKit)** ở đúng cỡ màn hình iPad và
+> iPhone với trang muasamcong giả lập: 19 kịch bản, 80 phép kiểm, đạt hết (chi tiết ở
+> `BAO-CAO-THAM-DINH-SAFARI.md`). **Các phần mới của 4.22.0 vì vậy chưa được kiểm trên thiết bị thật** — mục **F**
+> chỉ cách kiểm trong 2 phút và gửi lại cho em nếu có gì không ổn.
 
 ## A. Cài một lần (khoảng 3 phút)
 
@@ -73,46 +77,60 @@ trang mở xong rồi **chạm lại** dấu trang.
 
 | Nút | Để làm gì |
 |---|---|
-| **◀** | Quay lại màn hình trước của Cùi Bắp. |
-| Ô trạng thái | **Đã nối e-GP** (xanh) là sẵn sàng. Vàng: đang mở trang e-GP. Cam: có ghi chú lỗi — bấm Chẩn đoán. |
-| **Chuông + số** | Các thông báo của phần mềm (nhắc hạn bảo đảm dự thầu, gói mới…). Trên Chrome chúng là thông báo của Windows; ở đây gom vào một chỗ để không che màn hình. |
-| **Trang e-GP** | Xem tận mắt trang muasamcong thật mà phần mềm đang điều khiển. Chỉ để xem. (iPhone: nút này nằm trong bảng Chẩn đoán.) |
-| **Chẩn đoán** | Bảng tình trạng kỹ thuật. Có nút **Chép chẩn đoán** để gửi cho em khi cần. |
+| **‹** | Quay lại màn hình trước của Cùi Bắp. **Vuốt từ mép trái** hoặc nút ‹ của Safari cũng làm đúng việc này (từ 4.22.0). |
+| Ô trạng thái | **Đã nối e-GP** (xanh) là sẵn sàng. Vàng: đang mở trang e-GP. Cam: có ghi chú lỗi. Chạm vào ô này để mở Chẩn đoán. |
+| **Chuông + số** | Các thông báo của phần mềm (nhắc hạn bảo đảm dự thầu, gói mới, động thái đối thủ…). Trên Chrome chúng là thông báo của Windows; ở đây gom vào một chỗ để không che màn hình. |
+| **Tuỳ chọn** | Cỡ hiển thị A−/A+, giao diện Sáng/Tối, giữ máy thức, xem trang e-GP đang điều khiển, phiên bản (cập nhật, quay về bản trước). |
+| **Chẩn đoán** | Bảng tình trạng kỹ thuật. Có nút **Chép chẩn đoán** để gửi cho em khi cần. (iPhone: nằm trong Tuỳ chọn.) |
 | **Ẩn** | Tạm ẩn Cùi Bắp để dùng trang muasamcong như thường. Chạm lại dấu trang để hiện lại — không phải nạp lại. |
 
 Bấm vào **tên gói thầu** thì Safari mở trang gói đó trên e-GP ở **tab mới**; đóng tab đó là về lại Cùi Bắp.
+Trên thẻ gói, bấm **Chi tiết** để mở đủ thông tin; chạm vào **điểm phù hợp** hay một nhãn để đọc chú thích ở
+đáy màn hình.
 
 ## C. Cái gì dùng được, cái gì không
 
 | Việc | Trên Safari |
 |---|---|
-| Tìm gói thầu, lọc, chấm điểm, so sánh, lưu gói, ghi chú | **Có**, như trên Chrome. |
+| Tìm gói thầu (cả **tìm bằng câu thường**), lọc, chấm điểm, so sánh, lưu gói, ghi chú | **Có**, như trên Chrome. |
 | Kế hoạch lựa chọn nhà thầu, Nhà thầu trúng thầu, Mở thầu · chờ kết quả (đọc biên bản) | **Có.** |
-| Kho gói đã lưu, Checklist hồ sơ, Phân tích thị trường, Năng lực công ty, Cấu hình | **Có.** |
+| Kho gói đã lưu, **Hồ sơ quyết định**, Checklist hồ sơ, Phân tích thị trường, **Theo dõi đối thủ**, **Gói lặp lại hằng năm**, Năng lực công ty, Cấu hình | **Có.** |
+| **Đọc E-HSMT bằng AI** và bảng đối chiếu năng lực | **Có** — anh dùng ChatGPT / Gemini của anh, phần mềm soạn câu lệnh và lập bảng (hướng dẫn 4.22.0, mục C6). |
+| **In / Lưu PDF** | **Có** — bản in mở ở tab mới, in hoặc lưu PDF bằng nút Chia sẻ của Safari. |
 | Xuất CSV / Excel, sao lưu dữ liệu | **Có.** Safari hỏi thì chọn Tải về; tệp nằm trong app **Tệp › Tải về**. |
-| Gửi Telegram (gửi thử, bản tin, cảnh báo) | **Có**, nhưng chỉ khi Cùi Bắp đang mở (xem dòng dưới). |
-| Bộ săn tự động, quét theo lịch, bản tin 7 giờ sáng | **Chỉ chạy khi tab muasamcong đang mở và Cùi Bắp đang bật.** iPad khoá màn hình hoặc anh đóng tab thì dừng; lượt lỡ chạy bù khi anh mở lại. Muốn chạy 24/7 vẫn phải dùng máy tính (trạm săn 4.19.0). |
-| Thông báo đẩy của hệ điều hành | **Không.** Thay bằng chuông trên thanh của Cùi Bắp. |
-| **Tải E-HSMT** bằng một nút | **Không** — nút này cần phần mềm cầu nối chạy trên máy tính Windows. Trên iPad: bấm tên gói để mở trang e-GP rồi tải hồ sơ bằng tay. |
-| Link điện thoại (4.20.0 / 4.21.0) | **Không cần nữa** trên máy này — đó là cách cho iPhone mượn máy tính. |
+| Gửi Telegram (gửi thử, bản tin, cảnh báo, **tệp sao lưu hằng ngày**) | **Có**, nhưng chỉ khi Cùi Bắp đang mở (xem dòng dưới). |
+| Bộ săn tự động, quét theo lịch, bản tin 7 giờ sáng, tự kiểm tra đối thủ | **Chỉ chạy khi tab muasamcong đang mở và Cùi Bắp đang bật.** iPad khoá màn hình hoặc anh đóng tab thì dừng; lượt lỡ chạy bù khi anh mở lại. Bật **Tuỳ chọn → Giữ máy thức** và cắm sạc nếu muốn để máy chạy lâu. Muốn chạy 24/7 thật sự thì vẫn cần máy tính công ty. |
+| Thông báo đẩy của hệ điều hành | **Không.** Thay bằng chuông trên thanh của Cùi Bắp và tin Telegram. |
+| **Tải E-HSMT** bằng một nút | **Không** — nút này cần phần mềm cầu nối chạy trên máy tính Windows. Trên iPad: bấm **Xem e-GP** để mở trang gói rồi tải hồ sơ bằng tay. |
+| Link điện thoại (4.20.0 / 4.21.0) | **Không cần nữa** trên máy này — đó là cách cho iPhone mượn máy tính. Mục này đã ẩn. |
 
 ## D. Dữ liệu của anh nằm ở đâu
 
 - Trong **bộ nhớ của Safari trên chính máy này** (IndexedDB của trang muasamcong). Không gửi lên máy chủ nào.
-- iPad và máy tính **không tự đồng bộ** với nhau. Muốn chuyển dữ liệu: **Cấu hình → Sao lưu** ở máy này, rồi
-  khôi phục ở máy kia.
+- iPad và máy tính **không tự đồng bộ** với nhau. Muốn chuyển dữ liệu: sao lưu ở máy này rồi khôi phục ở máy
+  kia.
+- **Nên bật sao lưu tự động lên Telegram** (Cấu hình → Telegram → "Sao lưu tự động", từ 4.22.0): mỗi ngày phần
+  mềm gửi một tệp vào chính chat Telegram của anh. Mất dữ liệu thì lưu tệp đó về máy và bấm **Nhập backup**.
 - **Safari tự dọn dữ liệu của trang web mà lâu ngày anh không mở.** Theo tài liệu của Apple, mốc là 7 ngày
-  không dùng trang; em **không chắc** Safari trên máy anh áp dụng chính xác thế nào. Vì vậy: tuần nào cũng dùng
-  thì yên tâm; còn trước khi đi công tác dài ngày, hãy **Sao lưu** một lần.
+  không dùng trang; em **không chắc** Safari trên máy anh áp dụng chính xác thế nào. Phần mềm đã xin Safari
+  "lưu bền" (kết quả ghi trong bảng Chẩn đoán), nhưng Safari có quyền từ chối. Sao lưu Telegram là lớp bảo vệ
+  chắc chắn hơn.
 - **Duyệt riêng tư**: dữ liệu mất khi đóng tab. Phần mềm sẽ báo "Dữ liệu chưa lưu được xuống máy".
 - **Mỗi lúc chỉ một tab.** Mở Cùi Bắp ở tab thứ hai thì tab trước tự dừng và báo rõ — để hai tab không ghi đè
   dữ liệu của nhau.
 
 ## E. Cập nhật
 
-Không phải làm gì. Mỗi lần anh chạm dấu trang, nó tải **bản mới nhất** từ kho GitHub của anh
-(`Giaosucuibap/T-m-Th-u`). Mất mạng tới GitHub thì nó chạy **bản đã lưu sẵn trên máy** từ lần trước và báo
-"Đang dùng bản lưu sẵn". Mã dấu trang ở Bước 1 không phải cài lại khi có bản mới.
+Anh **không phải cài lại dấu trang**. Từ 4.22.0, bản mới **chỉ thay khi anh đồng ý**:
+
+- Có bản mới thì lần chạm dấu trang kế tiếp hiện hộp **"Có bản mới"** kèm vài dòng ghi chú. Bấm **Cập nhật
+  ngay**, hoặc **Để sau** (bản đang dùng chạy tiếp; 3 ngày sau mới hỏi lại).
+- **Tuỳ chọn → Phiên bản**: xem bản đang dùng, **quay về bản trước**, hoặc bật "tự cập nhật, không hỏi".
+- Nếu một lần mở bị dở dang, lần chạm sau phần mềm tự hỏi "thử lại hay dùng bản trước".
+- Mất mạng tới GitHub thì nó chạy **bản đã lưu sẵn trên máy** và báo "Đang dùng bản lưu sẵn".
+
+Em chỉ đưa một bản lên kênh này sau khi nó qua toàn bộ kiểm thử; mã đang làm dở không còn tự vào máy anh như
+trước.
 
 ## F. Lần chạy đầu tiên — kiểm trong 2 phút
 

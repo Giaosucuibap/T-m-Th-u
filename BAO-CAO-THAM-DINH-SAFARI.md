@@ -2,6 +2,10 @@
 
 Ngày 10/11/2026 · dựng từ tiện ích 4.21.0 · mã nguồn `safari/` · hướng dẫn dùng: `HUONG-DAN-SAFARI-IPAD.md`
 
+> **Cập nhật 11/11/2026 — bản 4.22.0.** Mục 1 đến 8 là bản thẩm định đầu tiên (4.21.0), giữ nguyên để đối
+> chiếu. Phần làm theo bản thẩm định đó, số đo trước/sau, lỗi tự tìm ra ở vòng hai và điểm chấm lại nằm ở
+> **mục 9**.
+
 > **Về "tổ thẩm định".** Anh yêu cầu em đóng vai một tổ chuyên gia xét duyệt lại phần mềm. Em đã làm đúng việc
 > của một tổ như vậy — soát lại kiến trúc, đọc lại từng tệp, dựng thêm tình huống xấu, đo bằng nhân Safari —
 > và tìm ra 14 lỗi của chính bản em viết; máy kiểm thử tự động (CI) bắt thêm lỗi thứ 15 (mục 5). Nhưng nói cho đúng: đây vẫn là **người viết tự soát bài của
@@ -190,3 +194,99 @@ dòng quyết định phần mềm có dùng được hay không.
    Phần mã dùng lại được gần hết; cần tài khoản Apple Developer và một máy Mac.
 4. **Về lâu dài**, kể cả khi dấu trang chạy tốt, tiện ích Safari vẫn đáng làm: tự chạy khi mở muasamcong, ngăn
    dữ liệu riêng (gỡ R3), không phụ thuộc GitHub lúc chạy (gỡ R4).
+
+## 9. Thẩm định lại sau 4.22.0 (11/11/2026)
+
+Anh yêu cầu: làm hết các khuyến nghị, tự chạy thử ở cỡ iPad, tự chấm, tự sửa cho tới 10/10. Mục này ghi lại
+đúng những gì đã làm được, đo được, và những gì **không** đạt được.
+
+**Cách chạy thử.** Em không có iPad và không vào được muasamcong thật. "Chạy thử trên iPad" ở đây là: chạy đúng
+mã dấu trang trong **WebKit 2.52.6** (nhân của Safari) ở khung nhìn iPad 820×1180 / 1024×1366 và iPhone 390×844,
+bật cờ màn cảm ứng, với trang muasamcong **giả lập**. Đó là phòng thí nghiệm, không phải thiết bị thật.
+
+### 9.1 Chín nhược điểm — đã xử lý thế nào
+
+| # | Nhược điểm (4.21.0) | Sau 4.22.0 (đo trong phòng thí nghiệm) | Tình trạng |
+|---|---|---|---|
+| 1 | Lùi trang làm trắng màn hình; lịch sử tab tăng 4 → 31 sau 27 lần đổi màn hình | Lịch sử không tăng; lùi = về màn hình trước của Cùi Bắp; đang mở bảng thì đóng bảng | Sửa xong; **chưa thử trên iPad thật** |
+| 2 | Nút 32–33 px, tên gói 23 px, ô So sánh 12×12 px | **0 chỗ bấm dưới 44 px** trên 24/24 màn hình, cả iPad và iPhone, kể cả khi mở danh mục và mọi khối thu gọn; vẫn 0 ở cỡ hiển thị 145% (iPad) và 130% (iPhone) | Sửa xong |
+| 3 | Thẻ gói 521 px (iPad), 842 px (iPhone); Kho gói dài 31,5 / 67,6 màn hình | Thẻ **360 px / 470 px**; Tìm gói 15,9 → 8,7 màn hình (iPad), 36,5 → 16,4 (iPhone); Kho gói **7,2 / 16,2** màn hình; 20 gói một trang | Sửa xong |
+| 4 | Giờ đóng thầu chỉ có trong chú thích rê chuột | Ghi trên thẻ; chú thích khác chạm là hiện | Sửa xong |
+| 5 | Nút E-HSMT, Link điện thoại, Ctrl K, chữ "investField" | Ẩn mục chỉ dùng trên máy tính; đổi câu chữ viết cho Chrome; không còn chữ "Chrome" trong phần hiển thị | Sửa xong |
+| 6 | Chữ nhỏ, không có giao diện tối | Cỡ hiển thị 90–145% (iPad mặc định 110%); giao diện tối có bảng màu riêng, thẻ sáng hơn nền | Sửa xong |
+| 7 | Không chạy nền, không có thông báo của iPad | Giữ máy thức; mở lên chạy bù bộ săn, bản tin, sao lưu, kiểm tra đối thủ | **Mới giảm nhẹ.** Chạy nền thật cần tiện ích Safari chính thức |
+| 8 | Dữ liệu chỉ nằm trong Safari của một máy | Sao lưu tự động lên Telegram mỗi ngày; nhập lại bằng một nút (đã thử gửi rồi nhập lại chính tệp đó) | Sửa xong phần sao lưu; **chưa có đồng bộ giữa các máy** |
+| 9 | Máy anh chạy thẳng mã em đang làm dở | Kênh ổn định; có bản mới thì hỏi; quay về bản trước; tự cứu khi lần mở dở dang | Sửa xong. Bật xác thực hai bước GitHub là việc của anh |
+
+### 9.2 Mười tính năng đề xuất — đã có gì
+
+| # | Tính năng | Tình trạng |
+|---|---|---|
+| 1 | AI đọc, tóm tắt E-HSMT | **Có, qua cầu nối**: phần mềm soạn câu lệnh, anh hỏi ChatGPT/Gemini, dán câu trả lời. **Chưa có** bản gọi AI ngay trong phần mềm (cần khoá API trả phí) |
+| 2 | Bảng đối chiếu yêu cầu ↔ năng lực | **Có**: tài chính và hợp đồng tương tự so bằng số; nhân sự, thiết bị đặt cạnh dòng đã khai để người phụ trách so |
+| 3 | Go/No-Go theo lịch sử | **Có**: số nhà thầu dự, tỷ lệ một nhà thầu, mức giảm của người trúng, đối thủ hay gặp, lịch sử của công ty. **Không** đưa "xác suất thắng" — dữ liệu không đủ cơ sở cho một con số như vậy |
+| 4 | Báo trước gói lặp lại, hợp đồng sắp hết hạn | **Có** phần gói lặp lại. **Không có** phần hợp đồng sắp hết hạn (không đọc được thời hạn hợp đồng) |
+| 5 | Cảnh báo đối thủ | **Có**: "trúng" tra thẳng e-GP theo mã số thuế; "dự thầu" chỉ biết với gói đã đọc biên bản mở thầu |
+| 6 | Tìm bằng câu thường | **Có** |
+| 7 | Báo cáo PDF một chạm | **Có** bốn loại báo cáo. Trên iPad là hai chạm: mở bản in rồi Chia sẻ → In |
+| 8 | Email và nhóm chat | **Có** nhóm Telegram. **Không có** email tự động (cần máy chủ) |
+| 9 | Nhiều tài khoản, phân quyền | **Chưa** (cần máy chủ). Có ô "Người phụ trách" từng gói |
+| 10 | App màn hình chính, xem khi mất mạng | **Chưa** cho bản Safari (cần địa chỉ cố định — đang chờ token Cloudflare) |
+
+### 9.3 Lỗi tự tìm ra ở vòng hai
+
+Các lỗi này do chính bộ kiểm thử mới và lượt soát ảnh chụp bắt được, trước khi đưa lên kênh ổn định:
+
+1. Câu "tìm các gói xây lắp…" để sót chữ **"các"** thành từ khoá.
+2. Tên gói trong danh sách động thái đối thủ cao **43 px** — thiếu 1 px so với chuẩn chạm.
+3. Giao diện tối: thẻ **đen tuyền**, tối hơn cả nền trang (màu trắng viết cứng bị đảo). Nay thẻ lấy màu của bảng
+   màu tối.
+4. Thẻ Kho gói dùng emoji, đổi màu lạ khi bật giao diện tối. Nay dùng bộ biểu tượng nét của phần mềm.
+5. Màn cảm ứng: bấm Tìm xong **không thấy gì đổi** vì dải tiến độ nằm dưới màn hình. Nay trang tự cuộn tới.
+6. Chrome 1366×768: thêm hai mục làm thanh trái **dài hơn màn hình 9 px**. Đã siết khoảng cách.
+7. iPhone cỡ 130%: trang Kiểm tra dữ liệu **tràn ngang 4 px** vì một mã dài không xuống dòng.
+8. Một chú thích trong mã bị bộ soát `chrome.*` hiểu nhầm là lời gọi API.
+9. Phép kiểm bản in của chính em đọc nhầm bảng kiểu thành nội dung (lỗi của bài kiểm, không phải của phần mềm).
+10. iPad cỡ 1024 px (có thanh trái): nút "Hồ sơ quyết định" mới thêm làm hàng nút của thẻ xuống dòng, thẻ gói
+    cao lại thành **440 px** (ngưỡng đặt ra là 400). Thẻ thu gọn nay ghi nhãn ngắn "Quyết định"; đo lại 388 px.
+11. **Lỗi có từ 4.21.0, bộ kiểm thử trên GitHub bắt được ngay trước khi phát hành** (bản Chrome trên máy tính,
+    trang "Link điện thoại"): gõ sai mã ghép địa chỉ cố định thì dòng "Mã ghép nối không đúng" **hiện chưa tới 2
+    giây rồi biến mất** — trang tự làm mới 2 giây một lần và nhịp làm mới ghi đè dòng báo lỗi (đo: 1,78 giây; trên
+    GitHub có lượt mất trước khi kịp nhìn thấy, làm bài kiểm đỏ ở 2/2 lượt chạy). Nay dòng báo lỗi giữ tới lần
+    bấm "Ghép nối" kế tiếp. Bài kiểm đầu-cuối được thêm đúng phép này (chờ hơn một nhịp làm mới rồi mới đọc):
+    chạy với mã cũ thì hỏng, với mã mới thì đạt.
+
+Mười một lỗi trên đã sửa và có phép kiểm giữ lại. **Một việc em chưa giải thích được:** bước chụp bố cục trong
+Chromium (bản Chrome trên máy tính) bị sập trình duyệt thử nghiệm ở 2 trong 6 lần chạy liên tiếp, đúng lúc đang
+nạp dữ liệu mẫu, trước khi chụp trang nào; bốn lần còn lại đạt, và khi gắn thêm phần ghi nhận "trang nào sập" thì
+không lặp lại được. Em coi đây là lỗi ngẫu nhiên của môi trường thử (kịch bản này vốn có ghi chú về việc trình
+duyệt thử nghiệm hay sập), nhưng nói rõ là **chưa tìm ra nguyên nhân**.
+
+### 9.4 Chấm lại (thang 10)
+
+| Tiêu chí | 4.21.0 | 4.22.0 | Vì sao chưa phải 10 |
+|---|---|---|---|
+| Tính năng | 8,5 | **9,5** | Thiếu AI gọi thẳng, hợp đồng sắp hết hạn |
+| Giao diện | 8,5 | **9** | Trang Kế hoạch còn vài emoji; các trang phân tích đời cũ chưa làm lại bố cục |
+| Hợp với màn cảm ứng | 5,5 | **9,5** | Mọi số đo đạt; nhưng **chưa có ngón tay thật** chạm vào |
+| Vận hành trên iPad | 5,5 | **7** | Vẫn không chạy nền, không có thông báo của iPad, phải chạm dấu trang mỗi lần mở |
+| Bảo mật và an toàn dữ liệu | 6 | **7,5** | Có kênh ổn định và sao lưu; dữ liệu vẫn chung nguồn với trang e-GP, mã vẫn tải từ GitHub |
+| Kiểm thử trong phòng thí nghiệm | 9 | **9,5** | 941 bài đơn vị, 80 phép kiểm đầu-cuối, đạt hết |
+| **Kiểm chứng trên thiết bị thật** | 0 | **3** | Anh xác nhận 4.21.0 chạy được; chưa có bảng Chẩn đoán; **chưa phần nào của 4.22.0 được thử trên iPad thật** |
+
+**Em không chấm 10/10.** Ở những gì đo được trong phòng thí nghiệm, bản 4.22.0 đạt các ngưỡng đã đặt ra. Nhưng
+ba thứ quyết định điểm 10 nằm ngoài tầm của bản này:
+
+- **Thử trên iPad thật**: vuốt quay lại, mở tab in, gửi tệp tới Telegram thật, chép câu lệnh bằng một chạm.
+- **Chạy nền và thông báo của iPad**: cần tiện ích Safari chính thức (máy Mac, tài khoản Apple Developer).
+- **Nhiều người dùng chung, đồng bộ, email, AI gọi thẳng**: cần máy chủ và khoá API.
+
+### 9.5 Việc cần anh
+
+1. Chạm dấu trang, bấm **Cập nhật ngay**, rồi thử năm việc: vuốt quay lại; **Tuỳ chọn → Tối**; một câu ở ô
+   "Tìm bằng câu thường"; **Gửi bản sao lưu ngay**; **In / Lưu PDF** ở một Hồ sơ quyết định.
+2. Gửi em bảng **Chẩn đoán** (Chẩn đoán → Chép chẩn đoán) để có số đo thật.
+3. Khai ba ô mới ở **Năng lực công ty** để bảng đối chiếu có số.
+4. Nếu muốn các phần còn thiếu: quyết định về token Cloudflare (đồng bộ, app màn hình chính), khoá API AI, và
+   tài khoản Apple Developer.
+

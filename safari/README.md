@@ -58,18 +58,49 @@ cha — không dùng.
 - Không dựng nổi trang tra cứu trong 30 giây → **chế độ hạn chế**: dùng chính trang cấp cao nhất làm tab danh
   sách (cách bản bookmarklet cũ của tác giả vẫn làm).
 
-## Dựng và kiểm thử
+## Dựng, phát hành và kiểm thử
 
 ```
-node safari/build.mjs            # dựng safari/dist (bắt buộc sau MỌI thay đổi trong GiaoSuCuiBap/ hoặc safari/src/)
-node safari/build.mjs --check    # CI: dist phải khớp mã nguồn
+node safari/build.mjs              # xem tình trạng: bản ổn định trong kho và bản dựng từ mã nguồn hiện tại
+node safari/build.mjs --check      # CI: safari/dist còn nguyên vẹn (mã băm, số byte, mã dấu trang)
+node safari/build.mjs --phat-hanh  # ĐƯA mã nguồn hiện tại lên kênh ổn định (ghi safari/dist)
+node safari/build.mjs --out <thư mục>   # dựng ra chỗ khác để thử
 node --test tests/safari-ban-dung.test.mjs
 xvfb-run -a node tools/test/safari-app.mjs [--nhanh] [--chi 2,14]   # WebKit thật, cần webkit2gtk-driver
 ```
 
-`tools/test/safari-app.mjs` chạy **đúng mã dấu trang** trong WebKit (cỡ iPad 1024×1366 và iPhone 390×844).
-Proxy `tools/test/map-proxy.mjs` ánh xạ `muasamcong.*`, `raw.githubusercontent.com`, `api.telegram.org` về máy
-chủ giả lập và **từ chối mọi tên miền khác**. Kịch bản 1 đối chiếu từng mã TBMT với tiện ích Chrome thật.
+**Kênh phát hành (từ 4.22.0).** `safari/dist/cuibap.js` là bản ỔN ĐỊNH — thứ dấu trang của người dùng tải về.
+Mã nguồn được phép đi trước; chỉ `--phat-hanh` mới đổi tệp đó, và chỉ chạy sau khi toàn bộ kiểm thử đạt. Ghi
+chú hiện trong hộp "Có bản mới" nằm ở `safari/ghi-chu-phat-hanh.txt` (tối đa 8 dòng).
+
+Tệp mới nhất luôn chạy trước và quyết định bản nào được dùng (`src/80-phat-hanh.js`): khác bản đang dùng thì
+hỏi; "Để sau" thì trao quyền cho bản đang dùng cất trong IndexedDB (ngăn `goi`: `js` = mới nhất, `dung` = đang
+dùng, `truoc` = bản trước); lần mở dở dang thì hỏi thử lại hay dùng bản kia. Bản được trao quyền không cần
+biết cơ chế này — kể cả 4.21.0 (mẫu thử: `tools/test/fixtures/cuibap-4.21.0-5663e848c26b.js.gz`).
+
+`tools/test/safari-app.mjs` chạy **đúng mã dấu trang** trong WebKit (cỡ iPad 1024×1366 và iPhone 390×844), luôn
+dựng từ MÃ NGUỒN chứ không dùng `safari/dist`. Proxy `tools/test/map-proxy.mjs` ánh xạ `muasamcong.*`,
+`raw.githubusercontent.com`, `api.telegram.org` về máy chủ giả lập và **từ chối mọi tên miền khác**. Kịch bản 1
+đối chiếu từng mã TBMT với tiện ích Chrome thật; 15: thao tác lùi; 16: nâng cấp từ bản 4.21.0; 17: tuỳ chọn;
+18: màn cảm ứng; 19: các tính năng 4.22.0.
+
+## Lớp vỏ cho màn cảm ứng (4.22.0)
+
+- **Cờ cho trang**: lớp vỏ đặt `__GSCB_TOUCH__`, `__GSCB_PLATFORM__ = 'safari'` trước khi trang chạy;
+  `lib/device.js` của tiện ích đọc hai cờ này và gắn `data-touch` / `data-platform` lên `<html>`. Mọi kiểu cho
+  ngón tay trong `theme.css` nằm sau `html[data-touch]`.
+- **Thao tác lùi**: khung dùng `location.replace` (không thêm mục lịch sử); lớp vỏ giữ một mục "bẫy" và biến
+  `popstate` thành "về màn hình trước" (`50-ui.js`).
+- **Cỡ hiển thị**: `zoom` đặt trên `<html>` CỦA TRANG (đặt trên thẻ `<iframe>` không phóng được trong WebKit).
+- **Giao diện tối**: bộ lọc `invert(1) hue-rotate(180deg)` trên thẻ `<iframe>` + bảng màu tối tính ngược qua ma
+  trận bộ lọc (`SAFARI_DARK_TOKENS`); ảnh, thanh trái, băng đầu trang được đảo lại (`SAFARI_KEEP`); bề mặt
+  viết cứng màu trắng lấy màu thẻ (`SAFARI_DARK_SURFACES`).
+- **In / Lưu PDF**: trang gọi `__GSCB_PRINT__(html)` (xem `lib/print.js`); lớp vỏ mở bản chụp ở tab mới ngay
+  trong cú chạm (`openReport`).
+- **Ẩn và đổi chữ**: mục cần Windows/Chrome bị ẩn (`SAFARI_HIDE`); câu chữ viết cho Chrome được đổi lúc hiển thị
+  (`SAFARI_WORDS`).
+- Tuỳ chọn thử nghiệm qua `window.__GSCB_OPTS__`: `touch`, `zoom`, `theme`, `noBackTrap`, `noRelease`, `noReload`,
+  `release`.
 
 ## Quy tắc khi sửa
 
@@ -89,4 +120,5 @@ chủ giả lập và **từ chối mọi tên miền khác**. Kịch bản 1 đ
 
 Không chạy nền; phải chạm dấu trang sau mỗi lần tải trang; không có native messaging (Tải E-HSMT, Link điện
 thoại); thông báo là chuông trong trang; dữ liệu nằm cùng nguồn với trang e-GP; Safari có thể dọn dữ liệu của
-trang lâu không mở. Chưa chạy trên iPad thật và muasamcong thật.
+trang lâu không mở (đã có sao lưu tự động lên Telegram). Người dùng xác nhận 4.21.0 chạy trên iPad thật
+(11/11/2026) nhưng chưa có bảng Chẩn đoán; các phần của 4.22.0 chưa được kiểm trên thiết bị thật.

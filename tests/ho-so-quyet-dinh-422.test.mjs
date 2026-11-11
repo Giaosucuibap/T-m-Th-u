@@ -192,6 +192,7 @@ test('kho bản đọc: lưu theo gói, cảnh báo đi kèm, xoá được; kho
   assert.equal((await rt.get({ key: 'IB-khong-co' })).entry, null);
   const backup = sanitizeBackupFeatures(s);
   assert.equal(backup.hsmtReads[TENDER.key].read.bond.value, 75_000_000);
+  assert.deepEqual(backup.hsmtReads, safeHsmtReads(s.hsmtReads), 'bộ che bí mật của bản sao lưu không được làm mất trường nào của bản đọc (mã TBMT, câu trích, vị trí)');
   assert.deepEqual(safeHsmtReads(backup.hsmtReads), backup.hsmtReads, 'nạp lại từ bản sao lưu không đổi nội dung');
   assert.equal((await rt.remove({ key: TENDER.key })).removed, true);
   assert.deepEqual(s.hsmtReads, {});
