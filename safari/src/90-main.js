@@ -127,6 +127,7 @@ async function boot() {
   hub.ui.show();
   guardTopNavigation();
   claimSingleInstance();
+  hub.ui.trapBack();
   TOP.__GSCB_SAFARI__ = {
     version: PACK.version, build: PACK.build,
     show: () => hub.ui.show(), hide: () => hub.ui.hide(),
@@ -137,9 +138,7 @@ async function boot() {
     hub.store = createStore();
     await hub.store.init();
     if (hub.retired) return;
-    // Dấu trang vừa tải được tệp từ GitHub: cất một bản vào máy để lần sau mất mạng vẫn chạy được.
-    const source = TOP.__GSCB_SRC__;
-    if (source && typeof source.text === 'string') { const text = source.text; source.text = null; void hub.store.keepBundle(text, `${PACK.version}/${PACK.build}`); }
+    hub.ui.applyPrefs(hub.store.getMeta('tuy-chon'));
     hub.alarms = createAlarms(hub.store);
     hub.alarms.load();
     hub.notifications = createNotifications();
@@ -161,9 +160,11 @@ async function boot() {
     await sleep(60);
     if (!hub.ui.hasPage()) hub.ui.navigate('search.html');
     hub.timing.ui = Date.now() - started;
+    // Giao diện đã lên: ghi nhận bản này mở được trên máy này (xem 80-phat-hanh.js).
+    void hub.store.setMeta(REL.ok, { build: PACK.build, at: Date.now() });
     // Lần đầu trên máy này: các trang của tiện ích viết cho Chrome, nói rõ một lần cho khỏi hiểu lầm.
-    if (!installed) hub.ui.toast({ id: 'chao', title: 'Cùi Bắp đang chạy ngay trên Safari', sticky: true,
-      message: 'Chỗ nào trong phần mềm ghi "Chrome" thì ở đây là Safari trên máy này: dữ liệu lưu trong Safari, không gửi đi đâu. Mỗi lần mở lại trang muasamcong, chạm dấu trang Cùi Bắp một lần.' });
+    if (!installed) hub.ui.toast({ id: 'chao', title: 'Cùi Bắp đang chạy ngay trên Safari', seconds: 20,
+      message: 'Dữ liệu lưu trong Safari của máy này, không gửi đi đâu. Mỗi lần mở lại trang muasamcong, chạm dấu trang Cùi Bắp một lần. Cỡ chữ và giao diện tối nằm ở nút Tuỳ chọn.' });
     if (!hub.store.isPersistent()) hub.ui.toast({ title: 'Dữ liệu chưa lưu được xuống máy', message: 'Safari đang chặn lưu trữ (duyệt riêng tư?). Kết quả vẫn xem được nhưng sẽ mất khi đóng tab.', sticky: true });
     if (TOP.__GSCB_SRC__?.cached) hub.ui.toast({ title: 'Đang dùng bản lưu sẵn trên máy', message: 'Không tải được bản mới nhất (mạng yếu hoặc GitHub không vào được). Phần mềm vẫn chạy bằng bản lần trước.' });
     if (TOP.location.hostname !== EGP_HOSTS[0]) hub.ui.toast({ title: 'Anh đang ở địa chỉ cũ của e-GP', sticky: true, link: `https://${EGP_HOSTS[0]}/vi/web/guest/contractor-selection?render=search`,
@@ -192,5 +193,10 @@ async function boot() {
   }
 }
 
+/* Chạm dấu trang lần nữa khi đang chạy (hoặc đang hỏi chọn bản): chỉ hiện lại. Còn không: giữ chỗ
+   NGAY (dấu trang kiểm biến này ngay sau khi chạy tệp), chọn bản được dùng, rồi mới khởi động. */
 if (TOP.__GSCB_SAFARI__) TOP.__GSCB_SAFARI__.show();
-else void boot();
+else {
+  TOP.__GSCB_SAFARI__ = { pending: true, version: PACK.version, build: PACK.build, show() {} };
+  chooseRelease().then((handedOver) => { if (!handedOver) return boot(); return undefined; }, () => boot());
+}

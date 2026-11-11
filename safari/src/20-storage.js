@@ -7,9 +7,11 @@
  *  đời cũ) thì chạy tạm trong bộ nhớ và báo rõ là dữ liệu sẽ mất khi đóng tab.
  *
  *  Ba ngăn: `local` (chrome.storage.local của tiện ích), `meta` (việc riêng của lớp vỏ:
- *  báo thức, bản đã cài) và `goi` — BẢN DỰ PHÒNG của chính tệp cuibap.js đang chạy.
- *  Dấu trang đọc ngăn `goi` (khoá `js`) khi không tải được tệp từ GitHub; tên kho, tên
- *  ngăn và tên khoá vì thế phải khớp với mã dấu trang trong safari/build.mjs.
+ *  báo thức, bản đã cài, tuỳ chọn hiển thị, tình trạng phát hành) và `goi` — các bản của
+ *  chính tệp cuibap.js: `js` (bản tải về mới nhất), `dung` (bản đang dùng), `truoc` (bản
+ *  trước, để quay về). Dấu trang đọc ngăn `goi`, khoá `js` khi không tải được tệp từ
+ *  GitHub; tên kho, tên ngăn và tên khoá vì thế phải khớp với mã dấu trang trong
+ *  safari/build.mjs. Việc ghi các bản nằm ở 80-phat-hanh.js.
  * ========================================================================== */
 const DB_NAME = 'gscb-safari';
 
@@ -32,6 +34,15 @@ function idbReadAll(db, store) {
     const cursor = db.transaction(store, 'readonly').objectStore(store).openCursor();
     cursor.onsuccess = () => { const c = cursor.result; if (!c) { resolve(out); return; } out.set(String(c.key), c.value); c.continue(); };
     cursor.onerror = () => reject(cursor.error);
+  });
+}
+function idbGet(db, store, key) {
+  return new Promise((resolve) => {
+    try {
+      const request = db.transaction(store, 'readonly').objectStore(store).get(key);
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => resolve(undefined);
+    } catch { resolve(undefined); }
   });
 }
 function idbWrite(db, store, { puts = [], dels = [], clear = false }) {
@@ -177,12 +188,6 @@ function createStore() {
     /** Tab này đã nhường quyền cho tab khác: thôi ghi xuống máy. */
     freeze() { frozen = true; },
     getMeta: (key) => meta.get(key),
-    setMeta(key, value) { meta.set(key, value); return persist('meta', { puts: [[key, value]] }); },
-    /** Cất bản dự phòng của tệp đang chạy (không giữ trong bộ nhớ; mỗi bản dựng chỉ ghi một lần). */
-    keepBundle(text, build) {
-      if (!db || meta.get('goi-ban') === build) return Promise.resolve(false);
-      meta.set('goi-ban', build);
-      return persist('goi', { puts: [['js', text]] }).then(() => persist('meta', { puts: [['goi-ban', build]] })).then(() => true);
-    }
+    setMeta(key, value) { meta.set(key, value); return persist('meta', { puts: [[key, value]] }); }
   };
 }

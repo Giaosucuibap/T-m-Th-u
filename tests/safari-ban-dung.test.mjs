@@ -3,7 +3,8 @@
  *
  *  Dấu trang trên iPad tải safari/dist/cuibap.js THẲNG TỪ KHO GIT, nên những điều sau
  *  phải luôn đúng, và các bài ở đây chặn mọi lần chúng sai:
- *   - tệp trong safari/dist khớp đúng mã nguồn hiện tại (tiện ích + safari/src);
+ *   - tệp trong safari/dist là BẢN ỔN ĐỊNH đã phát hành, còn nguyên vẹn (đúng mã băm đã ghi);
+ *     mã nguồn được phép đi trước nó — chỉ `node safari/build.mjs --phat-hanh` mới đổi nó;
  *   - content.js và page-hook.js được gói nguyên văn — phần đọc e-GP không bị đụng tới;
  *   - mọi import của 118 mô-đun trỏ tới tệp có trong gói;
  *   - mã dấu trang an toàn cho địa chỉ javascript:, và CHẠY ĐÚNG trong mọi tình huống
@@ -19,19 +20,51 @@ import fs from 'node:fs';
 import path from 'node:path';
 import vm from 'node:vm';
 import { fileURLToPath } from 'node:url';
-import { buildPack, bookmarklet, bundleUrl, distFiles, staleDist, lf, walk, REFS, REPO, extensionIdFromKey } from '../safari/build.mjs';
+import { buildPack, bookmarklet, bundleUrl, bundleInfo, distFiles, stableStatus, releaseNotes, lf, walk, REFS, REPO, extensionIdFromKey } from '../safari/build.mjs';
+import { createHash } from 'node:crypto';
+import zlib from 'node:zlib';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const EXT = path.join(ROOT, 'GiaoSuCuiBap');
 const read = (...parts) => lf(fs.readFileSync(path.join(ROOT, ...parts), 'utf8'));
 const { pack, code } = buildPack();
 
-test('safari/dist khớp mã nguồn hiện tại (tiện ích + lớp vỏ) — quên dựng lại là hỏng ngay', () => {
-  assert.deepEqual(staleDist(), [], 'chạy: node safari/build.mjs');
+test('bản ổn định trong safari/dist còn nguyên vẹn: đúng mã băm đã ghi, đúng là tệp của Cùi Bắp, dấu trang không lệch', () => {
+  const status = stableStatus();
+  assert.deepEqual(status.problems, [], 'bản ổn định chỉ được đổi bằng: node safari/build.mjs --phat-hanh');
   const meta = JSON.parse(read('safari', 'dist', 'phien-ban.json'));
-  assert.equal(meta.version, pack.version);
-  assert.equal(meta.build, pack.build);
+  const stable = read('safari', 'dist', 'cuibap.js');
+  assert.equal(createHash('sha256').update(stable).digest('hex'), meta.sha256);
+  assert.deepEqual(bundleInfo(stable), { version: meta.version, build: meta.build });
+  assert.match(meta.build, /^[0-9a-f]{12}$/);
+  assert.doesNotThrow(() => new vm.Script(stable), 'bản ổn định phải là JavaScript hợp lệ');
   assert.equal(pack.version, JSON.parse(read('GiaoSuCuiBap', 'manifest.json')).version);
+});
+
+test('mã nguồn được phép đi trước bản ổn định; khi trùng mã băm thì hai tệp trùng từng ký tự', () => {
+  const status = stableStatus();
+  assert.equal(status.source.build, pack.build);
+  if (status.inSync) assert.equal(read('safari', 'dist', 'cuibap.js'), code);
+  else assert.notEqual(status.stable.sha256, status.source.sha256);
+  // Phiên bản của bản ổn định không bao giờ MỚI hơn mã nguồn (không ai phát hành từ tương lai).
+  const num = (v) => v.split('.').map(Number).reduce((a, n) => a * 1000 + n, 0);
+  assert.ok(num(status.stable.version) <= num(status.source.version), `${status.stable.version} > ${status.source.version}`);
+});
+
+test('ghi chú phát hành: vài dòng ngắn cho người dùng đọc, nằm trong gói và trong mã băm bản dựng', () => {
+  const notes = releaseNotes();
+  assert.ok(notes.length >= 1 && notes.length <= 8, `${notes.length} dòng`);
+  for (const line of notes) { assert.ok(line.length <= 160, line); assert.doesNotMatch(line, /^#/); }
+  assert.deepEqual(pack.notes, notes);
+  assert.deepEqual(bundleInfo(code), { version: pack.version, build: pack.build });
+  assert.equal(bundleInfo('/* tệp khác */'), null);
+});
+
+test('bản 4.21.0 mà người dùng đang chạy được lưu làm mẫu thử để kiểm đường nâng cấp', () => {
+  const file = path.join(ROOT, 'tools', 'test', 'fixtures', 'cuibap-4.21.0-5663e848c26b.js.gz');
+  const text = zlib.gunzipSync(fs.readFileSync(file)).toString('utf8');
+  assert.deepEqual(bundleInfo(text), { version: '4.21.0', build: '5663e848c26b' });
+  assert.equal(createHash('sha256').update(text).digest('hex'), '8833aab5b4e0b485cd70f5998eb7272a3c4d32f1ad83e0b60d010ef0bfb88d38');
 });
 
 test('hai lần dựng cùng mã nguồn cho cùng một tệp (không có ngày giờ, không phụ thuộc thứ tự đọc thư mục)', () => {
@@ -96,7 +129,7 @@ test('mô-đun giao diện có điều hướng nhận bản mô phỏng locatio
 
 test('lớp vỏ: các tệp nguồn ghép theo thứ tự tên, không import/export, không còn mã gỡ lỗi', () => {
   const files = fs.readdirSync(path.join(ROOT, 'safari', 'src')).filter((f) => f.endsWith('.js')).sort();
-  assert.deepEqual(files, ['00-core.js', '10-assets.js', '20-storage.js', '30-chrome.js', '40-egp.js', '50-ui.js', '90-main.js']);
+  assert.deepEqual(files, ['00-core.js', '10-assets.js', '20-storage.js', '30-chrome.js', '40-egp.js', '50-ui.js', '80-phat-hanh.js', '90-main.js']);
   for (const file of files) {
     const text = read('safari', 'src', file);
     assert.doesNotMatch(text, /^\s*(?:import|export)\s/m, `${file} là script ghép, không phải mô-đun`);
@@ -128,7 +161,11 @@ test('dấu trang và lớp vỏ dùng CÙNG tên kho / ngăn / khoá cho bản 
   const storage = read('safari', 'src', '20-storage.js');
   assert.match(storage, /const DB_NAME = 'gscb-safari';/);
   assert.match(storage, /\['local', 'meta', 'goi'\]/);
-  assert.match(storage, /persist\('goi', \{ puts: \[\['js', text\]\] \}\)/);
+  // Bản tải về mới nhất được cất ở khoá `js` (80-phat-hanh.js) — đúng khoá mà dấu trang đọc khi mất mạng.
+  const release = read('safari', 'src', '80-phat-hanh.js');
+  assert.match(release, /newest: 'js'/);
+  assert.match(release, /await put\(REL\.newest, myText\)/);
+  assert.match(release, /idbWrite\(db, 'goi', \{ puts: \[\[slot, text\]\] \}\)/);
   assert.ok(MARK.includes("indexedDB.open('gscb-safari')"));
   assert.ok(MARK.includes("transaction('goi').objectStore('goi').get('js')"));
   // Dấu trang KHÔNG được tạo kho rỗng (lớp vỏ sẽ không còn dịp tạo đủ ngăn).

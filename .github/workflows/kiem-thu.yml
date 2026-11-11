@@ -47,8 +47,10 @@ jobs:
           node-version: 22
       - run: npm test
       - run: npm run test:tz
-      # Dấu trang trên iPad tải safari/dist/cuibap.js thẳng từ kho: tệp đó phải luôn khớp mã nguồn.
-      - name: Bản Safari trong kho khớp mã nguồn (safari/dist)
+      # Dấu trang trên iPad tải safari/dist/cuibap.js thẳng từ kho. Từ 4.22.0 tệp đó là BẢN ỔN ĐỊNH:
+      # chỉ đổi khi phát hành (node safari/build.mjs --phat-hanh), mã nguồn được phép đi trước.
+      # Bước này chặn việc tệp bị sửa tay / ghi dở (mã băm lệch) và việc mã dấu trang bị đổi.
+      - name: Bản Safari ổn định trong kho còn nguyên vẹn (safari/dist)
         run: node safari/build.mjs --check
       - name: Bộ kiểm thử trên bản xuống dòng CRLF (như máy Windows)
         run: |

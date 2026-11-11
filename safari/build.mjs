@@ -1,7 +1,10 @@
 /* ============================================================================
  *  DỰNG BẢN CHẠY THẲNG TRÊN SAFARI (iPad / iPhone)
  *
- *  node safari/build.mjs [--out <thư-mục>] [--check]
+ *  node safari/build.mjs                 xem tình trạng: bản ổn định trong kho so với mã nguồn
+ *  node safari/build.mjs --check         (CI) bản ổn định còn nguyên vẹn, dấu trang khớp
+ *  node safari/build.mjs --phat-hanh     PHÁT HÀNH: dựng từ mã nguồn hiện tại vào safari/dist
+ *  node safari/build.mjs --out <thư-mục> dựng thử vào chỗ khác (không đụng bản ổn định)
  *
  *  Gói NGUYÊN VĂN tiện ích (thư mục GiaoSuCuiBap) cùng lớp mô phỏng trong safari/src
  *  thành MỘT tệp safari/dist/cuibap.js. Dấu trang (bookmarklet) trên Safari nạp tệp
@@ -24,8 +27,15 @@
  *  giả lưu kiểu Windows (CRLF), và máy Windows khi lấy mã về còn đổi cả phần còn lại sang
  *  CRLF — không chuẩn hoá thì cùng một mã nguồn mà dựng ở hai máy ra hai tệp khác nhau.
  *
- *  --check: dựng vào bộ nhớ và so với safari/dist — khác thì thoát mã 1 (dùng cho CI,
- *  để tệp trong kho không bao giờ lệch mã nguồn).
+ *  HAI THỨ KHÁC NHAU, CỐ Ý TÁCH RA (từ 4.22.0):
+ *    - MÃ NGUỒN (GiaoSuCuiBap + safari/src): thay đổi liên tục trong lúc phát triển. Bài kiểm
+ *      đầu-cuối luôn dựng từ mã nguồn rồi chạy bản vừa dựng.
+ *    - BẢN ỔN ĐỊNH (safari/dist/cuibap.js): tệp mà dấu trang trên iPad của người dùng tải về.
+ *      Chỉ đổi khi chạy --phat-hanh, tức sau khi bản mới đã qua đủ kiểm thử. Trước 4.22.0 hai
+ *      thứ này buộc phải trùng nhau ở mọi commit, nên mỗi lần đẩy mã dở dang lên nhánh là
+ *      vài phút sau máy người dùng đã chạy mã đó.
+ *  --check không còn đòi "tệp trong kho trùng mã nguồn"; nó đòi tệp trong kho ĐÚNG LÀ một bản
+ *  đã phát hành (mã băm khớp phien-ban.json, không ai sửa tay) và mã dấu trang không lệch.
  * ========================================================================== */
 import { createHash, createPublicKey } from 'node:crypto';
 import fs from 'node:fs';
@@ -39,6 +49,7 @@ const args = process.argv.slice(2);
 const opt = (name, def = '') => { const i = args.indexOf(name); return i >= 0 && args[i + 1] ? args[i + 1] : def; };
 const OUT = path.resolve(opt('--out', path.join(ROOT, 'safari', 'dist')));
 const CHECK = args.includes('--check');
+const RELEASE = args.includes('--phat-hanh');
 
 const TEXT = new Set(['.js', '.html', '.css', '.json', '.svg']);
 const BINARY = new Set(['.png', '.woff2', '.jpg', '.jpeg', '.gif', '.ico']);
@@ -85,6 +96,13 @@ export function rewriteImports(file, code, exists) {
 const USES_LOCATION = /(?<![.\w$])location\.(?:href|assign|replace|reload|search|hash|pathname)\b/;
 const DECLARES_LOCATION = /(?:^|[;{}\n])\s*(?:export\s+)?(?:const|let|var|function|class)\s+location\b|import\s*\{[^}]*\blocation\b[^}]*\}/;
 const LOCATION_SHIM = 'const location=globalThis.__gscbLocation||globalThis.location;';
+
+/** Ghi chú phát hành (safari/ghi-chu-phat-hanh.txt): mỗi dòng một ý, hiện trong hộp "Có bản mới". */
+export function releaseNotes() {
+  const file = path.join(ROOT, 'safari', 'ghi-chu-phat-hanh.txt');
+  if (!fs.existsSync(file)) return [];
+  return lf(fs.readFileSync(file, 'utf8')).split('\n').map((line) => line.trim()).filter((line) => line && !line.startsWith('#')).slice(0, 8).map((line) => line.slice(0, 160));
+}
 
 export function buildPack() {
   const manifest = JSON.parse(fs.readFileSync(path.join(EXT, 'manifest.json'), 'utf8'));
@@ -143,8 +161,9 @@ export function buildPack() {
   const id = extensionIdFromKey(manifest.key);
   const shell = fs.readdirSync(SRC).filter((f) => f.endsWith('.js')).sort().map((f) => `/* ---- safari/src/${f} ---- */\n${lf(fs.readFileSync(path.join(SRC, f), 'utf8'))}`).join('\n');
   // Dấu vân tay của NỘI DUNG (không có ngày giờ): hai lần dựng cùng mã nguồn cho cùng một tệp.
-  const digest = createHash('sha256').update(JSON.stringify(files)).update(shell).digest('hex');
-  const pack = { version: manifest.version, build: digest.slice(0, 12), id, manifest, files };
+  const notes = releaseNotes();
+  const digest = createHash('sha256').update(JSON.stringify(files)).update(shell).update(JSON.stringify(notes)).digest('hex');
+  const pack = { version: manifest.version, build: digest.slice(0, 12), notes, id, manifest, files };
   const banner = `/* Giáo Sư Cùi Bắp ${manifest.version} — bản chạy thẳng trên Safari (iPad/iPhone). Bản dựng ${pack.build}.\n`
     + ' * TỆP SINH TỰ ĐỘNG bởi safari/build.mjs — đừng sửa tay. Mã nguồn: thư mục GiaoSuCuiBap và safari/src. */\n';
   const code = `${banner};(function(PACK){\n"use strict";\n${shell}\n})(${JSON.stringify(pack)});\n`;
@@ -200,25 +219,62 @@ export function bookmarklet(urls = REFS.map((ref) => bundleUrl(ref))) {
 /** Ba tệp của safari/dist, dựng từ mã nguồn hiện tại: [tên, nội dung]. */
 export function distFiles() {
   const { code, pack, stats } = buildPack();
-  const meta = `${JSON.stringify({ version: pack.version, build: pack.build, bytes: Buffer.byteLength(code), sha256: createHash('sha256').update(code).digest('hex') }, null, 2)}\n`;
+  const meta = `${JSON.stringify({ version: pack.version, build: pack.build, bytes: Buffer.byteLength(code), sha256: createHash('sha256').update(code).digest('hex'), ghiChu: pack.notes }, null, 2)}\n`;
   return { pack, stats, files: [['cuibap.js', code], ['phien-ban.json', meta], ['dau-trang.txt', `${bookmarklet()}\n`]] };
 }
-/** Tên các tệp trong `dir` đang lệch so với mã nguồn (so sau khi đưa xuống dòng về LF). */
-export function staleDist(dir = path.join(ROOT, 'safari', 'dist')) {
-  return distFiles().files.filter(([name, text]) => !fs.existsSync(path.join(dir, name)) || lf(fs.readFileSync(path.join(dir, name), 'utf8')) !== text).map(([name]) => name);
+
+/** Phiên bản và mã bản dựng ghi ở dòng đầu của một tệp cuibap.js (lớp vỏ cũng đọc đúng dòng này). */
+export function bundleInfo(text) {
+  const m = /Giáo Sư Cùi Bắp (\d+\.\d+\.\d+)[^\n]*?Bản dựng ([0-9a-f]{12})/.exec(String(text || '').slice(0, 600));
+  return m ? { version: m[1], build: m[2] } : null;
+}
+
+/**
+ * Tình trạng BẢN ỔN ĐỊNH trong `dir` (mặc định safari/dist):
+ *   problems — điều làm hỏng việc phát hành (tệp thiếu, bị sửa tay, dấu trang lệch);
+ *   inSync   — bản ổn định chính là bản dựng của mã nguồn hiện tại (vừa phát hành, hoặc mã chưa đổi).
+ */
+export function stableStatus(dir = path.join(ROOT, 'safari', 'dist')) {
+  const problems = [];
+  const fresh = distFiles();
+  const freshCode = fresh.files[0][1];
+  const source = { version: fresh.pack.version, build: fresh.pack.build, sha256: createHash('sha256').update(freshCode).digest('hex') };
+  const file = (name) => path.join(dir, name);
+  let stable = null;
+  for (const name of ['cuibap.js', 'phien-ban.json', 'dau-trang.txt']) if (!fs.existsSync(file(name))) problems.push(`thiếu tệp ${name}`);
+  if (!problems.length) {
+    const code = lf(fs.readFileSync(file('cuibap.js'), 'utf8'));
+    let meta = {};
+    try { meta = JSON.parse(fs.readFileSync(file('phien-ban.json'), 'utf8')); } catch (error) { problems.push(`phien-ban.json không đọc được: ${error.message}`); }
+    const sha256 = createHash('sha256').update(code).digest('hex');
+    const info = bundleInfo(code);
+    stable = { version: meta.version, build: meta.build, sha256, bytes: Buffer.byteLength(code) };
+    if (meta.sha256 !== sha256) problems.push('cuibap.js không khớp mã băm ghi trong phien-ban.json (tệp bị sửa tay hoặc ghi dở)');
+    if (meta.bytes !== stable.bytes) problems.push(`cuibap.js dài ${stable.bytes} byte, phien-ban.json ghi ${meta.bytes}`);
+    if (!info || info.version !== meta.version || info.build !== meta.build) problems.push('dòng đầu của cuibap.js không ghi đúng phiên bản / bản dựng trong phien-ban.json');
+    if (!code.includes('__GSCB_SAFARI__')) problems.push('cuibap.js không phải tệp của Cùi Bắp');
+    if (lf(fs.readFileSync(file('dau-trang.txt'), 'utf8')) !== fresh.files[2][1]) problems.push('dau-trang.txt lệch mã dấu trang hiện tại (dấu trang đã cài trên máy người dùng không tự đổi được — đừng sửa bookmarklet() nếu không thật cần)');
+  }
+  return { problems, stable, source, inSync: Boolean(stable) && stable.sha256 === source.sha256 };
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  if (CHECK) {
-    const stale = staleDist(OUT);
-    if (stale.length) { console.error(`safari/dist LỆCH mã nguồn (${stale.join(', ')}) — chạy: node safari/build.mjs`); process.exit(1); }
-    console.log('safari/dist khớp mã nguồn.');
-  } else {
+  const explicitOut = args.includes('--out');
+  if (RELEASE || explicitOut) {
     const { pack, stats, files } = distFiles();
     fs.mkdirSync(OUT, { recursive: true });
     for (const [name, text] of files) fs.writeFileSync(path.join(OUT, name), text);
     const code = files[0][1];
-    console.log(`Đã dựng ${path.relative(ROOT, path.join(OUT, 'cuibap.js'))} — ${(Buffer.byteLength(code) / 1024 / 1024).toFixed(2)} MB, bản dựng ${pack.build}, mã tiện ích ${pack.id}`);
+    console.log(`${RELEASE ? 'ĐÃ PHÁT HÀNH' : 'Đã dựng thử'} ${path.relative(ROOT, path.join(OUT, 'cuibap.js'))} — ${(Buffer.byteLength(code) / 1024 / 1024).toFixed(2)} MB, phiên bản ${pack.version}, bản dựng ${pack.build}, mã tiện ích ${pack.id}`);
     console.log(`  ${stats.modules} mô-đun · ${stats.classic} script thường · ${stats.html} trang · ${stats.css} css · ${stats.binary} tệp nhị phân · ${stats.assetRefs} ảnh chèn động · location mô phỏng: ${stats.locationShim.join(', ') || '(không)'}`);
+    if (RELEASE) console.log('  Dấu trang trên máy người dùng sẽ thấy bản này ở lần chạm kế tiếp (sau khi đẩy lên nhánh) và HỎI trước khi đổi.');
+  } else {
+    const status = stableStatus(OUT);
+    const s = status.stable;
+    console.log(`Bản ổn định trong kho: ${s ? `${s.version} · bản dựng ${s.build} · ${(s.bytes / 1024 / 1024).toFixed(2)} MB` : '(chưa có)'}`);
+    console.log(`Mã nguồn hiện tại:     ${status.source.version} · bản dựng ${status.source.build}`);
+    console.log(status.inSync ? 'Hai bên trùng nhau: bản ổn định chính là bản dựng của mã nguồn này.' : 'Mã nguồn đã đi trước bản ổn định (bình thường khi đang phát triển). Phát hành: node safari/build.mjs --phat-hanh');
+    if (status.problems.length) { console.error(`BẢN ỔN ĐỊNH CÓ VẤN ĐỀ:\n  - ${status.problems.join('\n  - ')}`); if (CHECK) process.exit(1); }
+    else if (CHECK) console.log('Bản ổn định nguyên vẹn; mã dấu trang khớp.');
   }
 }

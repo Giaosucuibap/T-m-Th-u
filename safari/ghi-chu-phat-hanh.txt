@@ -1,0 +1,6 @@
+# Ghi chú phát hành của bản Safari. Mỗi dòng một ý, tối đa 8 dòng, viết cho người dùng đọc.
+# Hiện trong hộp "Có bản mới" trước khi người dùng đồng ý cập nhật. Dòng bắt đầu bằng # bị bỏ qua.
+Vuốt quay lại của Safari không còn làm trắng màn hình: giờ là về màn hình trước của Cùi Bắp.
+Nút to hơn cho ngón tay, danh sách gói gọn hơn, giờ đóng thầu ghi thẳng trên thẻ.
+Thêm cỡ hiển thị A−/A+, giao diện tối, giữ máy thức khi săn.
+Bản mới chỉ thay khi anh đồng ý, và quay về bản trước được bằng một nút.

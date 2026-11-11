@@ -22,6 +22,9 @@ const EGP_ORIGINS = EGP_HOSTS.map((h) => `https://${h}`);
 const HERE = TOP.location.origin;
 const SEARCH_PAGE = `${HERE}/vi/web/guest/contractor-selection?render=search`;
 const OPTS = TOP.__GSCB_OPTS__ || {};            // chỉ dùng khi kiểm thử
+/* Máy dùng ngón tay (iPad / iPhone): nút to hơn, danh sách gọn hơn. iPad tự xưng là máy Mac
+   nên không dựa vào chuỗi nhận dạng; máy Mac thật không có điểm chạm nào. */
+const TOUCH = typeof OPTS.touch === 'boolean' ? OPTS.touch : (() => { try { return TOP.navigator.maxTouchPoints > 0 || TOP.matchMedia('(pointer: coarse)').matches; } catch { return false; } })();
 
 /* ------------------------------------------------------------- nhật ký chẩn đoán */
 const journal = [];
@@ -121,6 +124,12 @@ const navigationLive = (win) => { try { return NAV_API && win.navigation.entries
  * địa chỉ gốc (baseURI) và cookie vẫn đúng. Bản srcdoc cũng bắn `navigate` nhưng giữ
  * sai địa chỉ gốc, nên không dùng. Safari đời cũ không có Navigation API: dùng luôn
  * khung ban đầu, lớp vỏ có cách bám theo khác (xem 40-egp.js).
+ *
+ * PHẢI dùng location.replace, KHÔNG gán location.href (lỗi của 4.21.0, đo ngày 11/11/2026):
+ * gán href thêm một mục vào lịch sử CỦA CẢ TAB cho mỗi khung dựng ra — 27 lần đổi màn hình
+ * là 27 mục. Người dùng vuốt quay lại (hay bấm ‹ của Safari) thì trình duyệt lùi đúng mục
+ * đó: khung giao diện trở về about:blank, màn hình Cùi Bắp trắng trơn. replace thì không
+ * thêm mục nào, mà Navigation API trong khung vẫn hoạt động như cũ (đã đo lại).
  */
 async function openableFrame(parent, prepare) {
   const frame = TOP.document.createElement('iframe');
@@ -128,7 +137,7 @@ async function openableFrame(parent, prepare) {
   parent.appendChild(frame);
   if (!NAV_API) return frame;
   try {
-    frame.contentWindow.location.href = 'about:blank?gscb';
+    frame.contentWindow.location.replace('about:blank?gscb');
     const deadline = Date.now() + 1500;
     while (frame.isConnected && Date.now() < deadline) {
       let ready = false;

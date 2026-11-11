@@ -73,14 +73,30 @@ function pageHtml(page) {
   html = /<\/head>/i.test(html) ? html.replace(/<\/head>/i, (m) => SAFARI_TOUCH_CSS + m) : html + SAFARI_TOUCH_CSS;
   return html;
 }
-/* Chỉnh nhỏ cho màn hình chạm, chỉ có trong bản Safari (tệp của tiện ích không đổi):
+/* Kiểu chèn thêm vào MỌI trang tiện ích, chỉ có trong bản Safari:
    - chữ không tự phóng khi xoay ngang iPhone;
    - điện thoại: số tiền dài được xuống hàng, ô chọn lịch sử không đẩy trang rộng ra
      (đo trên WebKit 390 px: hai chỗ này làm trang Tìm gói thầu tràn ngang 24 px);
-   - trang popup của tiện ích rộng cố định 420 px: cho co theo màn hình. */
+   - trang popup của tiện ích rộng cố định 420 px: cho co theo màn hình;
+   - GIAO DIỆN TỐI. Lớp vỏ đặt bộ lọc đảo màu lên thẻ <iframe> (50-ui.js) và gắn thuộc tính
+     data-gscb-dark vào <html> của trang. Ở đây: (a) đặt lại các màu nền, viền, nền nhãn SAO
+     CHO SAU KHI ĐẢO chúng thành bảng màu tối có chủ đích — nền trang #0d1117, thẻ #161c24
+     sáng hơn nền, viền #2b3542 (màu nguồn tính ngược bằng chính ma trận của bộ lọc); (b) đảo
+     thêm một lần cho ảnh, bản đồ và những khối vốn đã tối (thanh trái, băng đầu trang) để
+     chúng giữ nguyên màu thật. */
+const SAFARI_DARK_TOKENS = '--bg:#ebeff5;--surface:#dee4ec;--surface-2:#d8dfe9;--surface-3:#cdd6e2;--line:#c2ccd9;--line-strong:#a9b6c6;'
+  + '--brand-50:#beddd9;--brand-100:#a5d0ca;--ok-bg:#c0decd;--warn-bg:#e2d6bd;--bad-bg:#f7d7d4;--info-bg:#c6dafc;'
+  + '--ok-line:#6fbb8c;--warn-line:#c2a25a;--bad-line:#f4a49d;--info-line:#81acfa;--card:var(--surface);--card-soft:var(--surface-2);--accent-soft:var(--brand-50);--gold-soft:var(--warn-bg)';
+const SAFARI_KEEP = ['img', 'video', 'canvas', 'svg image', '.ws-sidebar', '.hero', '.keep-colors', '.leaflet-container', '.map-canvas'];
 const SAFARI_TOUCH_CSS = '<style data-gscb-safari>html{-webkit-text-size-adjust:100%;text-size-adjust:100%}'
   + '@media (max-width:540px){.ws-metric .value.money{white-space:normal;overflow-wrap:anywhere}.history-label{flex-wrap:wrap;overflow:hidden}.history-label select{flex:1 1 100%;min-width:0;max-width:100%}'
-  + 'body:has(.popup-launch){width:auto;max-width:100%}}</style>';
+  + 'body:has(.popup-launch){width:auto;max-width:100%}}'
+  + `html[data-gscb-dark]{${SAFARI_DARK_TOKENS}}`
+  + `${SAFARI_KEEP.map((sel) => `html[data-gscb-dark] ${sel}`).join(',')}{filter:invert(1) hue-rotate(180deg)}`
+  // Ảnh nằm TRONG một khối đã được đảo lại thì không đảo nữa (đảo ba lần = đảo một lần).
+  + `${SAFARI_KEEP.filter((sel) => sel.startsWith('.')).flatMap((sel) => ['img', 'video', 'canvas'].map((inner) => `html[data-gscb-dark] ${sel} ${inner}`)).join(',')}{filter:none}`
+  + 'html[data-gscb-dark] ::selection{background:#a5d0ca}'
+  + '</style>';
 
 /** Ảnh chèn sau (innerHTML): `gscb-asset:icons/x.svg` hoặc đường dẫn tương đối → blob. */
 function fixAssetAttribute(el, pageDir) {
