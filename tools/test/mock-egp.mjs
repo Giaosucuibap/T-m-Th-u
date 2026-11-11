@@ -233,6 +233,7 @@ const SHAPE = (String(process.env.MOCK_CHAOS || '').match(/shape=([a-z]+)/) || [
 const CHAOS = Object.fromEntries(String(process.env.MOCK_CHAOS || '').split(',').filter(Boolean)
   .map((part) => { const [k, v] = part.split('='); return [k.trim(), v === undefined ? true : Number(v)]; }));
 let chaosSeed = Number(CHAOS.seed || 1), searchCount = 0, cutCount = 0, mutateCount = 0;
+let lastTelegramFile = null;
 const chaosRandom = () => { chaosSeed = (chaosSeed * 1103515245 + 12345) % 2147483648; return chaosSeed / 2147483648; };
 if (Object.keys(CHAOS).length) console.log('[mock] CHẾ ĐỘ KHÓ TÍNH:', JSON.stringify(CHAOS));
 const PAGE_HTML = fs.readFileSync(path.join(HERE, 'mock-page.html'), 'utf8')
@@ -279,6 +280,47 @@ const server = https.createServer(
         res.end(JSON.stringify({ ok: true, result: { message_id: 1 } }));
       });
       return;
+    }
+    /* Telegram giả — gửi TỆP (sao lưu tự động 4.22.0). Biểu mẫu nhiều phần không cần "hỏi trước";
+       nếu phần mềm vẫn hỏi trước thì từ chối như trường hợp xấu nhất. Tệp nhận được giữ trong bộ
+       nhớ để kịch bản lấy lại ở /__mock/telegram-file và thử KHÔI PHỤC bằng chính tệp đó. */
+    if (/^\/bot[^/]+\/sendDocument$/.test(url.pathname)) {
+      if (req.method === 'OPTIONS') { console.log('[mock] TELEGRAM TỆP HỎI TRƯỚC (preflight) — từ chối'); res.writeHead(403, { 'content-type': 'text/plain' }); res.end('no preflight'); return; }
+      const chunks = [];
+      req.on('data', (c) => chunks.push(c));
+      req.on('end', () => {
+        const body = Buffer.concat(chunks);
+        const boundary = (String(req.headers['content-type'] || '').match(/boundary=("?)([^";]+)\1/) || [])[2];
+        const out = { chat: '', caption: '', name: '', bytes: 0, gz: false };
+        if (boundary) {
+          const mark = Buffer.from(`--${boundary}`);
+          let at = body.indexOf(mark);
+          while (at >= 0) {
+            const next = body.indexOf(mark, at + mark.length);
+            if (next < 0) break;
+            const part = body.subarray(at + mark.length + 2, next - 2);
+            const split = part.indexOf('\r\n\r\n');
+            if (split > 0) {
+              const head = part.subarray(0, split).toString('utf8'), data = part.subarray(split + 4);
+              const field = (head.match(/name="([^"]+)"/) || [])[1];
+              if (field === 'document') { out.name = (head.match(/filename="([^"]*)"/) || [])[1] || ''; out.bytes = data.length; out.gz = data[0] === 0x1f && data[1] === 0x8b; lastTelegramFile = { name: out.name, data: Buffer.from(data) }; }
+              else if (field === 'chat_id') out.chat = data.toString('utf8');
+              else if (field === 'caption') out.caption = data.toString('utf8');
+            }
+            at = next;
+          }
+        }
+        console.log(`[mock] TELEGRAM TỆP ${JSON.stringify(out)}`);
+        const ok = Boolean(out.name && out.bytes && out.chat);
+        res.writeHead(ok ? 200 : 400, { 'content-type': 'application/json', 'access-control-allow-origin': '*' });
+        res.end(JSON.stringify(ok ? { ok: true, result: { message_id: 2, document: { file_name: out.name, file_size: out.bytes } } } : { ok: false, description: 'Bad Request: document missing' }));
+      });
+      return;
+    }
+    if (url.pathname === '/__mock/telegram-file') {
+      if (!lastTelegramFile) { res.writeHead(404, { 'content-type': 'text/plain' }); res.end('chưa có tệp'); return; }
+      res.writeHead(200, { 'content-type': 'application/octet-stream', 'x-file-name': encodeURIComponent(lastTelegramFile.name), 'access-control-expose-headers': 'x-file-name', 'access-control-allow-origin': '*', 'cache-control': 'no-store' });
+      res.end(lastTelegramFile.data); return;
     }
     if (url.pathname === '/__mock/mutate' && CHAOS.mutable) {
       for (let k = 0; k < 2; k++) {

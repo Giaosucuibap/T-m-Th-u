@@ -63,6 +63,9 @@ export function telegramTenderLine(t){
     +(t.investorName?`\n  🏛 ${escapeHtml(t.investorName)}`:'');
 }
 
+/** Loại tin được gửi thêm vào nhóm chat của phòng (4.22.0). */
+export const GROUP_KINDS=new Set(['matches','bulletin','deadline','plan-hunt','rival']);
+
 /** Phần có trạng thái: nhật ký gửi (kho), mạng (fetch), chế độ khoá. */
 export function createTelegramRuntime({getState,save,withLock,KEYS,fetchImpl=(...a)=>fetch(...a),sleep=ms=>new Promise(r=>setTimeout(r,ms))}){
 /** Ghi nhật ký gửi để người dùng biết hệ thống có chạy hay không. */
@@ -102,10 +105,62 @@ async function sendTelegram(settings,text,opts={}){
     }
     const message=parts.length>1?`Đã gửi (${parts.length} tin nhắn).`:'Đã gửi.';
     await logTelegram({ok:true,message,kind:opts.kind||'send'});
+    // 4.22.0 — nhóm chat của phòng đấu thầu: tin NGHIỆP VỤ (gói mới, bản tin sáng, nhắc hạn, kế hoạch,
+    // động thái đối thủ) được gửi thêm một bản vào nhóm. Tin riêng tư (link điện thoại, tệp sao lưu,
+    // tin thử, cảnh báo hệ thống) và tin của bộ săn đã có nơi nhận riêng thì KHÔNG. Nhóm lỗi không làm
+    // hỏng tin chính: chỉ ghi nhật ký để người dùng thấy.
+    const group=safeChatId(settings.telegramGroupChatId);
+    if(group&&!opts.chatId&&!opts.force&&group!==chatId&&GROUP_KINDS.has(opts.kind)){
+      try{
+        for(let i=0;i<parts.length;i++){
+          const {httpOk,status,data}=await callTelegram(token,'sendMessage',{chat_id:group,text:parts[i],parse_mode:'HTML',disable_web_page_preview:true});
+          if(!httpOk||data.ok===false){await logTelegram({ok:false,message:`Nhóm: ${telegramError(status,data.description)}`,kind:`${opts.kind}-nhom`});return {ok:true,message,group:false};}
+          if(i+1<parts.length)await sleep(400);
+        }
+        await logTelegram({ok:true,message:'Đã gửi thêm vào nhóm.',kind:`${opts.kind}-nhom`});
+        return {ok:true,message,group:true};
+      }catch(e){
+        await logTelegram({ok:false,message:`Nhóm: không kết nối được Telegram: ${String(e?.message||e)}`,kind:`${opts.kind}-nhom`});
+        return {ok:true,message,group:false};
+      }
+    }
     return {ok:true,message};
   }catch(e){
     const message=`Không kết nối được Telegram: ${String(e?.message||e)}`;
     await logTelegram({ok:false,message,kind:opts.kind||'send'});
+    return {ok:false,message};
+  }
+}
+
+/**
+ * Gửi MỘT TỆP vào chat (4.22.0 — sao lưu tự động). Dùng biểu mẫu nhiều phần
+ * (multipart/form-data): trình duyệt không phải "hỏi trước" (preflight) nên chạy được
+ * cả trong bản Safari, nơi phần mềm là một trang web gọi sang api.telegram.org.
+ */
+async function sendTelegramDocument(settings,file={},opts={}){
+  const token=String(settings.telegramBotToken||'').trim();
+  const chatId=String(opts.chatId||settings.telegramChatId||'').trim();
+  if(!token||!chatId)return {ok:false,message:'Thiếu Bot Token hoặc Chat ID.'};
+  const kind=opts.kind||'document';
+  try{
+    const form=new FormData();
+    form.append('chat_id',chatId);
+    if(file.caption)form.append('caption',String(file.caption).slice(0,1000));
+    form.append('disable_content_type_detection','true');
+    form.append('document',new Blob([file.bytes],{type:file.mime||'application/octet-stream'}),String(file.filename||'tep.bin').slice(0,120));
+    const res=await fetchImpl(`https://api.telegram.org/bot${encodeURIComponent(token)}/sendDocument`,{method:'POST',body:form});
+    const data=await res.json().catch(()=>({}));
+    if(!res.ok||data.ok===false){
+      const message=telegramError(res.status,data.description);
+      await logTelegram({ok:false,message,kind});
+      return {ok:false,message};
+    }
+    const message=`Đã gửi tệp ${String(file.filename||'')}.`;
+    await logTelegram({ok:true,message,kind});
+    return {ok:true,message};
+  }catch(e){
+    const message=`Không kết nối được Telegram: ${String(e?.message||e)}`;
+    await logTelegram({ok:false,message,kind});
     return {ok:false,message};
   }
 }
@@ -187,5 +242,5 @@ async function pushTelegramMatches(settings,matches,run){
   await dispatchOutbound(settings,`${head}\n\n${body}${tail}`,{kind:'matches',chatId});
 }
 
-return {logTelegram,callTelegram,sendTelegram,telegramDetectChatId,dispatchOutbound,pushTelegramMatches};
+return {logTelegram,callTelegram,sendTelegram,sendTelegramDocument,telegramDetectChatId,dispatchOutbound,pushTelegramMatches};
 }

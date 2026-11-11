@@ -24,6 +24,14 @@
     <input id="maxComfortPrice" type="number" min="0" step="1" inputmode="numeric" placeholder="20000000000">
     <label>Ghi chú</label>
     <textarea id="notes" rows="3"></textarea>
+    <h2 class="cap-sub">Số liệu để đối chiếu E-HSMT</h2>
+    <p class="muted small">Ba ô dưới đây dùng cho bảng “Yêu cầu E-HSMT ↔ năng lực công ty” và phần lịch sử dự thầu của chính công ty ở trang Hồ sơ quyết định. Để trống thì phần mềm ghi “chưa có dữ liệu”, không tự đoán. Số liệu chỉ lưu trên máy này.</p>
+    <label for="taxCode">Mã số thuế công ty</label>
+    <input id="taxCode" inputmode="numeric" maxlength="14" placeholder="5800000000" autocomplete="off">
+    <label for="avgRevenue">Doanh thu bình quân năm, 3 năm gần nhất (đồng)</label>
+    <input id="avgRevenue" type="number" min="0" step="1" inputmode="numeric" placeholder="45000000000">
+    <label for="liquidAssets">Nguồn lực tài chính có thể huy động cho một gói (đồng)</label>
+    <input id="liquidAssets" type="number" min="0" step="1" inputmode="numeric" placeholder="8000000000">
     <p><button class="btn" type="submit">Lưu hồ sơ và chấm lại kho gói</button></p>
   </form>
 </main>

@@ -9,6 +9,11 @@
   <section class="ws-intro"><div><div class="ws-kicker"><i></i> TỪ THÔNG TIN ĐẾN QUYẾT ĐỊNH</div><h1>Tìm đúng gói thầu.<br><em>Chọn đúng cơ hội.</em></h1><p>Tra cứu, sàng lọc và so sánh cơ hội từ e-GP. Mọi quyết định bắt đầu từ dữ liệu có thể kiểm chứng.</p></div><img class="ws-intro-art" src="icons/radar-scene.svg" alt="Minh họa radar tìm kiếm cơ hội"></section>
   <section class="card search-panel" aria-labelledby="criteria-title">
     <div class="section-label"><span class="label-icon" data-icon="filter"></span><h2 id="criteria-title">Bạn đang tìm gói thầu nào?</h2><span class="right">Tìm kiếm trên e-GP</span></div>
+    <div class="nl-row" id="nl-row">
+      <label for="nl-input">Tìm bằng câu thường <span class="muted">— gõ hoặc đọc như đang nói, phần mềm tự điền tiêu chí</span></label>
+      <div class="nl-box"><input id="nl-input" placeholder="Ví dụ: kênh mương dưới 10 tỷ ở Lâm Đồng, đóng thầu trong hai tuần" maxlength="300" autocomplete="off" enterkeyhint="search"><button id="nl-go" class="btn light" type="button">Hiểu câu này</button></div>
+      <div id="nl-understood" class="nl-understood hidden" role="status" aria-live="polite"></div>
+    </div>
     <form id="search-form" novalidate>
       <label class="search-field-main" for="keyword"><span class="sr-only">Từ khóa tìm kiếm trên e-GP</span><input id="keyword" placeholder="Tên gói thầu hoặc từ khóa, ví dụ: xây dựng trường học" maxlength="500" autocomplete="off"></label>
       <div class="search-grid has-category">

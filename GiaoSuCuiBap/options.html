@@ -53,6 +53,11 @@
         <div class="full"><label class="checkline" title="Một tin mỗi sáng: gói mới khớp tiêu chí 24 giờ qua, gói đang theo dõi sắp đóng thầu ≤3 ngày, tình trạng hệ thống. Chỉ dùng dữ liệu đã quét trên máy."><input id="telegramMorningBulletin" type="checkbox"><b>Bản tin sáng</b> — gom một tin mỗi ngày</label>
           <label for="morningBulletinTime" style="display:inline-block;margin-left:8px">lúc (giờ Việt Nam)</label> <input id="morningBulletinTime" type="time" value="07:00" style="width:auto">
           <button id="bulletin-test" class="btn light" type="button" style="width:auto">Gửi thử bản tin ngay</button><div id="bulletin-msg" class="small" role="status"></div></div>
+        <div class="full"><label for="telegramGroupChatId">Chat ID nhóm của phòng đấu thầu (tuỳ chọn)</label><input id="telegramGroupChatId" autocomplete="off" placeholder="Ví dụ: -1001234567890">
+          <small class="muted">Thêm bot vào nhóm Telegram của phòng rồi ghi Chat ID của nhóm (số âm). Nhóm nhận thêm một bản: gói mới đạt ngưỡng, bản tin sáng, nhắc hạn, kế hoạch và động thái đối thủ. Link điện thoại, tệp sao lưu và tin thử chỉ gửi vào chat riêng ở trên.</small></div>
+        <div class="full backup-row"><label class="checkline"><input id="telegramBackupDaily" type="checkbox"><b>Sao lưu tự động</b> — mỗi ngày gửi một tệp sao lưu vào chat này</label>
+          <button id="backup-now" class="btn light" type="button" style="width:auto">Gửi bản sao lưu ngay</button><div id="backup-msg" class="small" role="status"></div>
+          <small class="muted">Tệp có kho gói, bộ săn, checklist, hợp đồng tương tự và ghi chú nội bộ; không có Bot Token, Chat ID hay mật khẩu. Nên dùng chat riêng giữa bạn với bot. Dữ liệu không đổi thì không gửi lại. Khôi phục ở mục “Khôi phục và xóa dữ liệu” bên dưới.</small></div>
         <div class="full"><label for="notifyEmail">Email soạn thư (mailto — tiện ích không gửi SMTP hộ)</label><input id="notifyEmail" placeholder="thau@congty.vn"></div>
         <input id="notifyWebhook" type="hidden" value="">
         <div class="full"><label for="webhookSecret">Khóa ký gói đồng bộ JSON giữa các máy</label><input id="webhookSecret" type="password" autocomplete="off"><small class="muted">Dùng cùng khóa ở hai máy để kiểm tra gói có bị thay đổi. Đây không phải chữ ký số của cá nhân.</small></div>
@@ -92,8 +97,8 @@
 
     <div class="card" style="margin-top:14px">
       <h2>Khôi phục và xóa dữ liệu</h2>
-      <p class="muted small">Tệp nhập tối đa 30 MB. Khi nhập, Telegram và lịch tự động luôn được tắt để tránh thay đổi ngoài ý muốn.</p>
-      <input id="backupFile" type="file" accept="application/json">
+      <p class="muted small">Nhận tệp <b>.json</b> hoặc <b>.json.gz</b> (tệp sao lưu tải về, hoặc tệp phần mềm đã gửi vào Telegram), tối đa 30 MB. Khi nhập, Telegram và lịch tự động luôn được tắt để tránh thay đổi ngoài ý muốn.</p>
+      <input id="backupFile" type="file" accept=".json,.gz,application/json,application/gzip">
       <div class="row" style="margin-top:10px"><button id="import" class="btn light" type="button">Nhập backup</button><button id="clear" class="btn danger" type="button">Xóa danh sách và lịch sử quét</button><button id="factoryReset" class="btn light" type="button">Khôi phục mặc định — xóa toàn bộ</button></div>
     </div>
   </main>

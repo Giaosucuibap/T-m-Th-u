@@ -2,5 +2,8 @@
 # Hiện trong hộp "Có bản mới" trước khi người dùng đồng ý cập nhật. Dòng bắt đầu bằng # bị bỏ qua.
 Vuốt quay lại của Safari không còn làm trắng màn hình: giờ là về màn hình trước của Cùi Bắp.
 Nút to hơn cho ngón tay, danh sách gói gọn hơn, giờ đóng thầu ghi thẳng trên thẻ.
-Thêm cỡ hiển thị A−/A+, giao diện tối, giữ máy thức khi săn.
+Tuỳ chọn mới: cỡ hiển thị A−/A+, giao diện tối, giữ máy thức khi săn.
+Tìm bằng câu thường: gõ "kênh mương dưới 10 tỷ ở Lâm Đồng", phần mềm tự điền tiêu chí.
+Sao lưu tự động lên Telegram mỗi ngày; theo dõi đối thủ; báo trước gói lặp lại hằng năm.
+Hồ sơ quyết định: cạnh tranh theo lịch sử, đọc E-HSMT bằng ChatGPT hoặc Gemini, in hoặc lưu PDF.
 Bản mới chỉ thay khi anh đồng ý, và quay về bản trước được bằng một nút.

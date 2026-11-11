@@ -18,13 +18,20 @@ export function normalizeCapability(raw = {}) {
   const staff = lines(raw.staff).slice(0, 20);
   const avoid = lines(raw.avoidProvinces).slice(0, 20);
   const maxComfort = Number(raw.maxComfortPrice);
+  const money = (value) => { const n = Number(value); return Number.isFinite(n) && n > 0 ? Math.min(1e15, Math.round(n)) : 0; };
+  const taxDigits = String(raw.taxCode ?? '').trim().replace(/^vn/i, '').replace(/[^0-9]/g, '');
   return {
     trades,
     equipment,
     staff,
     avoidProvinces: avoid,
     maxComfortPrice: Number.isFinite(maxComfort) && maxComfort > 0 ? Math.round(maxComfort) : 0,
-    notes: String(raw.notes || '').trim().slice(0, 2000)
+    notes: String(raw.notes || '').trim().slice(0, 2000),
+    // 4.22.0 — ba số để đối chiếu yêu cầu E-HSMT và thống kê lịch sử của chính công ty. Để trống
+    // thì các bảng đối chiếu ghi "chưa có dữ liệu", không đoán.
+    taxCode: taxDigits.length === 10 || taxDigits.length === 13 ? taxDigits.slice(0, 10) : '',
+    avgRevenue: money(raw.avgRevenue),
+    liquidAssets: money(raw.liquidAssets)
   };
 }
 

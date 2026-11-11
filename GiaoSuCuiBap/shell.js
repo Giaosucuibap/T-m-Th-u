@@ -17,12 +17,14 @@ export const NAV_GROUPS = [
     ['winners.html', 'trophy', 'Nhà thầu trúng thầu']] },
   { id: 'theo-doi', label: 'Theo dõi', items: [
     ['dashboard.html', 'archive', 'Kho gói đã lưu'],
+    ['brief.html', 'contract', 'Hồ sơ quyết định'],
     ['hunts.html', 'radar', 'Bộ săn tự động'],
     ['checklist.html', 'checklist', 'Checklist hồ sơ']] },
   { id: 'phan-tich', label: 'Phân tích thị trường', fold: true, items: [
     ['market.html', 'map', 'Phân tích địa bàn'],
     ['analytics.html', 'chart', 'Phân tích thị trường'],
     ['rivals.html', 'compare', 'Đối thủ địa bàn'],
+    ['forecast.html', 'calendar', 'Gói lặp lại hằng năm'],
     ['investor.html', 'building', 'Hồ sơ chủ đầu tư'],
     ['profile.html', 'building', 'Hồ sơ nhà thầu 360°'],
     ['contractors.html', 'grid', 'Nhà thầu đã quét']] },
@@ -146,6 +148,22 @@ if (!IS_POPUP) {
   }
   const top = document.querySelector('.ws-topbar') || document.querySelector('body > header');
   if (top && shell) addMenuButton(top);
+  /* IN / LƯU PDF (4.22.0): trang có <main data-print="Tên báo cáo"> thì có nút in. lib/print.js lo phần còn lại
+     (hộp thoại in của Chrome; trong bản Safari là bản chụp mở ở tab mới). */
+  if (top && main && main.hasAttribute('data-print')) {
+    const print = document.createElement('button');
+    print.type = 'button'; print.className = 'btn light sm print-btn no-print'; print.innerHTML = `${icon('download', 16)}<span>In / Lưu PDF</span>`;
+    // Nạp sẵn mô-đun: Safari chỉ cho mở tab mới NGAY trong cú chạm, nên lúc bấm không được chờ tải gì nữa.
+    let printModule = null;
+    import('./lib/print.js').then((m) => { printModule = m; }).catch((error) => console.warn('Chưa nạp được phần in', error));
+    print.addEventListener('click', () => {
+      if (!printModule) return;
+      printModule.printPage({ title: main.getAttribute('data-print') })
+        .then((how) => { if (how === 'blocked') alert('Safari đã chặn tab mới. Hãy cho phép cửa sổ bật lên cho trang muasamcong rồi bấm lại.'); })
+        .catch((error) => console.warn('Chưa in được', error));
+    });
+    top.append(print);
+  }
 }
 
 /* MÁY CẢM ỨNG: chú thích rê chuột (thuộc tính title) không bao giờ hiện trên màn cảm ứng — mà

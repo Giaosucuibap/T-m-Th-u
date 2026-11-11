@@ -8,7 +8,7 @@
  *  - KHÔNG BAO GIỜ lưu /api/ (dữ liệu và khoá) hay /_gscb/ (con trỏ tới máy tính).
  *  Đổi phiên bản dưới đây là xoá bộ nhớ cũ.
  * ========================================================================== */
-const VERSION = 'gscb-4.21.0';
+const VERSION = 'gscb-4.22.0';
 
 self.addEventListener('install', (event) => {
   self.skipWaiting();

@@ -11,6 +11,9 @@ function fill(cap) {
   $('avoidProvinces').value = c.avoidProvinces.join('\n');
   $('maxComfortPrice').value = c.maxComfortPrice || '';
   $('notes').value = c.notes || '';
+  $('taxCode').value = c.taxCode || '';
+  $('avgRevenue').value = c.avgRevenue || '';
+  $('liquidAssets').value = c.liquidAssets || '';
 }
 
 async function load() {
@@ -26,7 +29,10 @@ $('form').onsubmit = async (e) => {
     staff: $('staff').value,
     avoidProvinces: $('avoidProvinces').value,
     maxComfortPrice: $('maxComfortPrice').value,
-    notes: $('notes').value
+    notes: $('notes').value,
+    taxCode: $('taxCode').value,
+    avgRevenue: $('avgRevenue').value,
+    liquidAssets: $('liquidAssets').value
   });
   const r = await send('UPDATE_SETTINGS', { capability });
   $('alert').textContent = r?.ok ? 'Đã lưu hồ sơ năng lực và chấm lại các gói đang lưu.' : (r?.message || 'Chưa lưu được.');

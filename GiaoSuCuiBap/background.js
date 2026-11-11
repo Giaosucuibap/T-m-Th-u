@@ -32,6 +32,13 @@ import { createHistoryRuntime } from './lib/runtime-history.js';
 import { createTelegramRuntime } from './lib/runtime-telegram.js';
 import { createMessageRegistry } from './lib/message-registry.js';
 import { automationHandlers } from './lib/handlers/automation.js';
+import { safekeepingHandlers } from './lib/handlers/safekeeping.js';
+import { insightHandlers } from './lib/handlers/insight.js';
+import { createRivalRuntime } from './lib/runtime-rivals.js';
+import { safeRivalWatches } from './lib/rival-watch.js';
+import { createHsmtRuntime } from './lib/runtime-hsmt.js';
+import { safeHsmtReads } from './lib/hsmt-ai.js';
+import { createBackupRuntime } from './lib/runtime-backup.js';
 import { navigationHandlers } from './lib/handlers/navigation.js';
 import { searchStoreHandlers } from './lib/handlers/search-store.js';
 import { phoneHandlers } from './lib/handlers/phone.js';
@@ -68,7 +75,7 @@ import {observationsFromBidOpen,observationsFromWinner,mergeObservations,contrac
 import {BRAND} from './lib/brand.js';
 import {DECISION_STATE_LABEL,normalizeDecisionState,statusOf} from './lib/decision.js';
 
-const KEYS={settings:'settings',tenders:'tenders',runs:'runs',template:'searchTemplate',templates:'searchTemplates',lastTemplate:'lastObservedTemplate',activeRun:'activeRun',participations:'participations',winnerLookup:'winnerLookup',winnerCache:'winnerCache',bidOpenScan:'bidOpenScan',planLookup:'planLookup',telegramLog:'telegramLog',observations:'observations',areas:'areas',areaScan:'areaScan',attachments:'attachments',investorScan:'investorScan',endpointMap:'endpointMap',hunts:'hunts',watchedInvestors:'watchedInvestors',deadlineAlerts:'deadlineAlerts',schemaHealth:'schemaHealth',checklists:'checklists',pastContracts:'pastContracts',amendmentLog:'amendmentLog',domRegression:'domRegression',auditLog:'auditLog',domSnapshots:'domSnapshots'};
+const KEYS={settings:'settings',tenders:'tenders',runs:'runs',template:'searchTemplate',templates:'searchTemplates',lastTemplate:'lastObservedTemplate',activeRun:'activeRun',participations:'participations',winnerLookup:'winnerLookup',winnerCache:'winnerCache',bidOpenScan:'bidOpenScan',planLookup:'planLookup',telegramLog:'telegramLog',observations:'observations',areas:'areas',areaScan:'areaScan',attachments:'attachments',investorScan:'investorScan',endpointMap:'endpointMap',hunts:'hunts',watchedInvestors:'watchedInvestors',deadlineAlerts:'deadlineAlerts',schemaHealth:'schemaHealth',checklists:'checklists',pastContracts:'pastContracts',amendmentLog:'amendmentLog',domRegression:'domRegression',auditLog:'auditLog',domSnapshots:'domSnapshots',watchedRivals:'watchedRivals',rivalWatch:'rivalWatch',hsmtReads:'hsmtReads'};
 const SAVED_SEARCHES = 'savedSearches';
 const DAILY_ALARM='gscb-daily';
 const DEADLINE_ALARM='gscb-deadlines';
@@ -99,9 +106,9 @@ if(chrome.storage.local.setAccessLevel){
 
 async function getState(){
   const data=await appStorage.get({
-    [SAVED_SEARCHES]:[],[KEYS.settings]:DEFAULT_SETTINGS,[KEYS.tenders]:[],[KEYS.runs]:[],[KEYS.template]:null,[KEYS.templates]:[],[KEYS.lastTemplate]:null,[KEYS.activeRun]:null,[KEYS.participations]:[],[KEYS.winnerLookup]:null,[KEYS.winnerCache]:{},[KEYS.bidOpenScan]:null,[KEYS.planLookup]:null,[KEYS.telegramLog]:[],[KEYS.observations]:[],[KEYS.areaScan]:null,[KEYS.attachments]:{},[KEYS.investorScan]:null,[KEYS.endpointMap]:[],[KEYS.hunts]:[],[KEYS.watchedInvestors]:[],[KEYS.deadlineAlerts]:{},[KEYS.schemaHealth]:null,[KEYS.checklists]:{},[KEYS.pastContracts]:[],[KEYS.amendmentLog]:[],[KEYS.domRegression]:null,[KEYS.auditLog]:[],[KEYS.domSnapshots]:[],[KEYS.areas]:null,liveCanary:null,canaryConfig:null
+    [SAVED_SEARCHES]:[],[KEYS.settings]:DEFAULT_SETTINGS,[KEYS.tenders]:[],[KEYS.runs]:[],[KEYS.template]:null,[KEYS.templates]:[],[KEYS.lastTemplate]:null,[KEYS.activeRun]:null,[KEYS.participations]:[],[KEYS.winnerLookup]:null,[KEYS.winnerCache]:{},[KEYS.bidOpenScan]:null,[KEYS.planLookup]:null,[KEYS.telegramLog]:[],[KEYS.observations]:[],[KEYS.areaScan]:null,[KEYS.attachments]:{},[KEYS.investorScan]:null,[KEYS.endpointMap]:[],[KEYS.hunts]:[],[KEYS.watchedInvestors]:[],[KEYS.deadlineAlerts]:{},[KEYS.schemaHealth]:null,[KEYS.checklists]:{},[KEYS.pastContracts]:[],[KEYS.amendmentLog]:[],[KEYS.domRegression]:null,[KEYS.auditLog]:[],[KEYS.domSnapshots]:[],[KEYS.areas]:null,[KEYS.watchedRivals]:[],[KEYS.rivalWatch]:null,[KEYS.hsmtReads]:{},liveCanary:null,canaryConfig:null
   });
-  const state={liveCanary:data.liveCanary||null,canaryConfig:data.canaryConfig||{},savedSearches:safeSavedSearches(data[SAVED_SEARCHES]),settings:{...DEFAULT_SETTINGS,...data[KEYS.settings]},tenders:data[KEYS.tenders]||[],runs:data[KEYS.runs]||[],template:data[KEYS.template]||null,templates:data[KEYS.templates]||[],lastTemplate:data[KEYS.lastTemplate]||null,activeRun:data[KEYS.activeRun]||null,participations:data[KEYS.participations]||[],winnerLookup:data[KEYS.winnerLookup]||null,winnerCache:data[KEYS.winnerCache]||{},bidOpenScan:data[KEYS.bidOpenScan]||null,planLookup:data[KEYS.planLookup]||null,telegramLog:data[KEYS.telegramLog]||[],observations:data[KEYS.observations]||[],areaScan:data[KEYS.areaScan]||null,attachments:data[KEYS.attachments]||{},investorScan:data[KEYS.investorScan]||null,endpointMap:data[KEYS.endpointMap]||[],hunts:safeHunts(data[KEYS.hunts]),watchedInvestors:safeWatches(data[KEYS.watchedInvestors]),deadlineAlerts:data[KEYS.deadlineAlerts]&&typeof data[KEYS.deadlineAlerts]==='object'?data[KEYS.deadlineAlerts]:{},schemaHealth:data[KEYS.schemaHealth]||null,checklists:data[KEYS.checklists]&&typeof data[KEYS.checklists]==='object'?data[KEYS.checklists]:{},pastContracts:safeContracts(data[KEYS.pastContracts]),amendmentLog:Array.isArray(data[KEYS.amendmentLog])?data[KEYS.amendmentLog].slice(0,500):[],domRegression:data[KEYS.domRegression]||null,auditLog:Array.isArray(data[KEYS.auditLog])?data[KEYS.auditLog].slice(0,800):[],domSnapshots:Array.isArray(data[KEYS.domSnapshots])?data[KEYS.domSnapshots].slice(0,8):[],areas:data[KEYS.areas]||null};
+  const state={liveCanary:data.liveCanary||null,canaryConfig:data.canaryConfig||{},savedSearches:safeSavedSearches(data[SAVED_SEARCHES]),settings:{...DEFAULT_SETTINGS,...data[KEYS.settings]},tenders:data[KEYS.tenders]||[],runs:data[KEYS.runs]||[],template:data[KEYS.template]||null,templates:data[KEYS.templates]||[],lastTemplate:data[KEYS.lastTemplate]||null,activeRun:data[KEYS.activeRun]||null,participations:data[KEYS.participations]||[],winnerLookup:data[KEYS.winnerLookup]||null,winnerCache:data[KEYS.winnerCache]||{},bidOpenScan:data[KEYS.bidOpenScan]||null,planLookup:data[KEYS.planLookup]||null,telegramLog:data[KEYS.telegramLog]||[],observations:data[KEYS.observations]||[],areaScan:data[KEYS.areaScan]||null,attachments:data[KEYS.attachments]||{},investorScan:data[KEYS.investorScan]||null,endpointMap:data[KEYS.endpointMap]||[],hunts:safeHunts(data[KEYS.hunts]),watchedInvestors:safeWatches(data[KEYS.watchedInvestors]),deadlineAlerts:data[KEYS.deadlineAlerts]&&typeof data[KEYS.deadlineAlerts]==='object'?data[KEYS.deadlineAlerts]:{},schemaHealth:data[KEYS.schemaHealth]||null,checklists:data[KEYS.checklists]&&typeof data[KEYS.checklists]==='object'?data[KEYS.checklists]:{},pastContracts:safeContracts(data[KEYS.pastContracts]),amendmentLog:Array.isArray(data[KEYS.amendmentLog])?data[KEYS.amendmentLog].slice(0,500):[],domRegression:data[KEYS.domRegression]||null,auditLog:Array.isArray(data[KEYS.auditLog])?data[KEYS.auditLog].slice(0,800):[],domSnapshots:Array.isArray(data[KEYS.domSnapshots])?data[KEYS.domSnapshots].slice(0,8):[],areas:data[KEYS.areas]||null,watchedRivals:safeRivalWatches(data[KEYS.watchedRivals]),rivalWatch:data[KEYS.rivalWatch]||null,hsmtReads:data[KEYS.hsmtReads]&&typeof data[KEYS.hsmtReads]==='object'?data[KEYS.hsmtReads]:{}};
   for(const key of ['winnerLookup','areaScan','investorScan'])state[key]=restoreLookupAwardView(state[key],key,state.areas);
   state.planLookup=restoreLegacyKhlcntView(state.planLookup,state.areas);
   return state;
@@ -229,6 +236,7 @@ function publicSettings(settings={}){
   const out={...DEFAULT_SETTINGS,...settings};
   out.telegramBotToken=settings.telegramBotToken?'••••':'';
   out.telegramChatId=settings.telegramChatId?'••••':'';
+  out.telegramGroupChatId=settings.telegramGroupChatId?'••••':'';
   out.hasTelegramToken=Boolean(String(settings.telegramBotToken||'').trim());
   out.hasTelegramChat=Boolean(String(settings.telegramChatId||'').trim());
   out.notifyWebhook=settings.notifyWebhook?'••••':'';
@@ -3135,7 +3143,7 @@ function importedSettings(raw={}){
   out.minPrice=Math.max(0,Math.min(1e15,Number(out.minPrice)||0));
   out.maxPrice=Math.max(out.minPrice,Math.min(1e15,Number(out.maxPrice)||Number.MAX_SAFE_INTEGER));
   if(!/^([01]\d|2[0-3]):[0-5]\d$/.test(String(out.dailyTime)))out.dailyTime=DEFAULT_SETTINGS.dailyTime;
-  out.telegramBotToken='';out.telegramChatId='';out.telegramEnabled=false;
+  out.telegramBotToken='';out.telegramChatId='';out.telegramGroupChatId='';out.telegramEnabled=false;out.telegramBackupDaily=false;
   out.notifyWebhook='';out.notifyEmail='';out.webhookSecret='';
   out.capability=normalizeCapability(raw.capability||{});
   out.approvalSteps=[1,2,3].includes(Number(raw.approvalSteps))?Number(raw.approvalSteps):1;
@@ -3680,6 +3688,20 @@ const messageRegistry=createMessageRegistry()
   .register('dien-thoai',phoneHandlers({phoneRuntime}));
 const exportRuntime=createExportRuntime({readSearchState:(...args)=>searchStateRuntime.read(...args),getState:(...args)=>getState(...args),downloadData:(...args)=>downloadData(...args),downloadXlsx:(...args)=>downloadXlsx(...args),mobileHtml:(...args)=>mobileHtml(...args),getContractorProfile:(...args)=>getContractorProfile(...args),priceRow:(...args)=>priceRow(...args),sanitizedTemplateState:(...args)=>sanitizedTemplateState(...args),stamp,numOrNull,chrome});
 
+// 4.22.0 — sao lưu tự động lên Telegram: tệp an toàn (không token) gửi vào chính chat của người dùng.
+const backupRuntime=createBackupRuntime({getState:(...a)=>getState(...a),local:chrome.storage.local,backupObject:()=>exportRuntime.backupObject(),
+  sendDocument:(...a)=>telegramRuntime.sendTelegramDocument(...a)});
+messageRegistry.register('giu-du-lieu',safekeepingHandlers({backupRuntime}));
+// 4.22.0 — theo dõi đối thủ: báo gói mới dự/trúng của các mã số thuế người dùng chọn (lib/rival-watch.js).
+const rivalRuntime=createRivalRuntime({getState:(...a)=>getState(...a),save:(...a)=>save(...a),withLock:(...a)=>withLock(...a),KEYS,
+  sendTelegram:(...a)=>sendTelegram(...a),escapeHtml:(...a)=>escapeHtml(...a),startWinnerLookup:(...a)=>startWinnerLookup(...a),
+  readLookup:async()=>(await appStorage.get({[KEYS.winnerLookup]:null}))[KEYS.winnerLookup],flushObservations:()=>flushObservations(),
+  blocked:async()=>Boolean(schemaIsRed(await readSafetyState())||activeListJob(await readQueryControlState(chrome.storage.local))||bbmtWaiter),
+  notify:({title,message})=>chrome.notifications.create({type:'basic',iconUrl:'icons/icon128.png',title,message}).catch(()=>{})});
+// 4.22.0 — bản đọc E-HSMT do trợ lý AI của người dùng trả về (phần mềm không tự gọi AI).
+const hsmtRuntime=createHsmtRuntime({getState:(...a)=>getState(...a),save:(...a)=>save(...a),withLock:(...a)=>withLock(...a),KEYS});
+messageRegistry.register('hieu-thi-truong',insightHandlers({rivalRuntime,hsmtRuntime}));
+
 void liveCanaryRuntime.hydrate().catch(()=>{});
 // Link điện thoại: service worker vừa thức dậy thì nối lại cầu nối nếu đang bật.
 void phoneRuntime.ensure().catch(()=>{});
@@ -3719,6 +3741,8 @@ chrome.runtime.onStartup.addListener(async()=>{
   void maybeSendBulletin().catch(()=>{});
   // Trạm săn: ghi khoảng Chrome/máy không chạy, xếp chạy bù lượt săn lỡ giờ, nhắn Telegram.
   void huntRuntime.heartbeat({startup:true}).catch(()=>{});
+  // Sao lưu tự động: mở máy sau hơn một ngày thì gửi bù ngay, không chờ nhịp 30 phút.
+  void backupRuntime.run().catch(()=>{});
   const s=await getState();
   if(!s.settings.scanOnStartup||!s.template)return;
   const now=Date.now();
@@ -3736,7 +3760,9 @@ chrome.alarms.onAlarm.addListener(async alarm=>{
   if(await historyRuntime.onAlarm(alarm))return;
   if((await getState()).settings.readOnlyMode&&!alarm.name.startsWith(TIMEOUT_PREFIX))return;
   if(alarm.name===DAILY_ALARM)await startScan('scheduled');
-  else if(alarm.name===DEADLINE_ALARM){await huntRuntime.heartbeat().catch(()=>{});await reviewDeadlines();}
+  else if(alarm.name===DEADLINE_ALARM){await huntRuntime.heartbeat().catch(()=>{});await reviewDeadlines();void backupRuntime.run().catch(()=>{});
+    // Đối thủ đang theo dõi: so kho với lần xem trước; đến lượt (mỗi ngày một lần) thì tra e-GP các gói họ đã trúng.
+    void rivalRuntime.evaluate().then(()=>rivalRuntime.sweep()).catch(()=>{});}
   else if(alarm.name===BULLETIN_ALARM){await maybeSendBulletin();await ensureBulletinAlarm(await getState());}
   else if(alarm.name.startsWith(HUNT_RETRY_PREFIX))await runHuntById(alarm.name.slice(HUNT_RETRY_PREFIX.length));
   else if(alarm.name.startsWith(TIMEOUT_PREFIX)){
@@ -3770,8 +3796,8 @@ chrome.runtime.onMessage.addListener((message,sender,sendResponse)=>{
     if(source==='content'&&bbmtWaiter?.private&&bbmtWaiter.waiters.has(sender.tab?.id)&&!['CONTENT_READY','BBMT_BIDDERS','BBMT_PRICE_BASIS','BBMT_DOM_RESULT'].includes(type)){sendResponse({ok:true,ignored:true});return;}
     if(source==='content'&&queryRuntime.isProbeTab(sender.tab?.id)&&!['KQLCNT_RESULTS','KQLCNT_DONE','CONTENT_READY'].includes(type)){sendResponse({ok:true,ignored:true});return;}
     if(source==='content'&&!queryRuntime.isProbeTab(sender.tab?.id)&&!(bbmtWaiter?.private&&bbmtWaiter.waiters.has(sender.tab?.id))&&schemaIsRed(await readSafetyState())){sendResponse({ok:false,message:SCHEMA_STOP_MESSAGE});return;}
-    if(source!=='content'&&['START_SCAN','SCAN_ALL','SCAN_CURRENT_TAB','RUN_HUNT','TBMT_SEARCH','PLAN_LOOKUP','WINNER_LOOKUP','BID_OPEN_SCAN','RETRY_BID_OPEN','AREA_SCAN','INVESTOR_SCAN'].includes(type)&&(schemaIsRed(await readSafetyState()))){await stopScansForSchema();sendResponse({ok:false,message:SCHEMA_STOP_MESSAGE});return;}
-    const WRITE_TYPES=new Set(['FACTORY_RESET','START_SCAN','SCAN_ALL','SCAN_CURRENT_TAB','RUN_HUNT','TBMT_SEARCH','PLAN_LOOKUP','WINNER_LOOKUP','BID_OPEN_SCAN','RETRY_BID_OPEN','AREA_SCAN','INVESTOR_SCAN','COMPARE_EGP_DOM','TELEGRAM_TEST','TELEGRAM_DETECT_CHAT','FETCH_AND_DOWNLOAD']);
+    if(source!=='content'&&['START_SCAN','SCAN_ALL','SCAN_CURRENT_TAB','RUN_HUNT','TBMT_SEARCH','PLAN_LOOKUP','WINNER_LOOKUP','BID_OPEN_SCAN','RETRY_BID_OPEN','AREA_SCAN','INVESTOR_SCAN','RIVAL_SWEEP_NOW'].includes(type)&&(schemaIsRed(await readSafetyState()))){await stopScansForSchema();sendResponse({ok:false,message:SCHEMA_STOP_MESSAGE});return;}
+    const WRITE_TYPES=new Set(['FACTORY_RESET','START_SCAN','SCAN_ALL','SCAN_CURRENT_TAB','RUN_HUNT','TBMT_SEARCH','PLAN_LOOKUP','WINNER_LOOKUP','BID_OPEN_SCAN','RETRY_BID_OPEN','AREA_SCAN','INVESTOR_SCAN','COMPARE_EGP_DOM','TELEGRAM_TEST','TELEGRAM_DETECT_CHAT','FETCH_AND_DOWNLOAD','TELEGRAM_BACKUP_NOW','RIVAL_SWEEP_NOW']);
     const mutating=/^(SAVE_|DELETE_|CLEAR_|SET_|IMPORT_)/.test(type)||WRITE_TYPES.has(type)||CONTENT_MESSAGE_TYPES.has(type)||type==='UPDATE_SETTINGS'||type==='APPLY_WAREHOUSE_CLEANUP'||type==='PREVIEW_WAREHOUSE_CLEANUP';
     if(mutating&&(await readSafetyState()).settings.readOnlyMode){
       const unlock=type==='UPDATE_SETTINGS'&&senderIsOptions(sender)&&message.payload?.readOnlyMode===false;
@@ -3977,11 +4003,11 @@ chrome.runtime.onMessage.addListener((message,sender,sendResponse)=>{
           if(!prices.ok)throw new Error(prices.message);
           const clean=importedSettings(raw);
           // Backup imports disable integrations; ordinary settings preserve intent.
-          for(const k of ['telegramBotToken','telegramChatId']){
+          for(const k of ['telegramBotToken','telegramChatId','telegramGroupChatId']){
             const next=String(raw[k]||'').trim().slice(0,500);
             clean[k]=/^•+$/.test(next)?String(s.settings[k]||''):next;
           }
-          for(const k of ['telegramEnabled','autoScan','scanOnStartup','autoExportMobileReport'])clean[k]=Boolean(raw[k]);
+          for(const k of ['telegramEnabled','autoScan','scanOnStartup','autoExportMobileReport','telegramBackupDaily'])clean[k]=Boolean(raw[k]);
           clean.capability=normalizeCapability(raw.capability||s.settings.capability||{});
           clean.notifyEmail=safeEmail(raw.notifyEmail);
           clean.notifyWebhook='';
@@ -4064,7 +4090,7 @@ chrome.runtime.onMessage.addListener((message,sender,sendResponse)=>{
           [KEYS.winnerCache]:{},[KEYS.bidOpenScan]:null,[KEYS.planLookup]:null,[KEYS.areaScan]:null,
           [KEYS.investorScan]:null,[KEYS.hunts]:clean.hunts,[KEYS.watchedInvestors]:clean.watchedInvestors,
           [KEYS.checklists]:clean.checklists,[KEYS.pastContracts]:clean.pastContracts,[KEYS.amendmentLog]:clean.amendmentLog,
-          [KEYS.auditLog]:clean.auditLog,[KEYS.deadlineAlerts]:{},[KEYS.domSnapshots]:[]});
+          [KEYS.auditLog]:clean.auditLog,[KEYS.deadlineAlerts]:{},[KEYS.domSnapshots]:[],[KEYS.watchedRivals]:clean.watchedRivals,[KEYS.rivalWatch]:null,[KEYS.hsmtReads]:clean.hsmtReads});
         await ensureDailyAlarm();
         sendResponse({ok:true,imported:clean.tenders.length,
           message:`Đã nhập ${clean.tenders.length} gói. Telegram và lịch tự động đang tắt để bảo đảm an toàn.`});

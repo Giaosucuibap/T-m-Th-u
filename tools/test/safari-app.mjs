@@ -34,6 +34,7 @@ import { openWebKit, webkitAvailable } from './webkit-driver.mjs';
 import { startMapProxy } from './map-proxy.mjs';
 import zlib from 'node:zlib';
 import { buildPack, bookmarklet, bundleUrl, bundleInfo, REFS } from '../../safari/build.mjs';
+import { competitionBrief, competitionLines } from '../../GiaoSuCuiBap/lib/competition.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const OUT = path.join(ROOT, 'test-results', 'safari-app');
@@ -940,6 +941,163 @@ numbered('MÀN CẢM ỨNG — các trang của phần mềm: chỗ bấm từ 4
         assert.deepEqual([dash.side, dash.more, dash.jargon], [false, true, false]);
         await s.ui('D.querySelector("#list .result-card [data-more]").click(); return true;');
         assert.equal(await s.ui('const c = D.querySelector("#list .result-card"); return c.classList.contains("open") && c.querySelector(".result-side").getBoundingClientRect().height > 0'), true);
+        assert.deepEqual((await s.state()).errors, []);
+      });
+    });
+  }
+});
+
+/* Câu trả lời mẫu của trợ lý AI cho bước "Đọc E-HSMT bằng AI" — đúng mẫu mà câu lệnh của phần mềm yêu cầu. */
+const HSMT_ANSWER = 'Kết quả trích xuất:\n```json\n' + JSON.stringify({ phien_ban: 1, goi_thau: { ten: 'Gói thử', ma_tbmt: '', chu_dau_tu: '' },
+  tom_tat: 'Thi công kênh bê tông dài 3 km, có 2 cống điều tiết; tiến độ 240 ngày qua mùa mưa.', moc_thoi_gian: { thoi_gian_thuc_hien_ngay: 240, hieu_luc_hsdt_ngay: 90 },
+  bao_dam_du_thau: { gia_tri_dong: 75000000, hinh_thuc: 'Thư bảo lãnh của ngân hàng', hieu_luc_ngay: 120, trich: 'Giá trị bảo đảm dự thầu: 75.000.000 VND', muc: 'BDL 19.1' },
+  yeu_cau: [{ nhom: 'tai_chinh', noi_dung: 'Doanh thu bình quân hằng năm của 3 năm gần nhất', gia_tri_dong: 12000000000, so_nam: 3, trich: 'Doanh thu bình quân hằng năm tối thiểu là 12.000.000.000 VND', muc: 'Chương III, mục 2.1' },
+    { nhom: 'tai_chinh', noi_dung: 'Nguồn lực tài chính cho gói thầu', gia_tri_dong: 9000000000, trich: 'Nguồn lực tài chính tối thiểu 9.000.000.000 VND', muc: 'Chương III, mục 2.2' },
+    { nhom: 'nhan_su', noi_dung: 'Chỉ huy trưởng công trường: kỹ sư thủy lợi, tối thiểu 5 năm kinh nghiệm', so_luong: 1, trich: '01 Chỉ huy trưởng công trường', muc: 'Mẫu 06A' },
+    { nhom: 'thiet_bi', noi_dung: 'Máy đào dung tích gầu ≥ 0,8 m3', so_luong: 2, trich: 'Máy đào ≥ 0,8 m3: 02 chiếc', muc: 'Mẫu 06D' }],
+  dieu_khoan_hop_dong: [{ loai: 'tam_ung', noi_dung: 'Tạm ứng 20% giá hợp đồng', trich: 'Tạm ứng: 20% giá hợp đồng', muc: 'ĐKCT 35.1' }],
+  tieu_chi_danh_gia: [{ noi_dung: 'Kỹ thuật đánh giá theo tiêu chí đạt / không đạt', trich: 'sử dụng tiêu chí đạt, không đạt', muc: 'Chương III, mục 4' }],
+  rui_ro: ['Thời gian thi công trùng mùa mưa'], chua_ro: ['Không thấy quy định về điều chỉnh giá'] }) + '\n```';
+
+numbered('TÍNH NĂNG 4.22.0 — tìm bằng câu thường, sao lưu Telegram và khôi phục, theo dõi đối thủ, gói lặp lại, hồ sơ quyết định (cạnh tranh, E-HSMT qua AI), bản in', async () => {
+  for (const device of ['ipad', 'iphone']) {
+    await session({ chaos: 'autoload', label: `tinh-nang-422-${device}`, device, opts: { touch: true, zoom: 1 } }, async (s) => {
+      const name = device === 'ipad' ? 'iPad 1024×1366' : 'iPhone 390×844';
+      let key = '';
+      await step(`${name} · tìm bằng câu thường: câu nói → các ô tiêu chí; KHÔNG tự hỏi e-GP; bấm tìm thì ra đúng 137 · khớp 115 như tìm bằng biểu mẫu`, async () => {
+        await s.open('search.html');
+        await s.ui(`D.getElementById('nl-input').value = 'tìm các gói xây lắp ở Lâm Đồng dưới 900 tỷ, đóng thầu trong 6 tháng'; D.getElementById('nl-go').click(); return true;`);
+        const filled = await s.ui('return { chips: [...D.querySelectorAll("#nl-understood .nl-chip")].map(x => x.textContent), province: D.getElementById("province").value, category: D.getElementById("category").value, max: D.getElementById("maxPrice").value, keyword: D.getElementById("keyword").value, closeTo: D.getElementById("close-to").value, run: !!D.getElementById("nl-run"), tran: D.documentElement.scrollWidth - W.innerWidth };');
+        assert.equal(filled.chips.length, 4, filled.chips.join(' | '));
+        assert.match(filled.province, /Lâm Đồng/);
+        assert.deepEqual([filled.category, filled.max, filled.keyword, filled.run], ['XL', '900 tỷ', '', true]);
+        assert.match(filled.closeTo, /^\d{4}-\d{2}-\d{2}$/);
+        assert.ok(filled.tran <= 1, `tràn ngang ${filled.tran}px`);
+        assert.equal((await s.send('GET_SEARCH_STATE', {}))?.activeRun || null, null, 'điền tiêu chí xong chưa được tự chạy lượt tìm');
+        // Bỏ lọc giá và hạn để so đúng với lượt tìm chuẩn của bộ kiểm thử (Lâm Đồng · Xây lắp).
+        await s.ui(`D.getElementById('nl-input').value = 'xây lắp ở lâm đồng'; D.getElementById('nl-go').click(); D.getElementById('nl-run').click(); return true;`);
+        await s.until(() => s.ui('return D.querySelectorAll("#list article.ws-result").length > 0 && /Hoàn tất|khớp/.test(D.body.innerText) && !D.getElementById("stop")?.offsetParent;'), 90000, 'thẻ kết quả');
+        const r = await s.send('GET_SEARCH_STATE', {});
+        assertFullRun(facts(r?.selectedRun || r?.runs?.[0]));
+        key = await s.ui('return D.querySelector("#list article.ws-result [data-watch]").dataset.watch;');
+        assert.ok(key, 'có mã gói để mở Hồ sơ quyết định');
+        assert.equal(await s.ui('const a = D.querySelector("#list article.ws-result [data-brief]"); return a ? a.getAttribute("href") : ""'), `brief.html?key=${encodeURIComponent(key)}`);
+      });
+      await step(`${name} · sao lưu lên Telegram: gửi TỆP bằng biểu mẫu (không "hỏi trước"), tệp không có Bot Token/Chat ID; nhập lại chính tệp đó thì kho còn nguyên`, async () => {
+        await s.open('options.html');
+        await s.ui(`W.__alerts = []; W.alert = (m) => W.__alerts.push(String(m)); W.confirm = () => true;
+          D.getElementById('telegramBotToken').value = '7123456789:AAHthu-nghiem'; D.getElementById('telegramChatId').value = '555666777'; D.getElementById('telegramEnabled').checked = true; D.getElementById('telegramBackupDaily').checked = true;
+          D.getElementById('form').requestSubmit(); return true;`);
+        await s.until(async () => (await s.send('TELEGRAM_BACKUP_STATUS'))?.enabled === true, 10000, 'lưu cấu hình Telegram');
+        const before = (await s.send('GET_STATE')).tenders.length;
+        await s.ui('D.getElementById("backup-now").click(); return true;');
+        const msg = await s.until(() => s.ui('const t = D.getElementById("backup-msg").textContent; return /Đã gửi|Chưa|Không|Thiếu/.test(t) && t;'), 30000, 'gửi bản sao lưu');
+        assert.match(msg, /^Đã gửi GiaoSuCuiBap-sao-luu-\d{4}-\d{2}-\d{2}_\d{2}-\d{2}\.json \(\d+ KB\) vào Telegram\.$/);
+        const line = s.mockLog().split('\n').filter((l) => l.includes('TELEGRAM TỆP {')).pop() || '';
+        assert.match(line, /"chat":"555666777"/);
+        assert.match(line, new RegExp(`${before} gói`));
+        assert.doesNotMatch(s.mockLog(), /TỆP HỎI TRƯỚC/, 'gửi tệp không được cần bước hỏi trước');
+        const restored = await s.ui(`return W.fetch('/__mock/telegram-file').then(async (r) => { const name = decodeURIComponent(r.headers.get('x-file-name')); const buf = await r.arrayBuffer(); const text = new W.TextDecoder().decode(buf);
+            const dt = new W.DataTransfer(); dt.items.add(new W.File([buf], name, { type: 'application/json' })); D.getElementById('backupFile').files = dt.files; D.getElementById('import').click();
+            await new Promise((ok) => setTimeout(ok, 3500)); return { secret: /AAHthu-nghiem|555666777/.test(text), alerts: W.__alerts.slice() }; });`);
+        assert.equal(restored.secret, false, 'tệp sao lưu không được chứa Bot Token hay Chat ID');
+        assert.match(restored.alerts.join(' | '), new RegExp(`Đã nhập ${before} gói`));
+        assert.equal((await s.send('GET_STATE')).tenders.length, before);
+        const st = await s.send('TELEGRAM_BACKUP_STATUS');
+        assert.deepEqual([st.enabled, st.configured], [false, false], 'nhập bản sao lưu: Telegram và lịch sao lưu tắt, phải bật lại bằng tay');
+        assert.match(st.last.message, /Đã gửi/);
+      });
+      await step(`${name} · theo dõi đối thủ: thêm mã số thuế (gói cũ không thành tin mới), "Kiểm tra ngay trên e-GP" tra gói đã trúng và báo gói mới; không tràn ngang`, async () => {
+        await s.send('UPDATE_SETTINGS', { telegramEnabled: true, telegramBotToken: '7123456789:AAHthu-nghiem', telegramChatId: '555666777' });
+        await s.open('rivals.html');
+        await s.ui(`W.alert = () => {}; W.confirm = () => true; D.getElementById('watch-tax').value = 'vn5800000111'; D.getElementById('watch-name').value = 'Công ty Đối Thủ'; D.getElementById('watch-form').requestSubmit(); return true;`);
+        await s.until(() => s.ui('return D.querySelectorAll("#watch-list .watch-row").length === 1;'), 10000, 'thêm đối thủ');
+        assert.equal(await s.ui('return D.querySelectorAll("#watch-events .watch-event").length'), 0);
+        await s.ui('D.getElementById("watch-sweep").click(); return true;');
+        const done = await s.until(() => s.ui('const t = D.getElementById("watch-msg").textContent; return /Đã tra e-GP|Chưa|Đang có|khoá/.test(t) && t;'), 180000, 'tra e-GP cho đối thủ');
+        assert.match(done, /^Đã tra e-GP cho 1\/1 đối thủ\. \d+ gói mới\./);
+        const view = await s.ui('return { events: D.querySelectorAll("#watch-events .watch-event.won").length, row: D.querySelector("#watch-list .watch-row .muted").textContent, tran: D.documentElement.scrollWidth - W.innerWidth, note: D.querySelector(".watch-foot").textContent };');
+        assert.ok(view.events >= 1, `${view.events} tin trúng thầu`);
+        assert.match(view.row, /\d+ gói trong kho · \d+ trúng · tra e-GP lần cuối/);
+        assert.match(view.note, /chưa thấy không có nghĩa là họ không dự/);
+        assert.ok(view.tran <= 1, `tràn ngang ${view.tran}px`);
+        assert.match(s.mockLog(), /TELEGRAM "👀 <b>Động thái đối thủ đang theo dõi<\/b>/);
+        // Tra lại ngay: không có gì mới thì không báo lại.
+        const again = await s.send('RIVAL_SWEEP_NOW', { taxCode: '5800000111' });
+        assert.equal(again.events.length, 0, 'gói đã báo không báo lần hai');
+      });
+      await step(`${name} · gói lặp lại hằng năm: kho mới có một năm thì nói rõ là chưa đủ, không bịa dự báo; có đường sang Kế hoạch lựa chọn nhà thầu`, async () => {
+        await s.open('forecast.html');
+        await s.until(() => s.ui('return /Kho có/.test(D.getElementById("summary").textContent);'), 15000, 'đọc kho');
+        const f = await s.ui('return { summary: D.getElementById("summary").textContent, cards: D.querySelectorAll(".forecast-card").length, empty: D.getElementById("list").textContent, note: D.getElementById("note").textContent, plans: !!D.querySelector(\'a[href="plans.html"]\'), tran: D.documentElement.scrollWidth - W.innerWidth };');
+        assert.match(f.summary, /Kho có [\d.]+ gói từ năm 2026 đến 2026\. Tìm thấy 0 nhóm gói lặp lại/);
+        assert.equal(f.cards, 0);
+        assert.match(f.empty, /Kho mới có dữ liệu của một năm/);
+        assert.match(f.note, /không phải kế hoạch của chủ đầu tư/);
+        assert.deepEqual([f.plans, f.tran <= 1], [true, true]);
+      });
+      await step(`${name} · hồ sơ quyết định: thông tin gói, cạnh tranh theo lịch sử (ít mẫu thì không đưa trung vị), dán câu trả lời của AI → bảng đối chiếu có câu trích`, async () => {
+        await s.open(`brief.html?key=${encodeURIComponent(key)}`);
+        await s.until(() => s.ui('return !!D.querySelector(".brief-title") && !!D.getElementById("save-read");'), 15000, 'hồ sơ quyết định');
+        const head = await s.ui('return { title: D.querySelector(".brief-title").textContent, facts: D.querySelectorAll("#head .brief-facts > div").length, score: D.getElementById("head").textContent, comp: D.getElementById("competition").textContent, steps: D.querySelectorAll("#hsmt .brief-steps > li").length, prompt: D.getElementById("prompt-text").value, tran: D.documentElement.scrollWidth - W.innerWidth };');
+        assert.ok(head.title.length > 10);
+        assert.equal(head.facts, 6);
+        assert.match(head.score, /không phải xác suất trúng thầu/);
+        assert.match(head.comp, /KHÔNG phải xác suất trúng thầu của gói đang xét/);
+        assert.doesNotMatch(head.comp, /Trung vị \d/, 'kho chưa đủ 5 gói của chủ đầu tư này thì không được đưa trung vị');
+        assert.equal(head.steps, 3);
+        assert.ok(head.prompt.includes('NGUYÊN VĂN') && head.prompt.includes(head.title.slice(0, 20)), 'câu lệnh có tên gói và yêu cầu trích nguyên văn');
+        assert.ok(head.tran <= 1, `tràn ngang ${head.tran}px`);
+        // Câu trả lời hỏng: báo rõ, không lưu gì.
+        await s.ui('D.getElementById("answer").value = "Xin lỗi, tôi không đọc được tệp đính kèm của bạn."; D.getElementById("save-read").click(); return true;');
+        await s.until(() => s.ui('return /Không tìm thấy khối JSON/.test(D.getElementById("read-msg").textContent);'), 8000, 'báo câu trả lời hỏng');
+        assert.equal((await s.send('GET_HSMT_READ', { key })).entry, null);
+        // Khai năng lực rồi dán câu trả lời đúng mẫu.
+        await s.send('UPDATE_SETTINGS', { capability: { avgRevenue: 15000000000, liquidAssets: 6000000000, staff: ['Chỉ huy trưởng: KS thủy lợi Nguyễn Văn A, 12 năm'], equipment: ['máy đào 0,8 m3 x 3'], taxCode: '5800000999' } });
+        await s.open(`brief.html?key=${encodeURIComponent(key)}`);
+        await s.until(() => s.ui('return !!D.getElementById("save-read");'), 15000, 'mở lại hồ sơ');
+        await s.ui('D.getElementById("answer").value = arguments[0]; D.getElementById("source").value = "Gemini"; D.getElementById("save-read").click(); return true;', [HSMT_ANSWER]);
+        await s.until(() => s.ui('return D.querySelectorAll("#hsmt .brief-table.matrix tbody tr").length === 4;'), 10000, 'bảng đối chiếu');
+        const m = await s.ui(`const tile = (i) => D.querySelectorAll('#hsmt .brief-tiles .brief-tile b')[i].textContent; const rows = [...D.querySelectorAll('#hsmt .brief-table.matrix tbody tr')];
+          return { tiles: [0, 1, 2, 3].map(tile), status: rows.map((r) => r.className), quotes: rows.filter((r) => r.querySelector('blockquote')).length, saved: /trợ lý: Gemini/.test(D.getElementById('hsmt').textContent), note: /AI có thể đọc sai/.test(D.getElementById('hsmt').textContent),
+            bond: /75\.000\.000/.test(D.getElementById('hsmt').textContent), lines: [...D.querySelectorAll('#competition .brief-lines li')].map((li) => li.textContent), tran: D.documentElement.scrollWidth - W.innerWidth };`);
+        assert.deepEqual(m.tiles, ['1', '1', '2', '0'], 'doanh thu đủ, nguồn lực thiếu, nhân sự và thiết bị phải tự đối chiếu');
+        assert.deepEqual(m.status, ['st-dat', 'st-thieu', 'st-tu-doi-chieu', 'st-tu-doi-chieu']);
+        assert.deepEqual([m.quotes, m.saved, m.note, m.bond], [4, true, true, true]);
+        // Phần cạnh tranh trên màn hình phải đúng từng câu với hàm tính trên chính kho của phiên này (kể cả dòng về công ty mình).
+        const st = await s.send('GET_STATE');
+        const brief = competitionBrief({ tender: st.tenders.find((t) => t.key === key), observations: st.observations, ownTaxCode: '5800000999' });
+        assert.deepEqual(m.lines, competitionLines(brief));
+        assert.equal(brief.own?.taxCode || (brief.level === 'khong' ? '5800000999' : ''), '5800000999');
+        assert.ok(m.tran <= 1, `tràn ngang ${m.tran}px`);
+        assert.equal((await s.send('GET_HSMT_READ', { key })).entry.source, 'Gemini', 'bản đọc còn sau khi mở lại trang');
+      });
+      await step(`${name} · In / Lưu PDF: bản in mở ở TAB MỚI ngay trong cú chạm; là trang đứng riêng, không còn nút, ô nhập hay script của phần mềm`, async () => {
+        const printed = await s.wk.exec(`const HUB = window.__GSCB_SAFARI__._hub; const W = HUB.ui.currentFrame().contentWindow; const D = W.document;
+          const real = window.open; let html = '', calls = 0, sync = false;
+          window.open = (url, target) => { calls++; return { document: { open() {}, write(x) { html += x; }, close() {}, getElementById: () => null }, focus() {}, print() {}, close() {} }; };
+          D.querySelector('.print-btn').click(); sync = calls === 1;
+          // Phần thân (sau <body) mới là nội dung báo cáo; phần đầu là toàn bộ bảng kiểu của trang, trong đó có tên lớp và bộ chọn.
+          return new Promise((done) => setTimeout(() => { window.open = real; const body = html.slice(html.indexOf('<body'));
+            done({ sync, calls, bytes: html.length, title: /class="brief-title"/.test(body), matrix: /class="brief-table matrix"/.test(body), bar: /id="gscb-print"/.test(body), buttons: (body.match(/<button/g) || []).length,
+              scripts: (html.match(/<script/gi) || []).length, inputs: (body.match(/<(input|textarea|select)\\b/gi) || []).length, steps: /class="brief-steps/.test(body), internal: (body.match(/href="(?!https:)/g) || []).length, stamp: /in lúc \\d{2}\\/\\d{2}\\/\\d{4}/.test(body), css: /@media print/.test(html) }); }, 1200));`);
+        assert.equal(printed.sync, true, 'tab mới phải được mở NGAY trong cú chạm (Safari chặn nếu mở sau)');
+        assert.ok(printed.bytes > 20000, `bản in ${printed.bytes} ký tự`);
+        assert.deepEqual([printed.title, printed.matrix, printed.bar, printed.stamp, printed.css], [true, true, true, true, true]);
+        assert.deepEqual([printed.buttons, printed.scripts, printed.inputs, printed.steps, printed.internal], [1, 0, 0, false, 0], 'chỉ còn một nút "In / Lưu PDF" của thanh hướng dẫn');
+      });
+      await step(`${name} · các màn hình mới: không còn chỗ bấm nào dưới 44 px, không tràn ngang, không lỗi script`, async () => {
+        const report = [];
+        for (const page of ['rivals.html', 'forecast.html', `brief.html?key=${encodeURIComponent(key)}`, 'brief.html', 'capability.html', 'options.html', 'search.html']) {
+          await s.open(page);
+          await sleep(500);
+          await s.ui('D.body.classList.add("nav-open"); for (const d of D.querySelectorAll("main details:not([open])")) d.open = true; return true;');
+          await sleep(200);
+          const r = await s.ui(`return ${SMALL_TARGETS};`);
+          if (r.count) report.push(`${page.split('?')[0]}: ${r.count}/${r.total} — ${r.small.join(' | ')}`);
+          assert.ok(await s.ui('return D.documentElement.scrollWidth - W.innerWidth <= 1'), `${page} tràn ngang`);
+        }
+        assert.deepEqual(report, []);
         assert.deepEqual((await s.state()).errors, []);
       });
     });

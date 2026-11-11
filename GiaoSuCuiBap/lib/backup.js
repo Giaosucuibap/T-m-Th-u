@@ -5,12 +5,14 @@ import { safeHunts, safeWatches } from './hunts.js';
 import { safeContracts } from './contracts.js';
 import { checklistItemsFor } from './capability.js';
 import { parseInvestorFilter } from './investor-filter.js';
+import { safeRivalWatches } from './rival-watch.js';
+import { safeHsmtReads } from './hsmt-ai.js';
 
 const bounded = (value, max = 220) => String(value ?? '').slice(0, max);
 const iso = value => typeof value === 'string' && Number.isFinite(Date.parse(value)) ? new Date(value).toISOString() : '';
 const records = value => (Array.isArray(value) ? value : []).filter(row => row && typeof row === 'object' && !Array.isArray(row));
 const safeKey = value => /^[a-zA-Z0-9:_-]{1,220}$/.test(String(value || '')) && !['__proto__', 'constructor', 'prototype'].includes(value);
-const DESTINATIONS = new Set(['notifyWebhook', 'notifyEmail', 'telegramChatId']);
+const DESTINATIONS = new Set(['notifyWebhook', 'notifyEmail', 'telegramChatId', 'telegramGroupChatId']);
 const safeWardIdentities=value=>records(value).slice(0,100).flatMap(row=>typeof row.code==='string'&&typeof row.parentCode==='string'&&row.code&&row.parentCode
   ?[{code:bounded(row.code,120),parentCode:bounded(row.parentCode,120),name:bounded(row.name,200)}]:[]);
 const safeLocations=value=>records(value).slice(0,100).map(row=>Object.fromEntries(['provCode','provName','provinceCode','provinceName','districtCode','districtName','wardCode','wardName','parentCode']
@@ -73,8 +75,13 @@ export function sanitizeBackupFeatures(state = {}, { disableHunts = true } = {})
   }));
   const auditLog = records(state.auditLog).slice(0, 800).map(row => ({ at: iso(row.at),
     operator: bounded(row.operator, 120), kind: bounded(row.kind, 40), key: bounded(row.key), detail: bounded(row.detail, 500) }));
+  // 4.22.0: danh sách đối thủ đang theo dõi (mã số thuế công khai, tên, ghi chú). Dấu "đã xem" không
+  // xuất: sau khi khôi phục, lượt xét đầu ghi mốc lại nên không thành hàng loạt "tin mới".
+  const watchedRivals = safeRivalWatches(records(state.watchedRivals));
   return stripSecretsDeep({hunts, watchedInvestors: safeWatches(records(state.watchedInvestors)),
-    checklists, pastContracts, amendmentLog, auditLog}) || {};
+    checklists, pastContracts, amendmentLog, auditLog, watchedRivals,
+    // Bản đọc E-HSMT (tóm tắt, yêu cầu, câu trích) — nội dung hồ sơ mời thầu công khai, không có bí mật.
+    hsmtReads: safeHsmtReads(state.hsmtReads)}) || {};
 }
 
 /** Chỉ xuất những khóa cài đặt mà phiên bản hiện tại thực sự hỗ trợ. */

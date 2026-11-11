@@ -87,7 +87,7 @@ test('content.js và page-hook.js — phần đọc dữ liệu e-GP — đượ
 test('gói có đủ mọi trang và mọi tệp của tiện ích; không kèm tài liệu và bản bookmarklet cũ', () => {
   const all = walk(EXT);
   const pages = all.filter((f) => f.endsWith('.html') && !f.startsWith('mobile/'));
-  assert.equal(pages.length, 23);
+  assert.equal(pages.length, 25);   // 4.22.0 thêm brief.html (Hồ sơ quyết định) và forecast.html (Gói lặp lại hằng năm)
   for (const page of pages) assert.ok(pack.files[page]?.s, `thiếu trang ${page}`);
   for (const file of all) {
     const skipped = file.endsWith('.md') || file.endsWith('.txt') || file.startsWith('mobile/');

@@ -39,12 +39,16 @@ export const DEFAULT_SETTINGS = Object.freeze({
   telegramEnabled: false,
   telegramBotToken: '',
   telegramChatId: '',
+  // Nhóm chat của phòng đấu thầu (4.22.0, tuỳ chọn): nhận thêm một bản các tin nghiệp vụ.
+  telegramGroupChatId: '',
   telegramMinScore: 70,
   // Nhắn cả khi không có gói mới, để biết hệ thống vẫn đang chạy.
   telegramDailySummary: false,
   // Bản tin sáng gom một tin mỗi ngày (4.17.0). Mặc định TẮT.
   telegramMorningBulletin: false,
   morningBulletinTime: '07:00',
+  // Sao lưu tự động (4.22.0): mỗi ngày gửi một tệp sao lưu an toàn vào chat Telegram. Mặc định TẮT.
+  telegramBackupDaily: false,
   notifyEmail: '',
   notifyWebhook: '',
   webhookSecret: '',

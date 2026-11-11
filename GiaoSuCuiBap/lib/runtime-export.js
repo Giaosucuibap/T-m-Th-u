@@ -227,20 +227,24 @@ async function exportCsv(saveAs=true,keys=null,runId='',view={},revision='',scop
 
 async function exportMobileReport(saveAs=true){const s=await getState();return downloadData(`GiaoSuCuiBap/Bao-cao-dien-thoai-${new Date().toISOString().slice(0,10)}.html`,'text/html',mobileHtml(s.tenders),saveAs);}
 
-async function exportBackup(){
+/** Nội dung bản sao an toàn — dùng chung cho nút tải về và sao lưu tự động lên Telegram. */
+async function backupObject(){
   const s=await getState();
   const cleanTemplates=sanitizedTemplateState(s);
   // Danh sách trắng: không xuất activeRun, runs[].queue, cache, log Telegram,
   // request lồng hoặc bất kỳ khóa nào có dấu hiệu bí mật.
   const exportState=buildSafeBackupState(s,cleanTemplates,DEFAULT_SETTINGS);
+  return {version:chrome.runtime.getManifest().version,
+    exportedAt:new Date().toISOString(),
+    backupMode:'SAFE',
+    _LUU_Y:'Ban sao an toan: queue request, token, CAPTCHA, cookie, Bot Token va Chat ID da duoc loai bo.',
+    ...exportState};
+}
+
+async function exportBackup(){
   const stamp=new Date().toISOString().replace(/[:.]/g,'-');
   return downloadData(`GiaoSuCuiBap/backup-du-lieu-an-toan-${stamp}.json`,
-    'application/json',
-    JSON.stringify({version:chrome.runtime.getManifest().version,
-      exportedAt:new Date().toISOString(),
-      backupMode:'SAFE',
-      _LUU_Y:'Ban sao an toan: queue request, token, CAPTCHA, cookie, Bot Token va Chat ID da duoc loai bo.',
-      ...exportState}),true);
+    'application/json',JSON.stringify(await backupObject()),true);
 }
 
 async function exportWinnersCsv(){
@@ -683,5 +687,5 @@ async function exportPlansCsv(payload={}){
     rows
   });
 }
-return {exportCsv,exportMobileReport,exportBackup,exportWinnersCsv,exportBidOpenCsv,exportProfileXlsx,exportInvestorXlsx,exportAreaXlsx,exportPlansCsv};
+return {exportCsv,exportMobileReport,exportBackup,backupObject,exportWinnersCsv,exportBidOpenCsv,exportProfileXlsx,exportInvestorXlsx,exportAreaXlsx,exportPlansCsv};
 }

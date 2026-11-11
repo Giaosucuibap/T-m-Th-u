@@ -1,12 +1,13 @@
 import {validateCriteria} from './lib/workspace.js';
+import {readBackupBytes,fileSizeText} from './lib/telegram-backup.js';
 /* Giáo Sư Cùi Bắp — options.js : trang Cấu hình. */
 
 const ids = ['minPrice', 'maxPrice', 'minDaysToClose', 'reportMinScore', 'maxPagesHint', 'dailyTime',
   'maxStoredTenders', 'scanTimeoutSeconds', 'alertMinScore', 'telegramMinScore'];
 const checks = ['requireConstruction', 'autoScan', 'scanOnStartup', 'openScheduledTabActive', 'keepEgpTabWarm',
-  'autoExportMobileReport', 'telegramEnabled', 'telegramDailySummary', 'telegramMorningBulletin', 'readOnlyMode'];
+  'autoExportMobileReport', 'telegramEnabled', 'telegramDailySummary', 'telegramMorningBulletin', 'telegramBackupDaily', 'readOnlyMode'];
 const lines = ['provinces', 'positiveKeywords', 'requiredKeywords', 'negativeKeywords'];
-const texts = ['morningBulletinTime', 'requirementText', 'telegramBotToken', 'telegramChatId', 'notifyEmail', 'notifyWebhook', 'webhookSecret', 'operatorName'];
+const texts = ['morningBulletinTime', 'requirementText', 'telegramBotToken', 'telegramChatId', 'telegramGroupChatId', 'notifyEmail', 'notifyWebhook', 'webhookSecret', 'operatorName'];
 const selects = ['approvalSteps'];
 
 const $ = (id) => document.getElementById(id);
@@ -64,15 +65,45 @@ $('form').onsubmit = async (e) => {
 
 $('import').onclick = async () => {
   const f = $('backupFile').files[0];
-  if (!f) return alert('Chọn file JSON backup.');
+  if (!f) return alert('Chọn tệp sao lưu (.json hoặc .json.gz).');
   if (f.size > 30_000_000) return alert('File backup vượt quá 30 MB nên không thể nhập an toàn.');
   try {
-    const data = JSON.parse(await f.text());
+    // 4.22.0: nhận cả tệp nén .json.gz mà phần mềm gửi vào Telegram khi kho lớn.
+    const data = await readBackupBytes(new Uint8Array(await f.arrayBuffer()));
+    if (JSON.stringify(data).length > 30_000_000) return alert('Tệp sau khi giải nén vượt quá 30 MB nên không thể nhập an toàn.');
     const r = await msg('IMPORT_BACKUP', { data });
     alert(r.ok ? (r.message || 'Đã nhập backup.') : r.message);
     load();
   } catch (e) { alert('File không hợp lệ: ' + e.message); }
 };
+
+/* Sao lưu tự động lên Telegram (4.22.0) */
+const vnTime = (iso) => { const t = Date.parse(iso || ''); if (!Number.isFinite(t)) return ''; const d = new Date(t + 7 * 3600_000); const two = (n) => String(n).padStart(2, '0'); return `${two(d.getUTCDate())}/${two(d.getUTCMonth() + 1)}/${d.getUTCFullYear()} ${two(d.getUTCHours())}:${two(d.getUTCMinutes())}`; };
+async function loadBackupStatus() {
+  const box = $('backup-msg'); if (!box) return;
+  const r = await msg('TELEGRAM_BACKUP_STATUS').catch(() => null);
+  if (!r?.ok) { box.textContent = ''; return; }
+  const last = r.last || {};
+  const parts = [];
+  if (last.okAt) parts.push(`Bản gần nhất: ${vnTime(last.okAt)} (giờ VN)${last.file ? ` · ${last.file}` : ''}${last.bytes ? ` · ${fileSizeText(last.bytes)}` : ''}.`);
+  else parts.push('Chưa gửi bản sao lưu nào.');
+  if (last.result && last.result !== 'ok' && last.message) parts.push(`Lần thử gần nhất (${vnTime(last.attemptAt)}): ${last.message}`);
+  if (!r.configured) parts.push('Cần Bot Token và Chat ID ở trên.');
+  box.textContent = parts.join(' ');
+  box.className = `small ${last.result === 'error' || last.result === 'too-big' ? 'danger-text' : 'muted'}`;
+}
+$('backup-now').onclick = async () => {
+  const btn = $('backup-now'), box = $('backup-msg');
+  btn.disabled = true; box.textContent = 'Đang đóng tệp và gửi vào Telegram…'; box.className = 'small muted';
+  try {
+    const r = await msg('TELEGRAM_BACKUP_NOW');
+    box.textContent = r?.message || (r?.ok ? 'Đã gửi.' : 'Chưa gửi được.');
+    box.className = `small ${r?.ok ? 'ok-text' : 'danger-text'}`;
+    loadLog();
+  } catch (e) { box.textContent = String(e.message || e); box.className = 'small danger-text'; }
+  finally { btn.disabled = false; }
+};
+loadBackupStatus();
 
 $('clear').onclick = async () => {
   if (confirm('Xóa danh sách gói thầu và lịch sử quét? Cấu hình và thông tin Telegram vẫn được giữ lại.')) {

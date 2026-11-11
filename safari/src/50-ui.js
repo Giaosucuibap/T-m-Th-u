@@ -266,6 +266,35 @@ function createUi() {
     hub.tabs.openExternal(abs);
   }
 
+  /**
+   * In / Lưu PDF. Phần mềm nằm trong một khung của trang muasamcong nên Safari không in riêng khung
+   * được: mở BẢN CHỤP của báo cáo (HTML đứng riêng do trang dựng) ở tab mới, người dùng in hoặc lưu
+   * PDF bằng nút Chia sẻ của Safari. Phải gọi ngay trong cú chạm, nếu không Safari chặn tab mới.
+   * Trả true nếu đã mở được (hoặc đã nhờ Safari mở qua một liên kết).
+   */
+  function openReport(html) {
+    let tab = null;
+    try { tab = TOP.open('', '_blank'); } catch { tab = null; }
+    if (tab && tab.document) {
+      try {
+        tab.document.open(); tab.document.write(String(html)); tab.document.close();
+        const button = tab.document.getElementById('gscb-print');
+        if (button) button.addEventListener('click', () => { try { tab.focus(); tab.print(); } catch { /* còn nút Chia sẻ → In của Safari */ } });
+        note('info', 'in', 'Đã mở bản in ở tab mới.');
+        return true;
+      } catch { try { tab.close(); } catch { /* bỏ qua */ } }
+    }
+    try {
+      const url = TOP.URL.createObjectURL(new TOP.Blob([String(html)], { type: 'text/html;charset=utf-8' }));
+      const link = TOP.document.createElement('a');
+      link.href = url; link.target = '_blank'; link.rel = 'noopener';
+      TOP.document.body.append(link); link.click(); link.remove();
+      TOP.setTimeout(() => { try { TOP.URL.revokeObjectURL(url); } catch { /* bỏ qua */ } }, 10 * 60_000);
+      note('info', 'in', 'Đã nhờ Safari mở bản in qua liên kết (tab mới bị chặn khi mở trực tiếp).');
+      return true;
+    } catch (error) { note('error', 'in', `Không mở được bản in: ${error?.message || error}`); return false; }
+  }
+
   let renderSeq = 0;
   const noted = new Set();
   /** Dựng một trang tiện ích vào khung mới; khung cũ giữ nguyên trên màn hình tới khi khung mới sẵn sàng. */
@@ -290,6 +319,7 @@ function createUi() {
     win.__GSCB_TOUCH__ = TOUCH;             // các trang của tiện ích đọc hai cờ này (shell.js) để chỉnh cho ngón tay
     win.__GSCB_PLATFORM__ = 'safari';
     win.open = (url) => { if (url) navigateFrom(String(url)); return null; };
+    win.__GSCB_PRINT__ = openReport;        // nút "In / Lưu PDF" của các trang (lib/print.js)
     win.close = () => back();
     win.addEventListener('error', (event) => note('error', entry.page, `${event.message || 'Lỗi script'}${event.lineno ? ` (dòng ${event.lineno})` : ''}`));
     win.addEventListener('unhandledrejection', (event) => note('error', entry.page, `Promise bị từ chối: ${event.reason?.message || event.reason}`));

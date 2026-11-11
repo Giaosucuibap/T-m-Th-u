@@ -70,7 +70,10 @@ test('theme.css: mọi quy tắc cho ngón tay nằm sau html[data-touch] — gi
   const css = read('GiaoSuCuiBap', 'theme.css');
   const at = css.indexOf('MÀN CẢM ỨNG (4.22.0)');
   assert.ok(at > 0, 'có mục MÀN CẢM ỨNG');
-  const section = css.slice(css.indexOf('*/', at) + 2).replace(/\/\*[\s\S]*?\*\//g, '');
+  // Mục MÀN CẢM ỨNG kết thúc ở mục "TÍNH NĂNG 4.22.0" (kiểu của các phần mới, áp dụng cho cả máy tính).
+  const end = css.indexOf('TÍNH NĂNG 4.22.0', at);
+  assert.ok(end > at, 'có mục TÍNH NĂNG 4.22.0 đứng sau');
+  const section = css.slice(css.indexOf('*/', at) + 2, css.lastIndexOf('/*', end)).replace(/\/\*[\s\S]*?\*\//g, '');
   /* Quy tắc nền (áp dụng cả máy tính) chỉ được là những phần tử MỚI của 4.22.0, mặc định ẩn hoặc trung tính. */
   const neutral = /^(\.deadline-exact( i)?|\.deadline-left|\.reason-more|\.card-more|\.qf-close|\.touch-tip)$/;
   const flat = section.replace(/@media[^{]*\{/g, '').replace(/\}\s*\}/g, '}');
