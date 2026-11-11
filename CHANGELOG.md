@@ -8,6 +8,10 @@ Tài liệu này ghi lại các thay đổi quan trọng của Giáo Sư Cùi B�
 ngày 11/11/2026 (9 nhược điểm, 10 tính năng đề xuất). Hướng dẫn: `HUONG-DAN-4.22.0.md`. Thẩm định lại sau khi
 làm: `BAO-CAO-THAM-DINH-SAFARI.md`, mục "Thẩm định lại sau 4.22.0".
 
+**Kênh ổn định của bản Safari:** 4.22.0 · bản dựng `081028c6ffac` (3.111.915 byte, SHA-256 `ebd91d78…0b9d` — đủ
+trong `safari/dist/phien-ban.json`), đưa lên ngày 11/11/2026 sau khi mọi phép kiểm tại chỗ và CI đạt. Dấu trang đã
+cài không đổi; máy đang dùng 4.21.0 được hỏi trước khi cập nhật.
+
 ### Sửa lỗi
 - **Thao tác lùi của Safari làm trắng màn hình.** Mỗi lần đổi màn hình, lớp vỏ thêm một mục vào lịch sử của tab
   (27 lần đổi: 4 → 31 mục); lùi một bước thì khung giao diện về `about:blank`. Nay khung dùng
@@ -68,7 +72,7 @@ tài khoản Apple Developer); báo hợp đồng sắp hết hạn (không có 
   e-GP giả lập (SEGV; 8/24 vòng với 4.22.0, 5/24 với 4.21.0), không phải trang của tiện ích. Kịch bản bỏ qua
   đúng lỗi đó, đếm và ghi vào `bao-cao.json`; trang đang chụp mà sập thì vẫn hỏng như thường.
 - `tools/test/safari-app.mjs`: 19 kịch bản, 80 phép kiểm trong WebKit 2.52.6 ở cỡ iPad và iPhone, e-GP giả
-  lập — thêm: thao tác lùi; nâng cấp từ đúng bản 4.21.0 đang phát hành; tuỳ chọn; màn cảm ứng; các tính năng
+  lập — thêm: thao tác lùi; nâng cấp từ đúng bản 4.21.0 đã phát hành trước đó; tuỳ chọn; màn cảm ứng; các tính năng
   mới (kể cả gửi tệp sao lưu rồi nhập lại chính tệp đó, và nội dung bản in).
 - Chưa kiểm được trên iPad thật và muasamcong thật: xem mục F của hướng dẫn.
 
