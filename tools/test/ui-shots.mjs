@@ -15,6 +15,21 @@ import path from 'node:path';
 
 const EXT = process.argv[2];
 const OUT = process.argv[3] || 'ui-shots';
+
+/* Trình duyệt thử nghiệm đôi khi SẬP MỘT TAB e-GP mà tiện ích mở trong lúc nạp dữ liệu. Đó là lỗi bộ nhớ của
+   chính Chromium ("Received signal 11 SEGV_MAPERR 000000000568" trong nhật ký trình duyệt), không phải của một
+   trang đang được chụp. Đo ngày 11/11/2026 với Chromium 1243 (Playwright 1.63), lặp lại riêng giai đoạn nạp:
+   8/24 vòng với tiện ích 4.22.0 và 5/24 vòng với tiện ích 4.21.0; có hay không tự đóng tab, có hay không ép cỡ
+   khung nhìn đều gặp. Tiện ích tự thử lại sau 30 giây và lượt tra vẫn xong. Nhưng trình điều khiển ném "Target
+   crashed" RA NGOÀI luồng chính (câu trả lời tới muộn của một tab không thuộc bài kiểm), làm cả kịch bản dừng
+   trước khi chụp trang nào — trước đây ghi nhận là "sập ngẫu nhiên, chưa rõ nguyên nhân".
+   Ở đây bỏ qua ĐÚNG lỗi đó, đếm lại và ghi vào báo cáo. Trang của tiện ích mà sập thì goto / evaluate /
+   screenshot ở luồng chính vẫn ném lỗi như thường; mọi lỗi ngoài luồng khác vẫn làm kịch bản dừng. */
+let tabEgpSap = 0;
+const laTabSap = (error) => /^(?:Protocol error \([^)]*\): )?Target crashed\b/.test(String(error?.message || error));
+const ngoaiLuong = (error) => { if (laTabSap(error)) { tabEgpSap++; return; } console.error(error); process.exit(1); };
+process.on('uncaughtException', ngoaiLuong);
+process.on('unhandledRejection', ngoaiLuong);
 const SIZES = (process.argv[4] || '1366x768,1920x1080').split(',').map((s) => s.split('x').map(Number));
 const PORT = process.env.MOCK_PORT || 9443;
 const UD = fs.mkdtempSync('/tmp/ud-');
@@ -121,7 +136,9 @@ for (const [w, h] of SIZES) {
     await pg.close();
   }
 }
+bao.tabEgpSap = tabEgpSap;
 fs.writeFileSync(path.join(OUT, 'bao-cao.json'), JSON.stringify(bao, null, 2));
+if (tabEgpSap) console.log(`LƯU Ý: trình duyệt thử nghiệm làm sập tab e-GP trong lúc nạp dữ liệu (${tabEgpSap} lỗi "Target crashed" ngoài luồng); tiện ích đã tự thử lại.`);
 console.log(`Đã chụp ${bao.trang.length} ảnh vào ${OUT}`);
 // Tổng hợp độ dễ đọc ở cỡ màn hình đầu tiên (mỗi trang đếm một lần).
 const dau = bao.trang.filter((t) => t.w === SIZES[0][0]);

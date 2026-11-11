@@ -255,8 +255,16 @@ Các lỗi này do chính bộ kiểm thử mới và lượt soát ảnh chụp
     GitHub có lượt mất trước khi kịp nhìn thấy, làm bài kiểm đỏ ở 2/2 lượt chạy). Nay dòng báo lỗi giữ tới lần
     bấm "Ghép nối" kế tiếp. Bài kiểm đầu-cuối được thêm đúng phép này (chờ hơn một nhịp làm mới rồi mới đọc):
     chạy với mã cũ thì hỏng, với mã mới thì đạt.
+12. **Lỗi của chính tính năng mới, cũng do bộ kiểm thử trên GitHub bắt được** (trang Đối thủ): bấm "Kiểm tra
+    ngay trên e-GP" xong, dòng báo "7 gói mới" hiện **trước**, còn danh sách "Động thái mới" phải chờ thêm một
+    lượt hỏi tiện ích mới hiện. Trên máy nhanh thì khoảng trống đó không thấy được; trên máy chậm thì có lúc đọc
+    thấy "7 gói mới" mà bên dưới chưa có gói nào (GitHub: đỏ 1 trong 2 lượt chạy cùng một mã). Em tái hiện chắc
+    chắn bằng cách làm chậm câu trả lời 0,6 giây (mã cũ hỏng 2/2, mã mới đạt 14/14); nay danh sách được vẽ xong
+    rồi dòng báo mới hiện, trong cùng một nhịp, và bài kiểm ghi lại số tin có trong danh sách đúng lúc dòng báo
+    đổi (phép này không phụ thuộc máy nhanh hay chậm). Sau đó em chạy **cả 19 kịch bản ở chế độ "mọi lượt đọc chậm thêm
+    0,35 giây"** để tìm lỗi cùng loại ở chỗ khác: 80/80, không còn chỗ nào.
 
-Mười một lỗi trên đã sửa và có phép kiểm giữ lại.
+Mười hai lỗi trên đã sửa và có phép kiểm giữ lại.
 
 **Hai chốt chặn thêm trước khi phát hành.** Dấu trang nạp một tệp duy nhất: một dòng cú pháp mà Safari trên máy
 anh chưa hiểu là cả tệp không chạy, kể cả phần "hỏi trước khi cập nhật". Bộ thử của em dùng nhân Safari đời mới
@@ -264,11 +272,20 @@ nên không bắt được loại lỗi này. Vì vậy em thêm: (1) `tools/tes
 được gói, tệp gói và bản ổn định ở mức ES2023 (mức Safari 16.4 hiểu trọn), chạy trên CI; (2)
 `tests/safari-toi-thieu-422.test.mjs` — danh sách cấm 22 nhóm hàm và 11 tính năng CSS chỉ có ở Safari mới hơn
 16.4. Kết quả lần soát này: **không thấy chỗ nào**. Giới hạn: đây là soát tĩnh trên mã; em không có iPad đời
-16.4 để chạy thật, và số phiên bản trong danh sách ghi theo hiểu biết của em. **Một việc em chưa giải thích được:** bước chụp bố cục trong
-Chromium (bản Chrome trên máy tính) bị sập trình duyệt thử nghiệm ở 2 trong 6 lần chạy liên tiếp, đúng lúc đang
-nạp dữ liệu mẫu, trước khi chụp trang nào; bốn lần còn lại đạt, và khi gắn thêm phần ghi nhận "trang nào sập" thì
-không lặp lại được. Em coi đây là lỗi ngẫu nhiên của môi trường thử (kịch bản này vốn có ghi chú về việc trình
-duyệt thử nghiệm hay sập), nhưng nói rõ là **chưa tìm ra nguyên nhân**.
+16.4 để chạy thật, và số phiên bản trong danh sách ghi theo hiểu biết của em.
+
+**Việc trước đây em ghi là "chưa giải thích được" — nay đã rõ.** Bước chụp bố cục trong Chromium (bản Chrome
+trên máy tính) thỉnh thoảng dừng với lỗi "Target crashed" lúc đang nạp dữ liệu mẫu. Em lặp riêng giai đoạn đó và
+đọc nhật ký của trình duyệt: **chính trình duyệt thử nghiệm bị lỗi bộ nhớ** (`Received signal 11 SEGV_MAPERR`)
+ở một tab muasamcong giả lập do tiện ích mở (theo trình tự thời gian là tab tra kế hoạch) — không phải một trang của phần mềm bị lỗi. Số đo:
+8/24 vòng với tiện ích 4.22.0 và **5/24 vòng với tiện ích 4.21.0 cũ** — tức không phải lỗi do bản mới gây ra; có
+hay không tự đóng tab, có hay không ép cỡ khung nhìn đều gặp. Khi tab đó sập, tiện ích tự mở lại tab sau 30 giây và
+lượt tra chạy tiếp (trong lượt em đo, danh sách 60/60 kế hoạch vẫn về đủ); thứ dừng lại là kịch bản kiểm thử
+(trình điều khiển ném lỗi ra ngoài luồng chính). Kịch bản
+nay bỏ qua đúng lỗi đó, đếm lại và ghi vào báo cáo. Trên GitHub (dùng bản Chromium khác) bước này đạt ở cả hai
+lượt chạy gần nhất. **Điều em không biết:** Chrome thật trên máy tính của anh có gặp lỗi này với trang
+muasamcong thật hay không — em không có cách thử; nếu có thì biểu hiện là một lượt tra kế hoạch chậm thêm khoảng
+30 giây rồi vẫn ra kết quả.
 
 ### 9.4 Chấm lại (thang 10)
 
@@ -279,7 +296,7 @@ duyệt thử nghiệm hay sập), nhưng nói rõ là **chưa tìm ra nguyên n
 | Hợp với màn cảm ứng | 5,5 | **9,5** | Mọi số đo đạt; nhưng **chưa có ngón tay thật** chạm vào |
 | Vận hành trên iPad | 5,5 | **7** | Vẫn không chạy nền, không có thông báo của iPad, phải chạm dấu trang mỗi lần mở |
 | Bảo mật và an toàn dữ liệu | 6 | **7,5** | Có kênh ổn định và sao lưu; dữ liệu vẫn chung nguồn với trang e-GP, mã vẫn tải từ GitHub |
-| Kiểm thử trong phòng thí nghiệm | 9 | **9,5** | 951 bài đơn vị, 80 phép kiểm đầu-cuối đạt hết; nhưng nhân thử là WebKit đời mới (chưa có máy Safari 16.4 thật), và còn một lần trình duyệt thử nghiệm sập chưa giải thích được |
+| Kiểm thử trong phòng thí nghiệm | 9 | **9,5** | 951 bài đơn vị, 80 phép kiểm đầu-cuối đạt hết, kể cả khi làm chậm mọi lượt đọc; nhưng nhân thử là WebKit đời mới (chưa có máy Safari 16.4 thật), và hai lỗi cuối cùng là do CI bắt chứ không phải em tự thấy trước |
 | **Kiểm chứng trên thiết bị thật** | 0 | **3** | Anh xác nhận 4.21.0 chạy được; chưa có bảng Chẩn đoán; **chưa phần nào của 4.22.0 được thử trên iPad thật** |
 
 **Em không chấm 10/10.** Ở những gì đo được trong phòng thí nghiệm, bản 4.22.0 đạt các ngưỡng đã đặt ra. Nhưng

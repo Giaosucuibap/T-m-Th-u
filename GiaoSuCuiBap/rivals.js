@@ -54,10 +54,11 @@ function renderWatch(r) {
 
 async function loadWatch({ markRead = true } = {}) {
   const r = await send('GET_RIVAL_WATCH').catch(() => null);
-  if (!r?.ok) { say(r?.message || 'Chưa đọc được danh sách theo dõi.', 'bad'); return; }
+  if (!r?.ok) { say(r?.message || 'Chưa đọc được danh sách theo dõi.', 'bad'); return false; }
   renderWatch(r);
   // Người dùng đã thấy danh sách: xoá số "chưa xem" cho lần sau (số vừa hiện vẫn giữ trên màn hình).
   if (markRead && r.unread) send('SET_RIVAL_READ').catch(() => {});
+  return true;
 }
 
 async function addWatch(taxCode, name) {
@@ -73,8 +74,12 @@ async function sweep(taxCode = '') {
   $('watch-sweep').disabled = true;
   $('watch-sweep-note').textContent = 'Đang tra e-GP cho các đối thủ… Có thể mất vài phút; bạn vẫn dùng được các màn hình khác.';
   const r = await send('RIVAL_SWEEP_NOW', taxCode ? { taxCode } : {}).catch((e) => ({ ok: false, message: String(e?.message || e) }));
-  say(r?.message || (r?.ok ? 'Đã kiểm tra.' : 'Chưa kiểm tra được.'), r?.ok ? 'ok' : 'bad');
-  await loadWatch({ markRead: false });
+  /* Danh sách TRƯỚC, lời báo SAU, trong cùng một nhịp vẽ. Trước đây lời báo "7 gói mới" hiện ngay còn danh sách
+     "Động thái mới" phải chờ thêm một lượt hỏi tiện ích — có lúc người dùng (và bài kiểm trên CI) đọc thấy
+     "7 gói mới" mà bên dưới chưa có gói nào. */
+  const listed = await loadWatch({ markRead: false });
+  const message = r?.message || (r?.ok ? 'Đã kiểm tra.' : 'Chưa kiểm tra được.');
+  say(listed ? message : `${message} Chưa đọc lại được danh sách — tải lại trang để xem.`, r?.ok && listed ? 'ok' : 'bad');
   run();
 }
 

@@ -16,6 +16,9 @@ làm: `BAO-CAO-THAM-DINH-SAFARI.md`, mục "Thẩm định lại sau 4.22.0".
   một lần và nhịp làm mới ghi đè dòng "Mã ghép nối không đúng" (đo: hiện 1,78 giây; có lượt mất gần như ngay).
   Lỗi có từ 4.21.0, bộ kiểm thử trên GitHub bắt được. Nay dòng báo lỗi giữ tới lần bấm "Ghép nối" kế tiếp; các
   dòng trạng thái chỉ ghi lại khi nội dung đổi (trình đọc màn hình không bị đọc lặp).
+- **Trang Đối thủ: lời báo đi trước danh sách.** Sau "Kiểm tra ngay trên e-GP", dòng "7 gói mới" hiện trước còn
+  danh sách "Động thái mới" tới sau một lượt hỏi tiện ích; trên máy chậm có lúc thấy lời báo mà chưa thấy gói
+  (CI đỏ 1/2 lượt). Nay vẽ danh sách xong mới hiện lời báo, cùng một nhịp.
 
 ### Bản Safari
 - **Phát hành an toàn**: `safari/dist/cuibap.js` là bản ỔN ĐỊNH, chỉ đổi bằng `node safari/build.mjs
@@ -58,6 +61,10 @@ tài khoản Apple Developer); báo hợp đồng sắp hết hạn (không có 
   Safari mới hơn. Soát tĩnh — không thay được việc chạy trên máy 16.4 thật.
 - `tests/link-dien-thoai-422.test.mjs` chạy đúng `phone.js` trong trang giả: gõ sai mã ghép nối, năm nhịp làm
   mới, dòng báo lỗi còn nguyên. `tools/test/phone-relay.mjs` 9/9, `phone-link.mjs` 7/7.
+- Chạy cả 19 kịch bản Safari ở chế độ "mọi lượt đọc chậm thêm 0,35 giây" (tìm lỗi thứ tự hiển thị): 80/80.
+- `tools/test/ui-shots.mjs`: lỗi "Target crashed" lúc nạp dữ liệu là trình duyệt thử nghiệm tự sập ở một tab
+  e-GP giả lập (SEGV; 8/24 vòng với 4.22.0, 5/24 với 4.21.0), không phải trang của tiện ích. Kịch bản bỏ qua
+  đúng lỗi đó, đếm và ghi vào `bao-cao.json`; trang đang chụp mà sập thì vẫn hỏng như thường.
 - `tools/test/safari-app.mjs`: 19 kịch bản, 80 phép kiểm trong WebKit 2.52.6 ở cỡ iPad và iPhone, e-GP giả
   lập — thêm: thao tác lùi; nâng cấp từ đúng bản 4.21.0 đang phát hành; tuỳ chọn; màn cảm ứng; các tính năng
   mới (kể cả gửi tệp sao lưu rồi nhập lại chính tệp đó, và nội dung bản in).

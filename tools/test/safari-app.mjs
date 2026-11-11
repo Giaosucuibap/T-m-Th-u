@@ -1013,9 +1013,15 @@ numbered('TÍNH NĂNG 4.22.0 — tìm bằng câu thường, sao lưu Telegram v
         await s.ui(`W.alert = () => {}; W.confirm = () => true; D.getElementById('watch-tax').value = 'vn5800000111'; D.getElementById('watch-name').value = 'Công ty Đối Thủ'; D.getElementById('watch-form').requestSubmit(); return true;`);
         await s.until(() => s.ui('return D.querySelectorAll("#watch-list .watch-row").length === 1;'), 10000, 'thêm đối thủ');
         assert.equal(await s.ui('return D.querySelectorAll("#watch-events .watch-event").length'), 0);
+        /* Lỗi CI bắt được ngày 11/11/2026 (đỏ 1/2 lượt): dòng báo "7 gói mới" hiện TRƯỚC, danh sách "Động thái
+           mới" tới sau một lượt hỏi tiện ích. Ghi lại số tin có trong danh sách ĐÚNG LÚC dòng báo đổi — phép này
+           không phụ thuộc máy nhanh hay chậm: với mã cũ luôn là 0. */
+        await s.ui(`W.__tinLucBao = null; new W.MutationObserver(() => { if (W.__tinLucBao === null && /^Đã tra e-GP/.test(D.getElementById('watch-msg').textContent)) W.__tinLucBao = D.querySelectorAll('#watch-events .watch-event').length; }).observe(D.getElementById('watch-msg'), { childList: true, characterData: true, subtree: true }); return true;`);
         await s.ui('D.getElementById("watch-sweep").click(); return true;');
         const done = await s.until(() => s.ui('const t = D.getElementById("watch-msg").textContent; return /Đã tra e-GP|Chưa|Đang có|khoá/.test(t) && t;'), 180000, 'tra e-GP cho đối thủ');
         assert.match(done, /^Đã tra e-GP cho 1\/1 đối thủ\. \d+ gói mới\./);
+        const tinLucBao = await s.ui('return W.__tinLucBao;');
+        assert.ok(tinLucBao >= 1, `lúc dòng báo "gói mới" hiện ra, danh sách Động thái mới có ${tinLucBao} tin — phải có sẵn`);
         const view = await s.ui('return { events: D.querySelectorAll("#watch-events .watch-event.won").length, row: D.querySelector("#watch-list .watch-row .muted").textContent, tran: D.documentElement.scrollWidth - W.innerWidth, note: D.querySelector(".watch-foot").textContent };');
         assert.ok(view.events >= 1, `${view.events} tin trúng thầu`);
         assert.match(view.row, /\d+ gói trong kho · \d+ trúng · tra e-GP lần cuối/);
