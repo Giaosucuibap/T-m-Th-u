@@ -1,0 +1,29 @@
+node_modules
+dist/
+# NGOẠI LỆ: bản chạy thẳng trên Safari. Dấu trang trên iPad tải safari/dist/cuibap.js THẲNG
+# TỪ KHO NÀY (raw.githubusercontent.com), nên tệp dựng phải nằm trong git. Bộ kiểm thử
+# (tests/safari-ban-dung.test.mjs) chặn mọi lần tệp này lệch mã nguồn.
+!/safari/dist/
+*.zip
+test-results/
+tools/test/certs/
+
+# Bằng chứng phát hành (HAR, ảnh chụp, workbook) — sinh lại mỗi bản, nặng ~13 MB,
+# và chứa dữ liệu e-GP thật dù đã che. Giữ trong gói giao, không đưa vào git.
+evidence/
+
+# Tệp thực thi biên dịch sẵn của cầu nối E-HSMT. Mã nguồn NativeHost.cs nằm
+# ngay cạnh; một tệp .exe trong git thì người duyệt không đọc được nó làm gì.
+native-agent/*.exe
+native-agent/*.exe.sha256
+
+# Giao diện iPhone của Link điện thoại (4.20.0): dựng từ mobile-app lúc đóng gói
+# (tools/release/dong-goi.mjs), không đưa bản dựng vào git.
+native-agent/web/
+
+canary-result.json
+
+# Địa chỉ cố định (4.21.0): bản dựng giao diện và cấu hình sinh tự động khi triển khai.
+relay/build/
+relay/.wrangler.jsonc
+relay/.wrangler/

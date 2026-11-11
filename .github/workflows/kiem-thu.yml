@@ -1,0 +1,384 @@
+# ============================================================================
+#  KIỂM THỬ TỰ ĐỘNG — chạy mỗi lần đẩy mã và mỗi PR
+#
+#  Bốn việc, chạy song song (việc thứ tư — app di động, Link điện thoại và BẢN CHẠY
+#  THẲNG TRÊN SAFARI cho iPad/iPhone — ở job app-di-dong):
+#    1. Linux   : toàn bộ bộ kiểm thử + chạy lại các ca ngày/giá ở 4 múi giờ.
+#    2. Windows : toàn bộ bộ kiểm thử, GỒM 10 bài cầu nối E-HSMT và 7 bài cầu nối
+#                 Link điện thoại (4.20.0) chỉ chạy đúng nghĩa
+#                 trên Windows (biên dịch bằng csc.exe, chạy tệp .exe). Tệp .exe
+#                 được biên dịch NGAY TẠI ĐÂY từ native-agent/NativeHost.cs — bài
+#                 kiểm chạy trên đúng mã nguồn ai cũng đọc được, không phải trên
+#                 một tệp nhị phân không rõ nguồn gốc.
+#                 Tệp .exe đã qua kiểm thử được lưu thành artifact để đưa vào gói
+#                 cài (4.19.0), kèm SHA-256. Kịch bản trạm săn (Task Scheduler)
+#                 cũng được đăng ký/gỡ thật ở đây.
+#    3. Trình duyệt: Chromium thật + máy chủ e-GP giả lập ở chế độ "khó tính"
+#                 (trang tự tải danh sách mặc định, bỏ qua thao tác khi bận, mạng
+#                 rớt). Đây là lớp bắt được lỗi chập chờn "e-GP chưa trả dữ liệu"
+#                 của 4.16.0 — bộ kiểm thử đơn vị không bắt được.
+#
+#  KHÔNG chạm vào e-GP thật. Kiểm thử trực tiếp trên e-GP vẫn phải chạy trên
+#  máy có mạng tới e-GP (tests/live-*.mjs) — xem tools/check-live-evidence.py.
+# ============================================================================
+name: Kiểm thử
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: kiem-thu-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  linux:
+    name: Bộ kiểm thử (Linux, 4 múi giờ)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - run: npm test
+      - run: npm run test:tz
+      # Dấu trang trên iPad tải safari/dist/cuibap.js thẳng từ kho. Từ 4.22.0 tệp đó là BẢN ỔN ĐỊNH:
+      # chỉ đổi khi phát hành (node safari/build.mjs --phat-hanh), mã nguồn được phép đi trước.
+      # Bước này chặn việc tệp bị sửa tay / ghi dở (mã băm lệch) và việc mã dấu trang bị đổi.
+      - name: Bản Safari ổn định trong kho còn nguyên vẹn (safari/dist)
+        run: node safari/build.mjs --check
+      - name: Bộ kiểm thử trên bản xuống dòng CRLF (như máy Windows)
+        run: |
+          mkdir -p "$RUNNER_TEMP/crlf" && git ls-files -z | xargs -0 cp --parents -t "$RUNNER_TEMP/crlf"
+          cd "$RUNNER_TEMP/crlf"
+          find . -type f \( -name '*.js' -o -name '*.mjs' -o -name '*.json' -o -name '*.html' \) -print0 | xargs -0 sed -i 's/\r*$/\r/'
+          node --test tests/*.test.mjs
+
+  app-di-dong:
+    name: App di động + bản Safari (lõi, cầu nối e-GP giả lập, đóng gói iOS/web, giao diện cỡ iPhone, WebKit iPhone/iPad)
+    # Ghim 24.04: ubuntu-latest (26.04) không còn gói webkit2gtk-driver (WebKitWebDriver + MiniBrowser
+    # của WebKitGTK 4.1) mà bài nhân Safari cần; mọi bước của job đã kiểm trên Ubuntu 24.04.5.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    defaults:
+      run:
+        working-directory: mobile-app
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - name: Lõi app khớp nguyên văn tiện ích (lib/, page-hook.js, content.js)
+        run: node scripts/sync-core.mjs --check
+      - name: Kiểm thử đơn vị
+        run: node --test tests/unit/*.test.mjs
+      - name: Cài Playwright + Chromium
+        working-directory: .
+        run: |
+          npm install --no-save --no-package-lock playwright@1.48.2
+          npx playwright install --with-deps chromium
+      - name: Chứng chỉ cho máy chủ giả lập
+        working-directory: .
+        run: |
+          mkdir -p tools/test/certs
+          openssl req -x509 -newkey rsa:2048 -nodes -days 2 \
+            -keyout tools/test/certs/key.pem -out tools/test/certs/cert.pem \
+            -subj "/CN=muasamcong.mpi.gov.vn" \
+            -addext "subjectAltName=DNS:muasamcong.mpi.gov.vn,DNS:muasamcong.mof.gov.vn,IP:127.0.0.1"
+      - name: Cầu nối app ↔ e-GP giả lập — mã tiêm thật của app trong Chromium (gồm chế độ khó tính, bấm Dừng)
+        run: node tests/browser/connector.mjs
+      - name: Cài thư viện app
+        run: npm ci --no-audit --no-fund
+      # 4.22.0 — một dòng cú pháp mà Safari của người dùng chưa hiểu là CẢ TỆP dấu trang không chạy, kể cả phần
+      # "hỏi trước khi cập nhật / quay về bản trước". Bộ thử WebKit dùng nhân mới nên không bắt được loại lỗi này.
+      # Phân tích mọi tệp được gói ở mức ES2023 (mức Safari 16.4 hiểu trọn); acorn lấy từ thư viện của app.
+      - name: Bản Safari — mọi tệp JS được gói, tệp gói và bản ổn định đọc được ở mức cú pháp của Safari 16.4
+        working-directory: .
+        run: node tools/test/cu-phap-safari.mjs
+      - name: Đóng gói thử cho iOS và web
+        env:
+          EXPO_NO_TELEMETRY: '1'
+          CI: '1'
+        run: |
+          npx expo export --platform ios --output-dir "$RUNNER_TEMP/app-ios"
+          npx expo export --platform web --output-dir "$RUNNER_TEMP/app-web"
+      - name: Chụp giao diện cỡ iPhone (dữ liệu mẫu) — không lỗi console, không gọi mạng
+        run: node tests/browser/ui-shots.mjs "$RUNNER_TEMP/app-web" "$RUNNER_TEMP/app-shots"
+      # 4.20.0 — Link điện thoại: máy tính công ty làm máy tra, iPhone mở link Safari.
+      - name: Đóng gói giao diện web cho Link điện thoại (chế độ máy tính công ty)
+        env:
+          EXPO_NO_TELEMETRY: '1'
+          CI: '1'
+          EXPO_PUBLIC_GSCB_MODE: remote
+        run: npx expo export --platform web --output-dir "$RUNNER_TEMP/app-web-remote"
+      - name: Cài Mono (dựng và chạy GiaoSuCuiBap.DienThoai.exe trên Linux)
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq mono-mcs mono-runtime libmono-system-web-extensions4.0-cil
+      - name: Máy phục vụ Link điện thoại (DienThoai.cs dưới Mono) — 7 bài
+        working-directory: .
+        run: node --test tests/dien-thoai-host-420.test.mjs
+      - name: Link điện thoại đầu-cuối — Chrome thật + native messaging + tiện ích + e-GP giả lập + trang iPhone
+        working-directory: .
+        run: xvfb-run -a node tools/test/phone-link.mjs "$PWD/GiaoSuCuiBap" "$RUNNER_TEMP/app-web-remote"
+      # 4.21.0 — địa chỉ cố định (Cloudflare Worker) + app trên màn hình chính iPhone/iPad.
+      - name: Cài WebKit (nhân của Safari) + trình quản lý cửa sổ cho khung nhìn đúng cỡ iPhone/iPad
+        run: sudo apt-get install -y -qq webkit2gtk-driver matchbox-window-manager
+      - name: Địa chỉ cố định đầu-cuối — Worker giả lập + tiện ích + cầu nối + WebKit cỡ iPhone 390×844 và iPad 1024×1366
+        working-directory: .
+        env:
+          GSCB_REQUIRE_WEBKIT: '1'
+        run: xvfb-run -a node tools/test/phone-relay.mjs "$PWD/GiaoSuCuiBap" "$RUNNER_TEMP/app-web-remote"
+      # Bản chạy thẳng trên Safari: TOÀN BỘ tiện ích chạy ngay trong tab muasamcong của iPad/iPhone,
+      # không cần máy tính. Bài này chạy ĐÚNG MÃ DẤU TRANG người dùng cài (tải tệp từ
+      # "raw.githubusercontent.com" đã ánh xạ về máy chủ thử), trên WebKit cỡ iPad và iPhone, và
+      # đối chiếu từng mã TBMT với tiện ích Chrome thật chạy cùng dữ liệu. 14 kịch bản: e-GP cấm
+      # nhúng khung, e-GP tải lại trang, e-GP chống nhúng, e-GP cấm eval, mất mạng tới GitHub…
+      - name: Cùi Bắp chạy thẳng trên Safari — dấu trang thật, WebKit cỡ iPad 1024×1366 và iPhone 390×844, đối chứng tiện ích Chrome
+        working-directory: .
+        env:
+          GSCB_REQUIRE_WEBKIT: '1'
+        run: xvfb-run -a node tools/test/safari-app.mjs
+      - name: Lưu ảnh màn hình app
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-anh-man-hinh
+          path: |
+            ${{ runner.temp }}/app-shots
+            test-results/phone-link/*.png
+            test-results/phone-relay/*.png
+            test-results/safari-app/*.png
+            test-results/safari-app/*.log
+          if-no-files-found: ignore
+
+  windows:
+    name: Bộ kiểm thử (Windows, gồm cầu nối E-HSMT)
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - name: Biên dịch hai cầu nối từ mã nguồn (E-HSMT và Link điện thoại)
+        shell: pwsh
+        run: |
+          $csc = 'C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe'
+          & $csc /nologo /target:exe /optimize+ /r:System.Web.Extensions.dll `
+            /out:native-agent\GiaoSuCuiBap.NativeHost.exe native-agent\NativeHost.cs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & $csc /nologo /target:exe /optimize+ /r:System.Web.Extensions.dll `
+            /out:native-agent\GiaoSuCuiBap.DienThoai.exe native-agent\DienThoai.cs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          New-Item -ItemType Directory -Force test-results | Out-Null
+      # Gồm 7 bài máy phục vụ Link điện thoại chạy trên đúng tệp .exe vừa biên dịch
+      # (.NET Framework thật), và bài CÀI THẬT link-dien-thoai.ps1: tải cloudflared từ
+      # GitHub, kiểm SHA-256 + chữ ký số Cloudflare, ghi HKCU, gỡ sạch.
+      # Kết quả đầy đủ nằm trong tệp; nhật ký in 12 dòng tổng kết và — khi hỏng — từng
+      # bài hỏng kèm lỗi, để đọc được ngay ở cuối nhật ký.
+      - name: Bộ kiểm thử (npm test)
+        shell: pwsh
+        run: |
+          npm test *> test-results\npm-test.log
+          $code = $LASTEXITCODE
+          Get-Content test-results\npm-test.log -Tail 12
+          if ($code -ne 0) {
+            Write-Output '===== CAC BAI HONG ====='
+            Select-String -Path test-results\npm-test.log -Pattern '^not ok' -Context 0,60 | ForEach-Object { $_.ToString() }
+          }
+          exit $code
+      # 4.20.0: mạng THẬT — cloudflared mở đường hầm trycloudflare, gọi từ Internet vào
+      # tệp .exe, lệnh tìm đi vòng về; giết ngang tệp .exe thì cloudflared chết theo.
+      # Phụ thuộc dịch vụ miễn phí của Cloudflare nên không chặn CI; kết quả in rõ.
+      - name: Link điện thoại qua đường hầm Cloudflare THẬT (dịch vụ ngoài — không chặn CI)
+        continue-on-error: true
+        timeout-minutes: 8
+        run: node tools/test/phone-tunnel-live.mjs
+      # 4.19.0: tệp .exe ĐÃ QUA bộ kiểm thử Windows ở bước trên được giữ lại làm
+      # bản phát hành — gói cài không còn thiếu cầu nối E-HSMT. Kèm mã SHA-256 để
+      # đối chiếu đúng tệp trong gói với đúng lần chạy kiểm thử này.
+      - name: Lưu hai cầu nối đã biên dịch và đã kiểm thử
+        shell: pwsh
+        run: |
+          foreach ($name in @('GiaoSuCuiBap.NativeHost.exe', 'GiaoSuCuiBap.DienThoai.exe')) {
+            $file = "native-agent\$name"
+            $h = (Get-FileHash $file -Algorithm SHA256).Hash.ToLower()
+            "$h  $name" | Out-File -Encoding ascii "$file.sha256"
+            Get-Content "$file.sha256"
+            # Cùng tệp đó in dạng base64 vào nhật ký (mã băm, độ dài, tên ở dòng đầu) — để máy
+            # đóng gói không tải được artifact vẫn lấy đúng tệp: tools/release/lay-cau-noi-tu-ci.mjs.
+            $b = [Convert]::ToBase64String([IO.File]::ReadAllBytes($file))
+            Write-Output "GSCB-EXE-BEGIN $h $($b.Length) $name"
+            for ($i = 0; $i -lt $b.Length; $i += 3000) { Write-Output ("GSCB-EXE " + $b.Substring($i, [Math]::Min(3000, $b.Length - $i))) }
+            Write-Output "GSCB-EXE-END"
+          }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cau-noi-e-hsmt-${{ github.sha }}
+          path: |
+            native-agent/GiaoSuCuiBap.NativeHost.exe
+            native-agent/GiaoSuCuiBap.NativeHost.exe.sha256
+            native-agent/GiaoSuCuiBap.DienThoai.exe
+            native-agent/GiaoSuCuiBap.DienThoai.exe.sha256
+          if-no-files-found: error
+          retention-days: 30
+
+  trinh-duyet:
+    name: Chromium + e-GP giả lập khó tính
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - name: Cài Playwright + Chromium
+        run: |
+          npm install --no-save --no-package-lock playwright@1.48.2
+          npx playwright install --with-deps chromium
+      - name: Chứng chỉ cho máy chủ giả lập
+        run: |
+          mkdir -p tools/test/certs
+          openssl req -x509 -newkey rsa:2048 -nodes -days 2 \
+            -keyout tools/test/certs/key.pem -out tools/test/certs/cert.pem \
+            -subj "/CN=muasamcong.mpi.gov.vn" \
+            -addext "subjectAltName=DNS:muasamcong.mpi.gov.vn,IP:127.0.0.1"
+      - name: Nạp mọi trang giao diện
+        run: xvfb-run -a node tools/test/load-all.mjs "$PWD/GiaoSuCuiBap"
+      - name: Ba luồng tra cứu dưới e-GP khó tính
+        env:
+          MOCK_PORT: '9443'
+          MOCK_CHAOS: autoload,early,busy,nativeslow=3500,slow=300,flaky=0.2,seed=11
+          MOCK_LOG: ${{ runner.temp }}/mock.log
+        run: |
+          # Ghi NỐI (>>) để lệnh làm rỗng nhật ký giữa các kịch bản không để lại byte rác.
+          node tools/test/mock-egp.mjs >> "$MOCK_LOG" 2>&1 &
+          for i in $(seq 1 30); do curl -sk --max-time 2 https://127.0.0.1:9443/ -o /dev/null && break; sleep 1; done
+          # Mỗi kịch bản tự kiểm qua nhật ký máy chủ rằng lượt "đạt" thật sự
+          # hỏi e-GP; nhật ký được làm mới giữa các kịch bản để đếm đúng.
+          xvfb-run -a node tools/test/bidopen-scan.mjs "$PWD/GiaoSuCuiBap" 6
+          : > "$MOCK_LOG"
+          xvfb-run -a node tools/test/tbmt-search.mjs "$PWD/GiaoSuCuiBap" 6
+          : > "$MOCK_LOG"
+          xvfb-run -a node tools/test/plan-lookup.mjs "$PWD/GiaoSuCuiBap" 5
+      - name: e-GP cắt 6 yêu cầu đầu tiên — phải tự chạy lại và lấy đủ dữ liệu
+        env:
+          MOCK_PORT: '9443'
+          MOCK_CHAOS: autoload,busy,cutfirst=6
+          MOCK_LOG: ${{ runner.temp }}/mock.log
+        run: |
+          pkill -f "node tools/test/mock-egp.mjs" || true
+          : > "$MOCK_LOG"
+          node tools/test/mock-egp.mjs >> "$MOCK_LOG" 2>&1 &
+          for i in $(seq 1 30); do curl -sk --max-time 2 https://127.0.0.1:9443/ -o /dev/null && break; sleep 1; done
+          xvfb-run -a node tools/test/tbmt-search.mjs "$PWD/GiaoSuCuiBap" 2
+          test "$(grep -c 'CẮT KẾT NỐI (cutfirst' "$MOCK_LOG")" = 6
+      - name: Giao diện 4.18.0 — chụp mọi trang, đo cỡ chữ và tương phản WCAG, không tràn khung
+        env:
+          MOCK_PORT: '9443'
+          MOCK_LOG: ${{ runner.temp }}/mock.log
+        run: |
+          pkill -f "node tools/test/mock-egp.mjs" || true; sleep 1
+          : > "$MOCK_LOG"
+          MOCK_CHAOS=autoload node tools/test/mock-egp.mjs >> "$MOCK_LOG" 2>&1 &
+          for i in $(seq 1 30); do curl -sk --max-time 2 https://127.0.0.1:9443/ -o /dev/null && break; sleep 1; done
+          xvfb-run -a node tools/test/ui-shots.mjs "$PWD/GiaoSuCuiBap" "${{ runner.temp }}/ui-shots" 1366x768,1920x1080
+      - name: Kết quả tức thì từ kho + Tìm nhanh (Ctrl K) dưới e-GP chậm
+        env:
+          MOCK_PORT: '9443'
+          MOCK_LOG: ${{ runner.temp }}/mock.log
+        run: |
+          pkill -f "node tools/test/mock-egp.mjs" || true; sleep 1
+          : > "$MOCK_LOG"
+          MOCK_CHAOS=autoload,nativeslow=3000,slow=2500 node tools/test/mock-egp.mjs >> "$MOCK_LOG" 2>&1 &
+          for i in $(seq 1 30); do curl -sk --max-time 2 https://127.0.0.1:9443/ -o /dev/null && break; sleep 1; done
+          xvfb-run -a node tools/test/instant-results.mjs "$PWD/GiaoSuCuiBap"
+      - name: e-GP mới — yêu cầu phụ, yêu cầu đếm gộp, trang phát chậm, dạng phòng xa
+        env:
+          MOCK_PORT: '9443'
+          MOCK_LOG: ${{ runner.temp }}/mock.log
+        run: |
+          for dang in shape=obj shape=double shape=blob side sidemulti wrap slowfire=6000,side,sidemulti shape=obj,side,sidemulti,wrap; do
+            pkill -f "node tools/test/mock-egp.mjs" || true; sleep 1
+            : > "$MOCK_LOG"
+            MOCK_CHAOS="autoload,busy,$dang" node tools/test/mock-egp.mjs >> "$MOCK_LOG" 2>&1 &
+            for i in $(seq 1 30); do curl -sk --max-time 2 https://127.0.0.1:9443/ -o /dev/null && break; sleep 1; done
+            echo "== $dang"
+            xvfb-run -a node tools/test/bidopen-scan.mjs "$PWD/GiaoSuCuiBap" 2
+          done
+      - name: Quét nhanh bộ săn — e-GP lọc đúng / bỏ qua bộ lọc / lọc sai
+        env:
+          MOCK_PORT: '9443'
+          MOCK_LOG: ${{ runner.temp }}/mock.log
+        run: |
+          for ca in "A honordate,fresh=5" "B fresh=5" "C honordate,datelie,fresh=5"; do
+            set -- $ca
+            pkill -f "node tools/test/mock-egp.mjs" || true; sleep 1
+            : > "$MOCK_LOG"
+            MOCK_CHAOS="autoload,$2" node tools/test/mock-egp.mjs >> "$MOCK_LOG" 2>&1 &
+            for i in $(seq 1 30); do curl -sk --max-time 2 https://127.0.0.1:9443/ -o /dev/null && break; sleep 1; done
+            xvfb-run -a node tools/test/hunt-delta.mjs "$PWD/GiaoSuCuiBap" "$1"
+          done
+      - name: Hiện ngay kết quả lượt trước + nhãn Mới/Đổi (bấm trên giao diện thật)
+        env:
+          MOCK_PORT: '9443'
+          MOCK_CHAOS: autoload,mutable,slow=3000
+          MOCK_LOG: ${{ runner.temp }}/mock.log
+        run: |
+          pkill -f "node tools/test/mock-egp.mjs" || true; sleep 1
+          : > "$MOCK_LOG"
+          node tools/test/mock-egp.mjs >> "$MOCK_LOG" 2>&1 &
+          for i in $(seq 1 30); do curl -sk --max-time 2 https://127.0.0.1:9443/ -o /dev/null && break; sleep 1; done
+          xvfb-run -a node tools/test/new-changed.mjs "$PWD/GiaoSuCuiBap"
+      - name: Bản tin sáng — gửi tới Telegram GIẢ (api.telegram.org trỏ về máy giả lập)
+        env:
+          MOCK_PORT: '9443'
+          MOCK_CHAOS: autoload
+          MOCK_LOG: ${{ runner.temp }}/mock.log
+        run: |
+          pkill -f "node tools/test/mock-egp.mjs" || true; sleep 1
+          : > "$MOCK_LOG"
+          node tools/test/mock-egp.mjs >> "$MOCK_LOG" 2>&1 &
+          for i in $(seq 1 30); do curl -sk --max-time 2 https://127.0.0.1:9443/ -o /dev/null && break; sleep 1; done
+          xvfb-run -a node tools/test/bulletin.mjs "$PWD/GiaoSuCuiBap"
+      - name: Tab e-GP mở sẵn phải làm lượt đầu nhanh hơn
+        env:
+          MOCK_PORT: '9443'
+          MOCK_CHAOS: autoload,early,busy,pageslow=4000,nativeslow=2500,slow=300
+          MOCK_LOG: ${{ runner.temp }}/mock.log
+        run: |
+          pkill -f "node tools/test/mock-egp.mjs" || true
+          node tools/test/mock-egp.mjs >> "$MOCK_LOG" 2>&1 &
+          for i in $(seq 1 30); do curl -sk --max-time 2 https://127.0.0.1:9443/ -o /dev/null && break; sleep 1; done
+          xvfb-run -a node tools/test/prewarm-speed.mjs "$PWD/GiaoSuCuiBap" 3 6
+      - name: Trạm săn 4.19.0 — quyền chạy nền tuỳ chọn, giờ đánh thức, nhịp tim (Chromium thật)
+        env:
+          MOCK_PORT: '9443'
+        run: xvfb-run -a node tools/test/station-ui.mjs "$PWD/GiaoSuCuiBap"
+      - name: Nút "Kiểm chứng toàn trình" ở trang Chẩn đoán — chạy đủ luồng, kết luận trung thực
+        env:
+          MOCK_PORT: '9443'
+          MOCK_LOG: ${{ runner.temp }}/mock.log
+        run: |
+          pkill -f "node tools/test/mock-egp.mjs" || true; sleep 1
+          : > "$MOCK_LOG"
+          MOCK_CHAOS=autoload node tools/test/mock-egp.mjs >> "$MOCK_LOG" 2>&1 &
+          for i in $(seq 1 30); do curl -sk --max-time 2 https://127.0.0.1:9443/ -o /dev/null && break; sleep 1; done
+          xvfb-run -a node tools/test/self-check.mjs "$PWD/GiaoSuCuiBap"
+      - name: Kho lịch sử 4.19.0 — nạp từng tháng bằng luồng đọc biên bản thật, nhường lượt của người dùng
+        env:
+          MOCK_PORT: '9443'
+          MOCK_LOG: ${{ runner.temp }}/mock.log
+        run: |
+          pkill -f "node tools/test/mock-egp.mjs" || true; sleep 1
+          : > "$MOCK_LOG"
+          MOCK_CHAOS=autoload node tools/test/mock-egp.mjs >> "$MOCK_LOG" 2>&1 &
+          for i in $(seq 1 30); do curl -sk --max-time 2 https://127.0.0.1:9443/ -o /dev/null && break; sleep 1; done
+          xvfb-run -a node tools/test/history.mjs "$PWD/GiaoSuCuiBap"
+      - name: Nhật ký máy chủ giả lập khi hỏng
+        if: failure()
+        run: tail -200 "${{ runner.temp }}/mock.log" || true

@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="vi"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Gói lặp lại hằng năm — Giáo Sư Cùi Bắp</title>
+<link rel="stylesheet" href="app.css"><link rel="stylesheet" href="workspace.css"><link rel="stylesheet" href="theme.css"><link rel="icon" href="icons/icon32.png">
+</head>
+<body class="workspace">
+<aside id="workspace-nav" class="ws-sidebar"></aside>
+<main id="main" data-print="Gói lặp lại hằng năm">
+  <div class="ws-topbar"><div class="breadcrumb"><span>Phân tích thị trường</span><b>Gói lặp lại hằng năm</b></div></div>
+  <section class="ws-intro"><div><h1>Biết trước gói<br><em>năm nào cũng có.</em></h1><p>Duy tu, sửa chữa thường xuyên, nạo vét, bảo vệ… cùng một chủ đầu tư, tên gần như y nguyên qua các năm. Phần mềm tìm các gói như vậy trong dữ liệu đã tải về máy và ước lượng kỳ đăng tiếp theo để bạn chuẩn bị sớm.</p></div></section>
+  <form class="card search-grid" id="form">
+    <div><label for="province">Tỉnh / địa điểm</label><input id="province" placeholder="Lâm Đồng"></div>
+    <div><label for="investor">Chủ đầu tư</label><input id="investor" placeholder="Ban QLDA…" maxlength="200"></div>
+    <div><label for="keyword">Từ khóa trong tên gói</label><input id="keyword" placeholder="nạo vét, duy tu, kênh…" maxlength="200"></div>
+  </form>
+  <div class="forecast-tools">
+    <button class="btn" id="go" type="button">Tìm gói lặp lại</button>
+    <label class="checkline"><input id="upcoming" type="checkbox" checked> Chỉ hiện gói sắp tới kỳ hoặc đã tới kỳ</label>
+    <a class="btn light" href="plans.html">Kế hoạch lựa chọn nhà thầu đã công bố</a>
+  </div>
+  <p id="summary" class="muted" role="status"></p>
+  <div id="list"></div>
+  <p class="notice forecast-note" id="note"></p>
+</main>
+<script type="module" src="shell.js"></script>
+<script type="module" src="forecast.js"></script>
+</body></html>

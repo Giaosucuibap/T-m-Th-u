@@ -1,0 +1,40 @@
+{
+  "name": "giao-su-cui-bap-mobile",
+  "version": "1.0.0",
+  "main": "expo-router/entry",
+  "dependencies": {
+    "@expo-google-fonts/be-vietnam-pro": "^0.4.1",
+    "@expo/metro-runtime": "~58.0.17",
+    "@expo/vector-icons": "^15.0.2",
+    "@react-native-async-storage/async-storage": "2.2.0",
+    "expo": "~58.0.23",
+    "expo-constants": "~58.0.15",
+    "expo-font": "~58.0.11",
+    "expo-linking": "~58.0.16",
+    "expo-notifications": "~58.1.8",
+    "expo-router": "~58.0.30",
+    "expo-splash-screen": "~58.0.13",
+    "expo-status-bar": "~58.0.4",
+    "expo-updates": "~58.0.21",
+    "expo-web-browser": "~58.0.7",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "react-native": "0.88.1",
+    "react-native-safe-area-context": "~5.11.1",
+    "react-native-screens": "~4.30.1",
+    "react-native-web": "~0.21.4",
+    "react-native-webview": "14.0.1"
+  },
+  "scripts": {
+    "start": "expo start",
+    "ios": "expo start --ios",
+    "android": "expo start --android",
+    "web": "expo start --web",
+    "sync-core": "node scripts/sync-core.mjs",
+    "check-core": "node scripts/sync-core.mjs --check",
+    "test": "node --test tests/unit/*.test.mjs",
+    "test:browser": "node tests/browser/connector.mjs",
+    "export:web": "expo export --platform web"
+  },
+  "private": true
+}

@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="vi"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Hồ sơ quyết định gói thầu — Giáo Sư Cùi Bắp</title>
+<link rel="stylesheet" href="app.css"><link rel="stylesheet" href="workspace.css"><link rel="stylesheet" href="theme.css"><link rel="icon" href="icons/icon32.png">
+</head>
+<body class="workspace">
+<aside id="workspace-nav" class="ws-sidebar"></aside>
+<main id="main" data-print="Hồ sơ quyết định gói thầu">
+  <div class="ws-topbar"><div class="breadcrumb"><span>Theo dõi</span><b>Hồ sơ quyết định</b></div></div>
+  <div id="alert" class="notice hidden" role="alert"></div>
+  <section id="picker" class="card brief-card hidden" aria-labelledby="picker-title">
+    <h2 id="picker-title">Chọn một gói trong kho</h2>
+    <p class="muted small">Hồ sơ quyết định gom vào một trang: thông tin gói, bối cảnh cạnh tranh theo lịch sử của chủ đầu tư, yêu cầu E-HSMT đối chiếu với năng lực công ty, và quyết định dự thầu. In hoặc lưu PDF được để trình duyệt.</p>
+    <input id="picker-q" type="search" placeholder="Lọc theo tên gói, mã TBMT, chủ đầu tư…" aria-label="Lọc gói trong kho">
+    <div id="picker-list"></div>
+  </section>
+  <section id="head" class="card brief-card brief-head hidden"></section>
+  <section id="competition" class="card brief-card hidden" aria-labelledby="comp-title"></section>
+  <section id="hsmt" class="card brief-card hidden" aria-labelledby="hsmt-title"></section>
+</main>
+<script type="module" src="shell.js"></script>
+<script type="module" src="brief.js"></script>
+</body></html>
