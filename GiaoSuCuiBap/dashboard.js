@@ -1,3 +1,4 @@
+import { icon } from './lib/icons.js';
 import { formatMoney, formatDate, daysToClose } from './lib/core.js';
 import { summarizeTenderFields } from './lib/tender-categories.js';
 import { TOUCH, pageSize } from './lib/device.js';
@@ -252,6 +253,9 @@ function decisionOptions(selected) {
     `<option value="${value}" ${selected === value ? 'selected' : ''}>${esc(label)}</option>`).join('');
 }
 
+/* 4.22.0: bốn dòng thông tin của thẻ dùng bộ biểu tượng nét của phần mềm thay cho emoji — cùng kiểu với thẻ ở
+   trang Tìm gói, và không bị đổi màu lạ khi bật giao diện tối trên Safari. */
+const DEADLINE_GLYPH = { CLOSED: 'stop', PLAN: 'plan', UNKNOWN: 'info' };
 function resultCard(tender) {
   const status = statusOf(tender);
   const action = actionFor(tender);
@@ -274,10 +278,10 @@ function resultCard(tender) {
         <h3 class="result-title"><a href="${esc(link)}" target="_blank" rel="noopener">${esc(tender.bidName || code)} ↗</a></h3>
         <div class="muted small"><b>${esc(label)}: ${esc(code)}</b> · ${esc(STATUS_LABEL[status] || status)}</div>
         <div class="result-meta">
-          <div>💰 <b>${esc(formatMoney(tender.price))}</b></div>
-          <div>${deadlineIcon(tender)} <b>${esc(deadlineText(tender))}</b></div>
-          <div>📍 ${esc(tender.location || 'Chưa xác định địa điểm')}</div>
-          <div>🏛 ${esc(tender.investorName || tender.procuringEntityName || 'Chưa xác định chủ đầu tư')}</div>
+          <div>${icon('chart', 16)}<b>${esc(formatMoney(tender.price))}</b></div>
+          <div>${icon(DEADLINE_GLYPH[status] || 'clock', 16)}<b>${esc(deadlineText(tender))}</b></div>
+          <div>${icon('pin', 16)}<span>${esc(tender.location || 'Chưa xác định địa điểm')}</span></div>
+          <div>${icon('building', 16)}<span>${esc(tender.investorName || tender.procuringEntityName || 'Chưa xác định chủ đầu tư')}</span></div>
         </div>
         <div class="tag-row">
           <span class="tag ${action.className === 'go' ? 'good' : action.className === 'watch' ? 'warn' : 'info'}">${esc(action.label)}</span>

@@ -88,6 +88,12 @@ const SAFARI_DARK_TOKENS = '--bg:#ebeff5;--surface:#dee4ec;--surface-2:#d8dfe9;-
   + '--brand-50:#beddd9;--brand-100:#a5d0ca;--ok-bg:#c0decd;--warn-bg:#e2d6bd;--bad-bg:#f7d7d4;--info-bg:#c6dafc;'
   + '--ok-line:#6fbb8c;--warn-line:#c2a25a;--bad-line:#f4a49d;--info-line:#81acfa;--card:var(--surface);--card-soft:var(--surface-2);--accent-soft:var(--brand-50);--gold-soft:var(--warn-bg)';
 const SAFARI_KEEP = ['img', 'video', 'canvas', 'svg image', '.ws-sidebar', '.hero', '.keep-colors', '.leaflet-container', '.map-canvas'];
+/* Bề mặt mà CSS của tiện ích viết cứng màu trắng (thẻ, bảng, nút sáng…): trong giao diện tối chúng lấy màu thẻ
+   của bảng màu tối, để thẻ SÁNG HƠN nền một bậc — không thì trắng bị đảo thành đen tuyền, tối hơn cả nền trang
+   (đo 11/11/2026 trên ảnh chụp WebKit). Ô nhập cố ý giữ đen: ô lõm xuống so với thẻ, dễ thấy chỗ gõ. */
+const SAFARI_DARK_SURFACES = ['.workspace .card', '.card', '.ws-result', '.run-strip', '.ws-metric', '.saved-search', '.warehouse-health', '.investor-directory-list', '.workflow-strip a',
+  'table', 'tbody tr>td', '.pipeline-button', '.pkg-footer', '.qf-panel', 'body.workspace>header', '.btn.light', '.workspace .btn.light', '.density-toggle', '.ws-menu-btn',
+  '.quick button', '.chips button', '.chip', '.result-links button', '.result-links a', '.brief-pick'];
 const SAFARI_HIDE = ['.ws-sidebar a[href="phone.html"]', '#station', 'section[aria-labelledby="native-title"]', '#native-check', '#native-guide', '#native-status', '[data-download]'];
 const SAFARI_TOUCH_CSS = '<style data-gscb-safari>html{-webkit-text-size-adjust:100%;text-size-adjust:100%}'
   + '@media (max-width:540px){.ws-metric .value.money{white-space:normal;overflow-wrap:anywhere}.history-label{flex-wrap:wrap;overflow:hidden}.history-label select{flex:1 1 100%;min-width:0;max-width:100%}'
@@ -97,6 +103,10 @@ const SAFARI_TOUCH_CSS = '<style data-gscb-safari>html{-webkit-text-size-adjust:
   // Ảnh nằm TRONG một khối đã được đảo lại thì không đảo nữa (đảo ba lần = đảo một lần).
   + `${SAFARI_KEEP.filter((sel) => sel.startsWith('.')).flatMap((sel) => ['img', 'video', 'canvas'].map((inner) => `html[data-gscb-dark] ${sel} ${inner}`)).join(',')}{filter:none}`
   + 'html[data-gscb-dark] ::selection{background:#a5d0ca}'
+  + `${SAFARI_DARK_SURFACES.map((sel) => `html[data-gscb-dark] ${sel}`).join(',')}{background-color:var(--surface)}`
+  // Thẻ đã chọn / thẻ ưu tiên / hàng bảng khi rê: giữ nền nhấn của chúng, chỉ đổi sang tông tối.
+  + 'html[data-gscb-dark] .ws-result.selected,html[data-gscb-dark] tbody tr:hover>td{background-color:var(--surface-2)}'
+  + 'html[data-gscb-dark] .result-links .card-more{background-color:var(--brand-50)}'
   // Những mục cần máy tính Windows hoặc Chrome chạy nền: không có nghĩa trên Safari, nên không hiện.
   + `${SAFARI_HIDE.join(',')}{display:none!important}`
   + '</style>';

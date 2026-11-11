@@ -410,8 +410,11 @@ html[data-touch] .result-links .card-more{display:inline-flex;border-color:var(-
 html[data-touch] .ws-result:not(.open) .reason-chip:not(.top){display:none}
 html[data-touch] .ws-result:not(.open) .reason-more{display:inline-block;border:1px solid var(--line-strong);background:var(--surface);font-weight:700}
 html[data-touch] .ws-result:not(.open)>details.explain,html[data-touch] .ws-result:not(.open)>.fresh-stamp,html[data-touch] .ws-result:not(.open)>p{display:none}
-/* 4.22.0: thẻ thu gọn nhường chỗ nút Khung BPTC cho "Hồ sơ quyết định" (vẫn bốn nút một hàng trên iPad). */
+/* 4.22.0: thẻ thu gọn nhường chỗ nút Khung BPTC cho "Hồ sơ quyết định", và ghi nhãn ngắn "Quyết định" để bốn nút
+   vẫn nằm một hàng trên iPad có thanh trái (đo ở 1024 px: nhãn dài làm hàng nút xuống dòng, thẻ cao 388 → 440 px). */
 html[data-touch] .ws-result:not(.open) [data-outline]{display:none}
+html[data-touch] .ws-result:not(.open) [data-brief] .lbl-long{display:none}
+html[data-touch] .ws-result:not(.open) [data-brief] .lbl-short{display:inline}
 
 /* Thẻ trong Kho gói đã lưu. */
 html[data-touch] .result-title a,html[data-touch] .pkg-heading h3 a{display:block;padding:11px 0}
@@ -437,6 +440,7 @@ html[data-touch] .result-card:not(.open) .result-side,html[data-touch] .result-c
  *  của bản Safari tự đúng; cỡ chạm 44 px đã có ở mục MÀN CẢM ỨNG phía trên.
  * ========================================================================== */
 .ok-text{color:var(--ok)}.danger-text{color:var(--bad)}
+[data-brief] .lbl-short{display:none}
 /* Tìm bằng câu thường */
 .nl-row{margin:0 0 14px;padding:12px 14px;border:1px solid var(--brand-100);border-radius:var(--radius);background:var(--brand-50)}
 .nl-row>label{display:block;margin:0 0 6px;font-weight:600;color:var(--ink);font-size:var(--fs-sm)}
@@ -507,9 +511,26 @@ html[data-touch] .result-card:not(.open) .result-side,html[data-touch] .result-c
   h2,h3{break-after:avoid}
   table{break-inside:auto}tr{break-inside:avoid}
 }
+/* Thanh trái thêm hai mục ở 4.22.0 (Hồ sơ quyết định, Gói lặp lại hằng năm). Trên màn hình máy tính thấp
+   (1366×768) siết khoảng cách đầu thanh và giữa các nhóm để vẫn vừa một màn hình, không phải cuộn —
+   đo trong Chromium: trước khi siết dài hơn 9 px. Màn cảm ứng dùng ngăn kéo cuộn được nên không áp dụng. */
+@media (max-height:800px){
+  html:not([data-touch]) .ws-brand{padding-bottom:8px}
+  html:not([data-touch]) .ws-sidebar .nav-caption,html:not([data-touch]) .ws-sidebar .nav-group>summary{margin-top:10px}
+}
+/* Biểu tượng nét trong bốn dòng thông tin của thẻ Kho gói (thay emoji). */
+.result-meta>div{display:flex;align-items:flex-start;gap:7px}
+.result-meta .ico{flex:none;margin-top:3px;color:var(--subtle)}
 /* Màn cảm ứng: liên kết tên gói trong các danh sách mới đủ cao cho ngón tay. */
 html[data-touch] .watch-event-title a,html[data-touch] .forecast-history li a{display:inline-block;padding:12px 0}
 html[data-touch] .forecast-history summary,html[data-touch] .brief-prompt>summary,html[data-touch] .brief-redo>summary{min-height:44px;display:flex;align-items:center;cursor:pointer}
+/* Điện thoại: bảng số liệu rộng hơn màn hình thì cuộn ngang NGAY TRONG bảng, không đẩy cả trang rộng ra
+   (đo ở cỡ hiển thị 130%: trang Kiểm tra dữ liệu tràn 4 px vì bảng 702 px). */
+@media (max-width:700px){
+  html[data-touch] main table:not(.brief-table){display:block;max-width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch}
+}
+/* Chuỗi dài không có khoảng trắng (mã tiện ích, đường dẫn, mã băm) được phép xuống dòng thay vì đẩy trang rộng ra. */
+html[data-touch] main p,html[data-touch] main li,html[data-touch] main dd,html[data-touch] main td{overflow-wrap:anywhere}
 /* Hồ sơ quyết định gói thầu */
 .brief-card{margin:0 0 14px}
 .brief-card h2{margin:0 0 10px;font-size:var(--fs-lg);color:var(--ink)}
