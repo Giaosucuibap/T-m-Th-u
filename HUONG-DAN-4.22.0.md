@@ -175,12 +175,15 @@ hình **Hợp đồng tương tự** (tên, năm, giá trị). Để trống th�
 
 ## F. Đã kiểm thử thế nào
 
-- **941 bài kiểm thử đơn vị** đạt (12 bài khác chỉ chạy trên Windows).
+- **951 bài kiểm thử đơn vị** đạt (12 bài khác chỉ chạy trên Windows).
 - **80 phép kiểm đầu-cuối (19 kịch bản)** trong WebKit (nhân của Safari) ở cỡ iPad 1024×1366 và iPhone 390×844, với trang
   muasamcong **giả lập**: chạy đúng mã dấu trang, nâng cấp từ đúng bản 4.21.0 anh đang dùng, thao tác lùi, tuỳ
   chọn, và mọi tính năng ở mục C.
 - Bản Chrome trên máy tính: ba bước kiểm trong Chromium đạt (mở mọi trang, bố cục 1366×768 và 1920×1080, tìm
   nhanh); hai bài đầu-cuối của Link điện thoại và địa chỉ cố định đạt 7/7 và 9/9.
+- **Soát mức Safari tối thiểu (16.4)**: mọi tệp trong bản Safari đọc được ở mức cú pháp Safari 16.4 hiểu, và
+  không dùng hàm nào chỉ có ở Safari đời mới hơn. Đây là soát trên mã, **không phải chạy trên một iPad đời
+  16.4 thật**.
 
 **Chưa kiểm được** — vì em không có iPad thật và không vào được muasamcong thật từ môi trường làm việc:
 

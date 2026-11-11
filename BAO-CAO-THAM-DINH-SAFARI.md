@@ -256,7 +256,15 @@ Các lỗi này do chính bộ kiểm thử mới và lượt soát ảnh chụp
     bấm "Ghép nối" kế tiếp. Bài kiểm đầu-cuối được thêm đúng phép này (chờ hơn một nhịp làm mới rồi mới đọc):
     chạy với mã cũ thì hỏng, với mã mới thì đạt.
 
-Mười một lỗi trên đã sửa và có phép kiểm giữ lại. **Một việc em chưa giải thích được:** bước chụp bố cục trong
+Mười một lỗi trên đã sửa và có phép kiểm giữ lại.
+
+**Hai chốt chặn thêm trước khi phát hành.** Dấu trang nạp một tệp duy nhất: một dòng cú pháp mà Safari trên máy
+anh chưa hiểu là cả tệp không chạy, kể cả phần "hỏi trước khi cập nhật". Bộ thử của em dùng nhân Safari đời mới
+nên không bắt được loại lỗi này. Vì vậy em thêm: (1) `tools/test/cu-phap-safari.mjs` — phân tích 139 tệp JS
+được gói, tệp gói và bản ổn định ở mức ES2023 (mức Safari 16.4 hiểu trọn), chạy trên CI; (2)
+`tests/safari-toi-thieu-422.test.mjs` — danh sách cấm 22 nhóm hàm và 11 tính năng CSS chỉ có ở Safari mới hơn
+16.4. Kết quả lần soát này: **không thấy chỗ nào**. Giới hạn: đây là soát tĩnh trên mã; em không có iPad đời
+16.4 để chạy thật, và số phiên bản trong danh sách ghi theo hiểu biết của em. **Một việc em chưa giải thích được:** bước chụp bố cục trong
 Chromium (bản Chrome trên máy tính) bị sập trình duyệt thử nghiệm ở 2 trong 6 lần chạy liên tiếp, đúng lúc đang
 nạp dữ liệu mẫu, trước khi chụp trang nào; bốn lần còn lại đạt, và khi gắn thêm phần ghi nhận "trang nào sập" thì
 không lặp lại được. Em coi đây là lỗi ngẫu nhiên của môi trường thử (kịch bản này vốn có ghi chú về việc trình
@@ -271,7 +279,7 @@ duyệt thử nghiệm hay sập), nhưng nói rõ là **chưa tìm ra nguyên n
 | Hợp với màn cảm ứng | 5,5 | **9,5** | Mọi số đo đạt; nhưng **chưa có ngón tay thật** chạm vào |
 | Vận hành trên iPad | 5,5 | **7** | Vẫn không chạy nền, không có thông báo của iPad, phải chạm dấu trang mỗi lần mở |
 | Bảo mật và an toàn dữ liệu | 6 | **7,5** | Có kênh ổn định và sao lưu; dữ liệu vẫn chung nguồn với trang e-GP, mã vẫn tải từ GitHub |
-| Kiểm thử trong phòng thí nghiệm | 9 | **9,5** | 941 bài đơn vị, 80 phép kiểm đầu-cuối, đạt hết |
+| Kiểm thử trong phòng thí nghiệm | 9 | **9,5** | 951 bài đơn vị, 80 phép kiểm đầu-cuối đạt hết; nhưng nhân thử là WebKit đời mới (chưa có máy Safari 16.4 thật), và còn một lần trình duyệt thử nghiệm sập chưa giải thích được |
 | **Kiểm chứng trên thiết bị thật** | 0 | **3** | Anh xác nhận 4.21.0 chạy được; chưa có bảng Chẩn đoán; **chưa phần nào của 4.22.0 được thử trên iPad thật** |
 
 **Em không chấm 10/10.** Ở những gì đo được trong phòng thí nghiệm, bản 4.22.0 đạt các ngưỡng đã đặt ra. Nhưng

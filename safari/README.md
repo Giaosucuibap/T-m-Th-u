@@ -66,6 +66,8 @@ node safari/build.mjs --check      # CI: safari/dist còn nguyên vẹn (mã bă
 node safari/build.mjs --phat-hanh  # ĐƯA mã nguồn hiện tại lên kênh ổn định (ghi safari/dist)
 node safari/build.mjs --out <thư mục>   # dựng ra chỗ khác để thử
 node --test tests/safari-ban-dung.test.mjs
+node --test tests/safari-toi-thieu-422.test.mjs   # không dùng hàm / CSS chỉ có ở Safari mới hơn 16.4
+node tools/test/cu-phap-safari.mjs      # mọi tệp được gói đọc được ở mức cú pháp Safari 16.4 (cần npm ci trong mobile-app)
 xvfb-run -a node tools/test/safari-app.mjs [--nhanh] [--chi 2,14]   # WebKit thật, cần webkit2gtk-driver
 ```
 
@@ -77,6 +79,11 @@ Tệp mới nhất luôn chạy trước và quyết định bản nào được
 hỏi; "Để sau" thì trao quyền cho bản đang dùng cất trong IndexedDB (ngăn `goi`: `js` = mới nhất, `dung` = đang
 dùng, `truoc` = bản trước); lần mở dở dang thì hỏi thử lại hay dùng bản kia. Bản được trao quyền không cần
 biết cơ chế này — kể cả 4.21.0 (mẫu thử: `tools/test/fixtures/cuibap-4.21.0-5663e848c26b.js.gz`).
+
+**Mức Safari tối thiểu là 16.4.** Bộ thử WebKit dùng nhân đời mới nên không bắt được cú pháp hay hàm mà máy đời
+cũ chưa có — và một dòng cú pháp lạ là cả tệp dấu trang không chạy. Hai chốt chặn: `cu-phap-safari.mjs` (phân
+tích bằng acorn ở ES2023, chạy trên CI) và `safari-toi-thieu-422.test.mjs` (danh sách cấm). Cần dùng một hàm mới
+thì kiểm tra có/không trước khi gọi rồi ghi vào `DA_KIEM_TRUOC` của bài kiểm; không nới danh sách cấm.
 
 `tools/test/safari-app.mjs` chạy **đúng mã dấu trang** trong WebKit (cỡ iPad 1024×1366 và iPhone 390×844), luôn
 dựng từ MÃ NGUỒN chứ không dùng `safari/dist`. Proxy `tools/test/map-proxy.mjs` ánh xạ `muasamcong.*`,

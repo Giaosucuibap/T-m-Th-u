@@ -52,7 +52,12 @@ bộ (cần máy chủ / token Cloudflare); chạy nền và thông báo của i
 tài khoản Apple Developer); báo hợp đồng sắp hết hạn (không có dữ liệu thời hạn).
 
 ### Kiểm thử
-- `npm test`: 941 bài đạt, 12 bài chỉ chạy trên Windows (thêm 7 tệp `*-422.test.mjs`).
+- `npm test`: 951 bài đạt, 12 bài chỉ chạy trên Windows (thêm 9 tệp `*-422.test.mjs`).
+- **Chốt mức Safari tối thiểu (16.4)**: `tools/test/cu-phap-safari.mjs` (CI) phân tích mọi tệp JS được gói, tệp
+  gói và bản ổn định ở mức ES2023; `tests/safari-toi-thieu-422.test.mjs` cấm hàm và tính năng CSS chỉ có ở
+  Safari mới hơn. Soát tĩnh — không thay được việc chạy trên máy 16.4 thật.
+- `tests/link-dien-thoai-422.test.mjs` chạy đúng `phone.js` trong trang giả: gõ sai mã ghép nối, năm nhịp làm
+  mới, dòng báo lỗi còn nguyên. `tools/test/phone-relay.mjs` 9/9, `phone-link.mjs` 7/7.
 - `tools/test/safari-app.mjs`: 19 kịch bản, 80 phép kiểm trong WebKit 2.52.6 ở cỡ iPad và iPhone, e-GP giả
   lập — thêm: thao tác lùi; nâng cấp từ đúng bản 4.21.0 đang phát hành; tuỳ chọn; màn cảm ứng; các tính năng
   mới (kể cả gửi tệp sao lưu rồi nhập lại chính tệp đó, và nội dung bản in).

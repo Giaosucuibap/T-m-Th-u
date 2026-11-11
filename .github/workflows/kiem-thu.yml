@@ -94,6 +94,12 @@ jobs:
         run: node tests/browser/connector.mjs
       - name: Cài thư viện app
         run: npm ci --no-audit --no-fund
+      # 4.22.0 — một dòng cú pháp mà Safari của người dùng chưa hiểu là CẢ TỆP dấu trang không chạy, kể cả phần
+      # "hỏi trước khi cập nhật / quay về bản trước". Bộ thử WebKit dùng nhân mới nên không bắt được loại lỗi này.
+      # Phân tích mọi tệp được gói ở mức ES2023 (mức Safari 16.4 hiểu trọn); acorn lấy từ thư viện của app.
+      - name: Bản Safari — mọi tệp JS được gói, tệp gói và bản ổn định đọc được ở mức cú pháp của Safari 16.4
+        working-directory: .
+        run: node tools/test/cu-phap-safari.mjs
       - name: Đóng gói thử cho iOS và web
         env:
           EXPO_NO_TELEMETRY: '1'
