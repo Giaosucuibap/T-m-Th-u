@@ -3,7 +3,7 @@
  *
  *  Gọi từ ba chỗ: nút "Gửi bản sao lưu ngay" ở Cấu hình (force), lúc phần mềm khởi
  *  động, và nhịp 30 phút sẵn có. Mỗi lần chỉ một lượt chạy; kết quả lần gần nhất nằm
- *  ở chrome.storage.local.telegramBackup để trang Cấu hình hiển thị.
+ *  ở kho cục bộ của trình duyệt (khoá telegramBackup) để trang Cấu hình hiển thị.
  * ========================================================================== */
 import { backupDecision, backupFingerprint, backupCaption, backupReasonText, packBackup, fileSizeText, BACKUP_STATE_KEY } from './telegram-backup.js';
 
