@@ -1,5 +1,9 @@
 import { icon, hydrateIcons } from './lib/icons.js';
 hydrateIcons();
+import { TOUCH, markDocument } from './lib/device.js';
+/* Máy cảm ứng và bản Safari: gắn data-touch / data-platform lên <html> để theme.css chỉnh
+   nút, thẻ, danh sách cho ngón tay (xem lib/device.js). Máy tính dùng chuột: không gắn gì. */
+markDocument();
 
 /* Điều hướng nhóm theo CÔNG VIỆC của người làm thầu, không theo lịch sử tính
    năng. Bốn trang tra cứu e-GP đứng đầu — trước đây ba trong số đó nằm lẫn
@@ -142,6 +146,29 @@ if (!IS_POPUP) {
   }
   const top = document.querySelector('.ws-topbar') || document.querySelector('body > header');
   if (top && shell) addMenuButton(top);
+}
+
+/* MÁY CẢM ỨNG: chú thích rê chuột (thuộc tính title) không bao giờ hiện trên màn cảm ứng — mà
+   nhiều chú thích mang thông tin thật (cách tính điểm, từng tín hiệu minh bạch). Chạm vào
+   phần tử có chú thích thì hiện nội dung ở một ô dưới đáy màn hình; chạm chỗ khác hay cuộn
+   thì ẩn. Nút, liên kết, ô nhập giữ nguyên việc của chúng. */
+if (TOUCH && !IS_POPUP) {
+  let tip = null, owner = null, timer = 0;
+  const hideTip = () => { clearTimeout(timer); if (tip) tip.remove(); tip = null; owner = null; };
+  document.addEventListener('click', (event) => {
+    const el = event.target.closest?.('[title]');
+    const previous = owner;
+    hideTip();
+    if (!el || el === previous || el.closest('a[href],button,input,select,textarea,summary,label')) return;
+    const text = (el.getAttribute('title') || '').trim();
+    if (!text) return;
+    tip = document.createElement('div');
+    tip.className = 'touch-tip'; tip.setAttribute('role', 'tooltip'); tip.textContent = text;
+    document.body.append(tip);
+    owner = el;
+    timer = setTimeout(hideTip, 12000);
+  });
+  window.addEventListener('scroll', hideTip, true);
 }
 
 // Display preferences change spacing only. They never alter filters, result

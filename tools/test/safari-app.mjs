@@ -864,6 +864,88 @@ numbered('TUỲ CHỌN trên máy cảm ứng: nút của lớp vỏ từ 44 px,
   });
 });
 
+/* Chỗ bấm nhỏ hơn 44 px trong trang đang mở (bỏ liên kết nằm giữa câu văn). */
+const SMALL_TARGETS = `(() => { const cs = (el) => W.getComputedStyle(el);
+  const shown = (el) => { for (let n = el; n && n.nodeType === 1; n = n.parentElement) { const st = cs(n); if (st.display === 'none' || st.visibility === 'hidden' || Number(st.opacity) < 0.05) return false; } const r = el.getBoundingClientRect(); return r.width >= 1 && r.height >= 1; };
+  const out = []; let total = 0;
+  for (const el of D.querySelectorAll('a[href], button, input:not([type="hidden"]), select, textarea, summary, [role="button"], [role="tab"]')) {
+    if (el.disabled || !shown(el)) continue;
+    if (el.tagName === 'A' && cs(el).display === 'inline' && el.parentElement && ((el.parentElement.innerText || '').trim().length > (el.innerText || '').trim().length + 15)) continue;
+    let r = el.getBoundingClientRect(), x1 = r.left, y1 = r.top, x2 = r.right, y2 = r.bottom;
+    if (el.matches('input[type="checkbox"], input[type="radio"]')) for (const l of (el.labels || [])) { const q = l.getBoundingClientRect(); x1 = Math.min(x1, q.left); y1 = Math.min(y1, q.top); x2 = Math.max(x2, q.right); y2 = Math.max(y2, q.bottom); }
+    total++;
+    if (Math.min(x2 - x1, y2 - y1) < 43.5) out.push((el.id || el.className || el.tagName) + ' "' + String(el.getAttribute('aria-label') || el.innerText || '').trim().slice(0, 20) + '" ' + Math.round(x2 - x1) + '×' + Math.round(y2 - y1));
+  }
+  return { total, small: out.slice(0, 8), count: out.length }; })()`;
+
+numbered('MÀN CẢM ỨNG — các trang của phần mềm: chỗ bấm từ 44 px, thẻ gói thu gọn, giờ đóng thầu ghi thẳng, chú thích chạm để mở, không còn mục của máy tính', async () => {
+  for (const device of ['ipad', 'iphone']) {
+    const opts = { touch: true, zoom: 1 };                               // cỡ hiển thị 100%: trường hợp chỗ bấm nhỏ nhất
+    await session({ chaos: 'autoload', label: `cam-ung-${device}`, device, opts }, async (s) => {
+      const name = device === 'ipad' ? 'iPad 1024×1366' : 'iPhone 390×844';
+      await step(`${name} · tìm gói: 20 thẻ một trang, thẻ thu gọn (tối đa ${device === 'ipad' ? 3 : 2} nhãn), giờ đóng thầu ghi trên thẻ, không có nút E-HSMT`, async () => {
+        const { run } = await searchByUi(s);
+        assertFullRun(run);
+        const card = await s.ui(`const all = [...D.querySelectorAll('#list article.ws-result')], c = all[0], vis = (el) => !!el && el.getBoundingClientRect().height > 0;
+          return { cards: all.length, cao: Math.round(c.getBoundingClientRect().height), chips: [...c.querySelectorAll('.reason-chip:not(.reason-more)')].filter(vis).length, allChips: c.querySelectorAll('.reason-chip:not(.reason-more)').length, more: (c.querySelector('.reason-more') || {}).textContent || '',
+            exact: (c.querySelector('.deadline-exact') || {}).textContent || '', details: [...c.querySelectorAll('details.explain')].filter(vis).length, checklistLink: vis(c.querySelector(':scope > p')), moreBtn: vis(c.querySelector('[data-more]')), download: D.querySelectorAll('[data-download]').length,
+            touch: D.documentElement.getAttribute('data-touch'), platform: D.documentElement.getAttribute('data-platform'), tran: D.documentElement.scrollWidth - W.innerWidth, manHinh: Math.round(D.documentElement.scrollHeight / W.innerHeight * 10) / 10 };`);
+        assert.deepEqual([card.touch, card.platform], ['1', 'safari']);
+        assert.equal(card.cards, 20, 'máy cảm ứng: 20 gói một trang');
+        assert.ok(card.chips <= (device === 'ipad' ? 3 : 2) && card.allChips > card.chips, `hiện ${card.chips}/${card.allChips} nhãn`);
+        assert.match(card.more, /^\+\d+$/);
+        assert.match(card.exact, /\d{2}:\d{2} \d{2}\/\d{2}\/\d{2}/, `giờ đóng thầu ghi thẳng trên thẻ: "${card.exact}"`);
+        assert.deepEqual([card.details, card.checklistLink, card.moreBtn], [0, false, true], 'phần chi tiết ẩn cho tới khi bấm "Chi tiết"');
+        assert.equal(card.download, 0, 'nút E-HSMT (cần cầu nối Windows) không có trong bản Safari');
+        assert.ok(card.cao <= (device === 'ipad' ? 400 : 560), `thẻ cao ${card.cao}px (4.21.0: ${device === 'ipad' ? 521 : 842}px)`);
+        assert.ok(card.tran <= 1, `tràn ngang ${card.tran}px`);
+        console.log(`        thẻ gói ${card.cao}px · trang kết quả dài ${card.manHinh} màn hình`);
+        // Bấm "Chi tiết": mở đủ nhãn và các khối giải thích; vẽ lại danh sách vẫn giữ trạng thái mở.
+        await s.ui('D.querySelector("#list article.ws-result [data-more]").click(); return true;');
+        const open = await s.ui(`const c = D.querySelector('#list article.ws-result'), vis = (el) => !!el && el.getBoundingClientRect().height > 0; return { open: c.classList.contains('open'), chips: [...c.querySelectorAll('.reason-chip:not(.reason-more)')].filter(vis).length, details: [...c.querySelectorAll('details.explain')].filter(vis).length, text: c.querySelector('[data-more]').textContent, more: vis(c.querySelector('.reason-more')) };`);
+        assert.deepEqual([open.open, open.details, open.text, open.more], [true, 2, 'Thu gọn', false]);
+        assert.ok(open.chips >= card.allChips, 'mở ra thì hiện đủ nhãn');
+      });
+      await step(`${name} · chạm vào phần tử có chú thích (điểm phù hợp) thì nội dung hiện ở đáy màn hình; chạm chỗ khác thì ẩn`, async () => {
+        await s.ui('D.querySelector("#list .ws-score").click(); return true;');
+        assert.match(await s.ui('return (D.querySelector(".touch-tip") || {}).textContent || ""'), /không phải xác suất trúng thầu/);
+        await s.ui('D.querySelector("main h1, main h2").click(); return true;');
+        assert.equal(await s.ui('return D.querySelectorAll(".touch-tip").length'), 0);
+      });
+      await step(`${name} · không còn chỗ bấm nào dưới 44 px trên các màn hình chính (kể cả khi mở danh mục và các khối thu gọn)`, async () => {
+        const report = [];
+        for (const page of ['search.html', 'dashboard.html', 'plans.html', 'winners.html', 'bidopen.html', 'hunts.html', 'checklist.html', 'options.html', 'analytics.html', 'market.html', 'capability.html', 'diagnostics.html']) {
+          await s.open(page);
+          await s.ui('D.body.classList.add("nav-open"); for (const d of D.querySelectorAll("main details:not([open])")) d.open = true; return true;');
+          await sleep(200);
+          const r = await s.ui(`return ${SMALL_TARGETS};`);
+          if (r.count) report.push(`${page}: ${r.count}/${r.total} — ${r.small.join(' | ')}`);
+          assert.ok(await s.ui('return D.documentElement.scrollWidth - W.innerWidth <= 1'), `${page} tràn ngang`);
+        }
+        assert.deepEqual(report, []);
+      });
+      await step(`${name} · mục chỉ dành cho máy tính không hiện; chữ viết cho Chrome được đổi cho đúng với Safari; Kho gói thu gọn`, async () => {
+        await s.open('hunts.html');
+        const hunts = await s.ui(`const vis = (el) => !!el && el.getBoundingClientRect().height > 0; return { station: vis(D.getElementById('station')), phone: [...D.querySelectorAll('.ws-sidebar a[href="phone.html"]')].filter(vis).length, chrome: (D.querySelector('main').innerText.match(/Chrome/g) || []).length, text: D.querySelector('main').innerText.slice(0, 600), kbd: [...D.querySelectorAll('.ws-quick kbd')].filter(vis).length };`);
+        assert.deepEqual([hunts.station, hunts.phone, hunts.chrome, hunts.kbd], [false, 0, 0, 0], hunts.text);
+        assert.match(hunts.text, /Cùi Bắp cần đang mở trên Safari/);
+        await s.open('options.html');
+        const options = await s.ui('const t = D.querySelector("main").innerText; return { chrome: (t.match(/Chrome/g) || []).length, has: /khi Cùi Bắp đang mở/.test(t), head: /Cảnh báo trong Cùi Bắp và Telegram/.test(t) };');
+        assert.deepEqual(options, { chrome: 0, has: true, head: true });
+        await s.open('diagnostics.html');
+        assert.equal(await s.ui('const el = D.querySelector(\'section[aria-labelledby="native-title"]\'); return !!el && el.getBoundingClientRect().height > 0'), false, 'mục cầu nối tải E-HSMT (Windows) không hiện');
+        await s.open('dashboard.html');
+        const dash = await s.ui(`const all = [...D.querySelectorAll('#list .result-card')], c = all[0], vis = (el) => !!el && el.getBoundingClientRect().height > 0; return { cards: all.length, side: vis(c && c.querySelector('.result-side')), more: vis(c && c.querySelector('[data-more]')), jargon: /investField/.test(D.body.innerText), cao: c ? Math.round(c.getBoundingClientRect().height) : 0 };`);
+        assert.ok(dash.cards > 0 && dash.cards <= 20, `${dash.cards} thẻ`);
+        assert.deepEqual([dash.side, dash.more, dash.jargon], [false, true, false]);
+        await s.ui('D.querySelector("#list .result-card [data-more]").click(); return true;');
+        assert.equal(await s.ui('const c = D.querySelector("#list .result-card"); return c.classList.contains("open") && c.querySelector(".result-side").getBoundingClientRect().height > 0'), true);
+        assert.deepEqual((await s.state()).errors, []);
+      });
+    });
+  }
+});
+
 const picked = ONLY.length ? ONLY.map((n) => scenarios[n - 1]).filter(Boolean) : QUICK ? scenarios.slice(0, 2) : scenarios;
 for (const run of picked) await run();
 

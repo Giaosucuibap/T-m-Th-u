@@ -88,6 +88,7 @@ const SAFARI_DARK_TOKENS = '--bg:#ebeff5;--surface:#dee4ec;--surface-2:#d8dfe9;-
   + '--brand-50:#beddd9;--brand-100:#a5d0ca;--ok-bg:#c0decd;--warn-bg:#e2d6bd;--bad-bg:#f7d7d4;--info-bg:#c6dafc;'
   + '--ok-line:#6fbb8c;--warn-line:#c2a25a;--bad-line:#f4a49d;--info-line:#81acfa;--card:var(--surface);--card-soft:var(--surface-2);--accent-soft:var(--brand-50);--gold-soft:var(--warn-bg)';
 const SAFARI_KEEP = ['img', 'video', 'canvas', 'svg image', '.ws-sidebar', '.hero', '.keep-colors', '.leaflet-container', '.map-canvas'];
+const SAFARI_HIDE = ['.ws-sidebar a[href="phone.html"]', '#station', 'section[aria-labelledby="native-title"]', '#native-check', '#native-guide', '#native-status', '[data-download]'];
 const SAFARI_TOUCH_CSS = '<style data-gscb-safari>html{-webkit-text-size-adjust:100%;text-size-adjust:100%}'
   + '@media (max-width:540px){.ws-metric .value.money{white-space:normal;overflow-wrap:anywhere}.history-label{flex-wrap:wrap;overflow:hidden}.history-label select{flex:1 1 100%;min-width:0;max-width:100%}'
   + 'body:has(.popup-launch){width:auto;max-width:100%}}'
@@ -96,7 +97,60 @@ const SAFARI_TOUCH_CSS = '<style data-gscb-safari>html{-webkit-text-size-adjust:
   // Ảnh nằm TRONG một khối đã được đảo lại thì không đảo nữa (đảo ba lần = đảo một lần).
   + `${SAFARI_KEEP.filter((sel) => sel.startsWith('.')).flatMap((sel) => ['img', 'video', 'canvas'].map((inner) => `html[data-gscb-dark] ${sel} ${inner}`)).join(',')}{filter:none}`
   + 'html[data-gscb-dark] ::selection{background:#a5d0ca}'
+  // Những mục cần máy tính Windows hoặc Chrome chạy nền: không có nghĩa trên Safari, nên không hiện.
+  + `${SAFARI_HIDE.join(',')}{display:none!important}`
   + '</style>';
+
+/* ----------------------------------------------------------- chữ nói đúng về Safari */
+/* Các trang của tiện ích viết cho Chrome trên máy tính ("Chrome cần đang chạy", "khi mở Chrome"…).
+   Trong bản Safari những câu đó sai. Lớp vỏ đổi chữ ngay khi trang hiện ra và mỗi khi trang tự
+   viết thêm chữ; tệp của tiện ích không đổi. Quy tắc cụ thể đứng trước, quy tắc chung đứng sau. */
+const SAFARI_WORDS = [
+  [/Lịch dùng báo thức Chrome — lượt lỡ giờ \(máy tắt, Chrome đóng\) được chạy bù khoảng 2 phút sau khi Chrome chạy lại\./g, 'Lịch chỉ chạy khi Cùi Bắp đang mở trên Safari — lượt lỡ giờ được chạy bù khi anh mở lại.'],
+  [/Chrome cần đang chạy — có thể chạy nền, không cần mở cửa sổ \(xem mục Trạm săn\)\./g, 'Cùi Bắp cần đang mở trên Safari (bật "Giữ máy thức" trong Tuỳ chọn để màn hình không tự tắt).'],
+  [/ \(bật chạy nền ở trang Bộ săn\)/g, ''],
+  [/Đã lưu bộ săn và đăng ký lịch Chrome\./g, 'Đã lưu bộ săn và đặt lịch.'],
+  [/Cảnh báo trên máy tính và Telegram/g, 'Cảnh báo trong Cùi Bắp và Telegram'],
+  [/thông báo trên máy\b/g, 'thông báo ở chuông'],
+  [/khi Chrome đang (hoạt động|chạy)/g, 'khi Cùi Bắp đang mở'],
+  [/khi mở Chrome/g, 'khi mở Cùi Bắp'],
+  [/sau khi Chrome (hoạt động|chạy)( trở)? lại/g, 'sau khi anh mở lại Cùi Bắp'],
+  [/khi Chrome chạy lại/g, 'khi anh mở lại Cùi Bắp'],
+  [/Chrome cần (đang )?(hoạt động|chạy)/g, 'Cùi Bắp cần đang mở'],
+  [/Chrome không thể( tự)? đánh thức máy/g, 'Safari không tự đánh thức được máy'],
+  [/tiện ích Chrome/g, 'phần mềm'],
+  [/Giữ Chrome và tab e-GP/g, 'Giữ Safari mở ở tab muasamcong này'],
+  [/Chrome\/máy/g, 'Safari/máy'],
+  [/\bChrome\b/g, 'Safari']
+];
+const SAFARI_WORD_HINT = /Chrome|trên máy/;
+function safariWording(text) {
+  if (!SAFARI_WORD_HINT.test(text)) return text;
+  let out = text;
+  for (const [pattern, to] of SAFARI_WORDS) out = out.replace(pattern, to);
+  return out;
+}
+/** Đổi chữ trong một nhánh DOM (nút chữ + ba thuộc tính người dùng đọc được). */
+function adaptWording(doc, root) {
+  const win = doc.defaultView;
+  const fix = (node) => { const next = safariWording(node.nodeValue); if (next !== node.nodeValue) node.nodeValue = next; };
+  if (root.nodeType === 3) { fix(root); return; }
+  if (root.nodeType !== 1 || /^(SCRIPT|STYLE)$/.test(root.tagName)) return;
+  const walker = doc.createTreeWalker(root, win.NodeFilter.SHOW_TEXT);
+  for (let node = walker.nextNode(); node; node = walker.nextNode()) { if (!/^(SCRIPT|STYLE)$/.test(node.parentNode.tagName)) fix(node); }
+  for (const el of [root, ...root.querySelectorAll('[title],[placeholder],[aria-label]')]) {
+    for (const name of ['title', 'placeholder', 'aria-label']) { const value = el.getAttribute && el.getAttribute(name); if (value) { const next = safariWording(value); if (next !== value) el.setAttribute(name, next); } }
+  }
+}
+function watchWording(doc) {
+  const Observer = doc.defaultView.MutationObserver;
+  new Observer((records) => {
+    for (const record of records) {
+      if (record.type === 'characterData') adaptWording(doc, record.target);
+      else for (const node of record.addedNodes) adaptWording(doc, node);
+    }
+  }).observe(doc, { childList: true, subtree: true, characterData: true });
+}
 
 /** Ảnh chèn sau (innerHTML): `gscb-asset:icons/x.svg` hoặc đường dẫn tương đối → blob. */
 function fixAssetAttribute(el, pageDir) {

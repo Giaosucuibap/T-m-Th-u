@@ -1,5 +1,6 @@
 import { formatMoney, formatDate, daysToClose } from './lib/core.js';
 import { summarizeTenderFields } from './lib/tender-categories.js';
+import { TOUCH, pageSize } from './lib/device.js';
 import {
   DECISION_STATES,
   DECISION_STATE_LABEL,
@@ -32,7 +33,9 @@ const RUN_LABEL = Object.freeze({
   CANCELLED: 'Đã dừng',
   PARTIAL: 'Hoàn tất một phần'
 });
-const PAGE_SIZE = 60;
+/* Máy cảm ứng: 20 gói một trang và thẻ thu gọn (đo 11/11/2026: 60 thẻ một trang dài 31 màn hình iPad). */
+const PAGE_SIZE = pageSize(60, 20);
+const openedCards = new Set();
 
 let state = { tenders: [], runs: [], settings: {}, templates: [], template: null, activeRun: null };
 let pipelineFilter = '';
@@ -263,7 +266,8 @@ function resultCard(tender) {
       : Number(tender.score || 0) >= 70 && status !== 'CLOSED' ? 'priority' : '';
   const reasons = (tender.reasons || []).slice(0, 3);
 
-  return `<article class="card result-card ${cardClass}" data-key="${esc(tender.key)}">
+  const isOpen = openedCards.has(tender.key);
+  return `<article class="card result-card ${cardClass} ${isOpen ? 'open' : ''}" data-key="${esc(tender.key)}">
     <div class="result-layout">
       <div class="result-score ${scoreClass(tender.score)}">${Number(tender.score || 0)}<small>/100</small></div>
       <div>
@@ -282,6 +286,7 @@ function resultCard(tender) {
           ${changed.changed ? `<span class="tag info">${changed.count} thay đổi</span>` : ''}
           ${reasons.map((reason) => `<span class="tag">${esc(reason)}</span>`).join('')}
         </div>
+        ${TOUCH ? `<button type="button" class="btn light sm card-more" data-more aria-expanded="${isOpen}">${isOpen ? 'Thu gọn' : 'Chi tiết và quyết định'}</button>` : ''}
         <div class="confidence" style="margin-top:10px">
           <span>${esc(confidence.label)} ${confidence.value}%</span>
           <span class="confidence-bar" aria-hidden="true"><i style="width:${confidence.value}%"></i></span>
@@ -333,6 +338,15 @@ function renderList() {
     : '<div class="card priority-empty">Không có gói nào khớp điều kiện đang chọn.</div>';
 
   bindResultActions();
+  $('list').querySelectorAll('[data-more]').forEach((button) => button.addEventListener('click', () => {
+    const card = button.closest('.result-card'), key = card?.dataset.key;
+    if (!key) return;
+    const on = !openedCards.has(key);
+    if (on) openedCards.add(key); else openedCards.delete(key);
+    card.classList.toggle('open', on);
+    button.setAttribute('aria-expanded', String(on));
+    button.textContent = on ? 'Thu gọn' : 'Chi tiết và quyết định';
+  }));
   $('warehouse-pagination').classList.toggle('hidden',pages<=1);
   $('warehouse-page-label').textContent=`Trang ${currentPage}/${pages} · ${items.length?offset+1:0}–${offset+visible.length}/${items.length} gói sau lọc`;
   $('warehouse-prev').disabled=currentPage<=1;$('warehouse-next').disabled=currentPage>=pages;
@@ -341,7 +355,7 @@ function renderList() {
 
 function renderFieldQuality(){
   const quality=summarizeTenderFields(state.tenders||[]);
-  $('warehouse-field-quality').textContent=`${quality.missingOfficial.toLocaleString('vi-VN')}/${quality.total.toLocaleString('vi-VN')} gói thiếu trường lĩnh vực gốc investField (${quality.missingOfficialPercent.toLocaleString('vi-VN',{maximumFractionDigits:1})}%). ${quality.invalidOfficial} gói có giá trị nguồn chưa nhận diện; ${quality.unclassified} gói chưa phân loại. Chỉ trong kho đã lưu; không đoán lĩnh vực từ tên gói.`;
+  $('warehouse-field-quality').textContent=`${quality.missingOfficial.toLocaleString('vi-VN')}/${quality.total.toLocaleString('vi-VN')} gói chưa có mã lĩnh vực chính thức từ e-GP (${quality.missingOfficialPercent.toLocaleString('vi-VN',{maximumFractionDigits:1})}%). ${quality.invalidOfficial} gói có mã lĩnh vực phần mềm chưa nhận ra; ${quality.unclassified} gói chưa phân loại. Số liệu chỉ tính trong kho đã lưu; phần mềm không đoán lĩnh vực từ tên gói.`;
 }
 async function loadWarehouseHealth(){
   const request=++healthRequest;

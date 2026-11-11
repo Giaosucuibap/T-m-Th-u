@@ -72,7 +72,8 @@ function createStore() {
       for (const [key, value] of await idbReadAll(db, 'meta')) meta.set(key, value);
     } catch (error) { note('error', 'kho', error); }
     // Xin Safari giữ dữ liệu lâu dài (không bắt buộc được cấp).
-    try { TOP.navigator.storage?.persist?.().catch(() => {}); } catch { /* không hỗ trợ */ }
+    // Kết quả (được hứa giữ hay không) hiện ở bảng Chẩn đoán; Safari tự quyết theo mức độ dùng trang.
+    try { TOP.navigator.storage?.persist?.().then((granted) => { hub.timing.persisted = Boolean(granted); }, () => {}); } catch { /* không hỗ trợ */ }
   }
 
   function persist(store, change) {

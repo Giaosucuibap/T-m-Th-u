@@ -333,6 +333,7 @@ function createUi() {
       } catch { /* không có cũng không sao: đã có location mô phỏng và bộ bắt cú bấm */ }
     }
     watchAssets(d, entry.page);
+    watchWording(d);                        // chữ viết cho Chrome → nói đúng về Safari (10-assets.js)
     d.write(html);
     d.close();
     paint(frame);                           // cỡ hiển thị + sáng/tối, TRƯỚC khi khung hiện ra

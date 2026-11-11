@@ -100,10 +100,11 @@ export function openQuickFind(options = {}) {
   root = document.createElement('div');
   root.className = 'qf-backdrop';
   root.innerHTML = `<div class="qf-panel" role="dialog" aria-modal="true" aria-label="Tìm nhanh">
-    <div class="qf-input-row">${icon('search', 20)}<input class="qf-q" type="search" role="combobox" aria-expanded="true" aria-controls="qf-list" aria-autocomplete="list" placeholder="Gõ mã TBMT (IB…), mã KHLCNT (PL…), tên gói, chủ đầu tư hoặc tên trang" autocomplete="off" spellcheck="false"><kbd>Esc</kbd></div>
+    <div class="qf-input-row">${icon('search', 20)}<input class="qf-q" type="search" role="combobox" aria-expanded="true" aria-controls="qf-list" aria-autocomplete="list" placeholder="Gõ mã TBMT (IB…), mã KHLCNT (PL…), tên gói, chủ đầu tư hoặc tên trang" autocomplete="off" spellcheck="false"><kbd>Esc</kbd><button type="button" class="qf-close" aria-label="Đóng tìm nhanh">Đóng</button></div>
     <div class="qf-list" id="qf-list" role="listbox"></div>
-    <div class="qf-foot"><span>↑ ↓ chọn</span><span>Enter mở</span><span>Esc đóng</span><span>Gói trong kho là dữ liệu đã lưu — có thể đã cũ; tra e-GP để có bản mới nhất.</span></div></div>`;
+    <div class="qf-foot"><span class="key-hint">↑ ↓ chọn</span><span class="key-hint">Enter mở</span><span class="key-hint">Esc đóng</span><span>Gói trong kho là dữ liệu đã lưu — có thể đã cũ; tra e-GP để có bản mới nhất.</span></div></div>`;
   root.addEventListener('mousedown', (event) => { if (event.target === root) close(); });
+  root.querySelector('.qf-close').addEventListener('click', () => close());
   document.body.append(root);
   document.addEventListener('keydown', onKey, true);
   const input = root.querySelector('.qf-q');
