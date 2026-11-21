@@ -1,15 +1,16 @@
 {
-  "version": "4.22.0",
-  "build": "081028c6ffac",
-  "bytes": 3111915,
-  "sha256": "ebd91d785153fcebc9eee9ef2f263588befe95044829f6697179c50adec40b9d",
+  "version": "4.23.0",
+  "build": "dae03b85bb4d",
+  "bytes": 3208761,
+  "sha256": "12e024f1a886756fd3ea10c51872aff919579e4426d32ebeaf9b0b8ccab7347f",
   "ghiChu": [
-    "Vuốt quay lại của Safari không còn làm trắng màn hình: giờ là về màn hình trước của Cùi Bắp.",
-    "Nút to hơn cho ngón tay, danh sách gói gọn hơn, giờ đóng thầu ghi thẳng trên thẻ.",
-    "Tuỳ chọn mới: cỡ hiển thị A−/A+, giao diện tối, giữ máy thức khi săn.",
-    "Tìm bằng câu thường: gõ \"kênh mương dưới 10 tỷ ở Lâm Đồng\", phần mềm tự điền tiêu chí.",
-    "Sao lưu tự động lên Telegram mỗi ngày; theo dõi đối thủ; báo trước gói lặp lại hằng năm.",
-    "Hồ sơ quyết định: cạnh tranh theo lịch sử, đọc E-HSMT bằng ChatGPT hoặc Gemini, in hoặc lưu PDF.",
+    "Sửa bảng bị bóp cột: tên nhà thầu, tên gói nay đọc được trên 2–3 dòng; cột số chỉ rộng bằng con số.",
+    "Bảng nhiều cột cuộn ngang trong khung riêng, cột tên đứng yên; chạm tiêu đề cột để sắp xếp.",
+    "Ô Tỉnh/thành phố có danh sách riêng: gõ \"dong nai\", \"tp\", \"hcm\" hay tên tỉnh cũ đều ra, không cần dấu.",
+    "Danh mục tỉnh, thành lấy thẳng từ e-GP nên theo tên mới: đã có Thành phố Đồng Nai.",
+    "Ô Xã/phường và Ban QLDA cũng có danh sách cuộn được, gõ không dấu.",
+    "iPad cầm dọc: biểu mẫu xếp lại hai cột, không còn ô bị cắt chữ.",
+    "iPhone: bảng thành thẻ, không phải vuốt ngang.",
     "Bản mới chỉ thay khi anh đồng ý, và quay về bản trước được bằng một nút."
   ]
 }

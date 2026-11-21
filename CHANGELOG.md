@@ -9,7 +9,10 @@ Tài liệu này ghi lại các thay đổi quan trọng của Giáo Sư Cùi B�
 không gợi ý được "Đồng Nai". Hướng dẫn: `HUONG-DAN-4.23.0.md`. Nguyên nhân, vì sao phòng thử để lọt, đánh giá ưu
 nhược sau khi chạy thử lại: `BAO-CAO-THAM-DINH-SAFARI.md`, mục 10.
 
-**Kênh ổn định của bản Safari:** ở commit này vẫn là 4.22.0 · bản dựng `081028c6ffac`. Bản 4.23.0 chỉ được đưa lên (`node safari/build.mjs --phat-hanh`) sau khi mọi việc trên CI đạt.
+**Kênh ổn định của bản Safari:** 4.23.0 · bản dựng `dae03b85bb4d` (3.208.761 byte, SHA-256 `12e024f1…347f` — đủ
+trong `safari/dist/phien-ban.json`), đưa lên ngày 21/11/2026 sau khi mọi phép kiểm tại chỗ và CI đạt (8/8 việc ở cả
+hai lượt chạy trên `e5f13a3`; bài đo bảng trên CI chạy đúng bản dựng này: 31/31 phép kiểm, 100 lượt đo, 0 vi phạm).
+Dấu trang đã cài không đổi; máy đang dùng 4.22.0 được **hỏi trước** khi cập nhật và giữ 4.22.0 để quay về.
 
 ### Sửa lỗi
 
