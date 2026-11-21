@@ -231,7 +231,7 @@ test('Xã/phường, Ban QLDA: gõ không dấu, có hay không chữ "xã" / "p
  *  Hành vi của ô gợi ý rút ra từ ảnh iPad thật và từ bài đo — canh bằng mã nguồn vì cần bàn phím, con trỏ thật
  * ------------------------------------------------------------------------- */
 test('ô gợi ý: đóng ngay khi con trỏ sang ô khác; chọn xong thì hạ bàn phím; cuộn tức thì; tính lại khi bàn phím ảo trượt lên', () => {
-  const src = fs.readFileSync(new URL('../GiaoSuCuiBap/lib/suggest.js', import.meta.url), 'utf8');
+  const src = fs.readFileSync(new URL('../GiaoSuCuiBap/lib/suggest.js', import.meta.url), 'utf8').replace(/\r\n/g, '\n');
   // Bài đo "kết quả tức thì": danh sách nán lại 160 ms sau khi rời ô, che nút Tìm, lần bấm trễ 0,85 giây.
   assert.match(src, /const next = event\.relatedTarget;\s*if \(next && next !== clear && !pop\.contains\(next\)\) \{ hide\(\); sync\(\); return; \}/);
   // Ảnh iPad thật: bàn phím che gần nửa màn hình — chọn xong phải thấy lại biểu mẫu, kể cả ô nhận nhiều tỉnh.

@@ -13,7 +13,8 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { planColumns, cardLayout, pinColumn, ONE_LINE, CARD_BELOW } from '../GiaoSuCuiBap/lib/table-fit.js';
 
-const read = (file) => fs.readFileSync(new URL(`../GiaoSuCuiBap/${file}`, import.meta.url), 'utf8');
+// Máy Windows lấy mã về với xuống dòng CRLF: đưa về LF trước khi so chuỗi nhiều dòng (CI Windows đỏ vì thiếu bước này).
+const read = (file) => fs.readFileSync(new URL(`../GiaoSuCuiBap/${file}`, import.meta.url), 'utf8').replace(/\r\n/g, '\n');
 const C = (body, headMin, headMax, wraps, extra = {}) => ({ body, headMin, headMax, wraps, pad: 24, ...extra });
 const sum = (list) => list.reduce((a, b) => a + b, 0);
 
