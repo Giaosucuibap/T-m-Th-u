@@ -1,0 +1,188 @@
+/* ============================================================================
+ *  TỆP CỦA TIỆN ÍCH → blob URL
+ *
+ *  Các khung giao diện không có "thư mục" thật để tải app.css hay lib/core.js, nên
+ *  mỗi tệp trong gói được phát qua một blob URL; import map trong từng khung ánh xạ
+ *  tên trần `gscb/lib/core.js` tới blob tương ứng. Không tệp nào tải từ máy chủ e-GP.
+ * ========================================================================== */
+const FILES = PACK.files;
+const MIME = { '.js': 'text/javascript', '.css': 'text/css', '.html': 'text/html', '.json': 'application/json', '.svg': 'image/svg+xml',
+  '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif', '.ico': 'image/x-icon', '.woff2': 'font/woff2' };
+const extOf = (file) => (file.match(/\.[a-z0-9]+$/i) || [''])[0].toLowerCase();
+const blobUrls = new Map();
+
+function resolvePath(from, relative) {
+  const out = from.split('/').slice(0, -1);
+  for (const part of relative.split('/')) {
+    if (!part || part === '.') continue;
+    if (part === '..') out.pop(); else out.push(part);
+  }
+  return out.join('/');
+}
+const isAbsoluteRef = (value) => /^(?:[a-z][a-z0-9+.-]*:|\/\/|#)/i.test(value);
+
+function cssWithAssets(file, text) {
+  return text.replace(/url\(\s*(['"]?)([^'")]+)\1\s*\)/g, (match, quote, ref) => {
+    if (isAbsoluteRef(ref)) return match;
+    const target = resolvePath(file, ref.split(/[?#]/)[0]);
+    return FILES[target] ? `url("${assetUrl(target)}")` : match;
+  });
+}
+
+/** blob URL của một tệp trong gói (tạo khi cần, dùng lại về sau). */
+function assetUrl(file) {
+  if (blobUrls.has(file)) return blobUrls.get(file);
+  const entry = FILES[file];
+  if (!entry) return '';
+  const type = MIME[extOf(file)] || 'application/octet-stream';
+  let blob;
+  if (entry.b !== undefined) {
+    const raw = atob(entry.b), bytes = new Uint8Array(raw.length);
+    for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
+    blob = new Blob([bytes], { type });
+  } else {
+    const text = extOf(file) === '.css' ? cssWithAssets(file, entry.s) : entry.s;
+    blob = new Blob([text], { type: `${type};charset=utf-8` });
+  }
+  const url = URL.createObjectURL(blob);
+  blobUrls.set(file, url);
+  return url;
+}
+
+let importMapText = '';
+function importMap() {
+  if (!importMapText) {
+    const imports = {};
+    for (const file of Object.keys(FILES)) if (FILES[file].m) imports[`gscb/${file}`] = assetUrl(file);
+    importMapText = JSON.stringify({ imports });
+  }
+  return importMapText;
+}
+
+/** HTML của một trang tiện ích, đã trỏ mọi script / css / ảnh sang blob và gắn import map. */
+function pageHtml(page) {
+  const entry = FILES[page];
+  if (!entry || extOf(page) !== '.html') return null;
+  let html = entry.s.replace(/<(script|link|img|source)\b[^>]*>/gi, (tag) => tag.replace(/\b(src|href)="([^"]+)"/i, (match, attr, value) => {
+    if (isAbsoluteRef(value)) return match;
+    const target = resolvePath(page, value.split(/[?#]/)[0]);
+    return FILES[target] ? `${attr}="${assetUrl(target)}"` : match;
+  }));
+  const map = `<script type="importmap">${importMap()}</script>`;
+  html = /<head[^>]*>/i.test(html) ? html.replace(/<head[^>]*>/i, (m) => m + map) : map + html;
+  html = /<\/head>/i.test(html) ? html.replace(/<\/head>/i, (m) => SAFARI_TOUCH_CSS + m) : html + SAFARI_TOUCH_CSS;
+  return html;
+}
+/* Kiểu chèn thêm vào MỌI trang tiện ích, chỉ có trong bản Safari:
+   - chữ không tự phóng khi xoay ngang iPhone;
+   - điện thoại: số tiền dài được xuống hàng, ô chọn lịch sử không đẩy trang rộng ra
+     (đo trên WebKit 390 px: hai chỗ này làm trang Tìm gói thầu tràn ngang 24 px);
+   - trang popup của tiện ích rộng cố định 420 px: cho co theo màn hình;
+   - GIAO DIỆN TỐI. Lớp vỏ đặt bộ lọc đảo màu lên thẻ <iframe> (50-ui.js) và gắn thuộc tính
+     data-gscb-dark vào <html> của trang. Ở đây: (a) đặt lại các màu nền, viền, nền nhãn SAO
+     CHO SAU KHI ĐẢO chúng thành bảng màu tối có chủ đích — nền trang #0d1117, thẻ #161c24
+     sáng hơn nền, viền #2b3542 (màu nguồn tính ngược bằng chính ma trận của bộ lọc); (b) đảo
+     thêm một lần cho ảnh, bản đồ và những khối vốn đã tối (thanh trái, băng đầu trang) để
+     chúng giữ nguyên màu thật. */
+const SAFARI_DARK_TOKENS = '--bg:#ebeff5;--surface:#dee4ec;--surface-2:#d8dfe9;--surface-3:#cdd6e2;--line:#c2ccd9;--line-strong:#a9b6c6;'
+  + '--brand-50:#beddd9;--brand-100:#a5d0ca;--ok-bg:#c0decd;--warn-bg:#e2d6bd;--bad-bg:#f7d7d4;--info-bg:#c6dafc;'
+  + '--ok-line:#6fbb8c;--warn-line:#c2a25a;--bad-line:#f4a49d;--info-line:#81acfa;--card:var(--surface);--card-soft:var(--surface-2);--accent-soft:var(--brand-50);--gold-soft:var(--warn-bg)';
+const SAFARI_KEEP = ['img', 'video', 'canvas', 'svg image', '.ws-sidebar', '.hero', '.keep-colors', '.leaflet-container', '.map-canvas'];
+/* Bề mặt mà CSS của tiện ích viết cứng màu trắng (thẻ, bảng, nút sáng…): trong giao diện tối chúng lấy màu thẻ
+   của bảng màu tối, để thẻ SÁNG HƠN nền một bậc — không thì trắng bị đảo thành đen tuyền, tối hơn cả nền trang
+   (đo 11/11/2026 trên ảnh chụp WebKit). Ô nhập cố ý giữ đen: ô lõm xuống so với thẻ, dễ thấy chỗ gõ. */
+const SAFARI_DARK_SURFACES = ['.workspace .card', '.card', '.ws-result', '.run-strip', '.ws-metric', '.saved-search', '.warehouse-health', '.investor-directory-list', '.workflow-strip a',
+  'table', 'tbody tr>td', '.pipeline-button', '.pkg-footer', '.qf-panel', 'body.workspace>header', '.btn.light', '.workspace .btn.light', '.density-toggle', '.ws-menu-btn',
+  '.quick button', '.chips button', '.chip', '.result-links button', '.result-links a', '.brief-pick'];
+const SAFARI_HIDE = ['.ws-sidebar a[href="phone.html"]', '#station', 'section[aria-labelledby="native-title"]', '#native-check', '#native-guide', '#native-status', '[data-download]'];
+const SAFARI_TOUCH_CSS = '<style data-gscb-safari>html{-webkit-text-size-adjust:100%;text-size-adjust:100%}'
+  + '@media (max-width:540px){.ws-metric .value.money{white-space:normal;overflow-wrap:anywhere}.history-label{flex-wrap:wrap;overflow:hidden}.history-label select{flex:1 1 100%;min-width:0;max-width:100%}'
+  + 'body:has(.popup-launch){width:auto;max-width:100%}}'
+  + `html[data-gscb-dark]{${SAFARI_DARK_TOKENS}}`
+  + `${SAFARI_KEEP.map((sel) => `html[data-gscb-dark] ${sel}`).join(',')}{filter:invert(1) hue-rotate(180deg)}`
+  // Ảnh nằm TRONG một khối đã được đảo lại thì không đảo nữa (đảo ba lần = đảo một lần).
+  + `${SAFARI_KEEP.filter((sel) => sel.startsWith('.')).flatMap((sel) => ['img', 'video', 'canvas'].map((inner) => `html[data-gscb-dark] ${sel} ${inner}`)).join(',')}{filter:none}`
+  + 'html[data-gscb-dark] ::selection{background:#a5d0ca}'
+  + `${SAFARI_DARK_SURFACES.map((sel) => `html[data-gscb-dark] ${sel}`).join(',')}{background-color:var(--surface)}`
+  // Thẻ đã chọn / thẻ ưu tiên / hàng bảng khi rê: giữ nền nhấn của chúng, chỉ đổi sang tông tối.
+  + 'html[data-gscb-dark] .ws-result.selected,html[data-gscb-dark] tbody tr:hover>td{background-color:var(--surface-2)}'
+  + 'html[data-gscb-dark] .result-links .card-more{background-color:var(--brand-50)}'
+  // Những mục cần máy tính Windows hoặc Chrome chạy nền: không có nghĩa trên Safari, nên không hiện.
+  + `${SAFARI_HIDE.join(',')}{display:none!important}`
+  + '</style>';
+
+/* ----------------------------------------------------------- chữ nói đúng về Safari */
+/* Các trang của tiện ích viết cho Chrome trên máy tính ("Chrome cần đang chạy", "khi mở Chrome"…).
+   Trong bản Safari những câu đó sai. Lớp vỏ đổi chữ ngay khi trang hiện ra và mỗi khi trang tự
+   viết thêm chữ; tệp của tiện ích không đổi. Quy tắc cụ thể đứng trước, quy tắc chung đứng sau. */
+const SAFARI_WORDS = [
+  [/Lịch dùng báo thức Chrome — lượt lỡ giờ \(máy tắt, Chrome đóng\) được chạy bù khoảng 2 phút sau khi Chrome chạy lại\./g, 'Lịch chỉ chạy khi Cùi Bắp đang mở trên Safari — lượt lỡ giờ được chạy bù khi anh mở lại.'],
+  [/Chrome cần đang chạy — có thể chạy nền, không cần mở cửa sổ \(xem mục Trạm săn\)\./g, 'Cùi Bắp cần đang mở trên Safari (bật "Giữ máy thức" trong Tuỳ chọn để màn hình không tự tắt).'],
+  [/ \(bật chạy nền ở trang Bộ săn\)/g, ''],
+  [/Đã lưu bộ săn và đăng ký lịch Chrome\./g, 'Đã lưu bộ săn và đặt lịch.'],
+  [/Cảnh báo trên máy tính và Telegram/g, 'Cảnh báo trong Cùi Bắp và Telegram'],
+  [/thông báo trên máy\b/g, 'thông báo ở chuông'],
+  [/khi Chrome đang (hoạt động|chạy)/g, 'khi Cùi Bắp đang mở'],
+  [/khi mở Chrome/g, 'khi mở Cùi Bắp'],
+  [/sau khi Chrome (hoạt động|chạy)( trở)? lại/g, 'sau khi anh mở lại Cùi Bắp'],
+  [/khi Chrome chạy lại/g, 'khi anh mở lại Cùi Bắp'],
+  [/Chrome cần (đang )?(hoạt động|chạy)/g, 'Cùi Bắp cần đang mở'],
+  [/Chrome không thể( tự)? đánh thức máy/g, 'Safari không tự đánh thức được máy'],
+  [/tiện ích Chrome/g, 'phần mềm'],
+  [/Giữ Chrome và tab e-GP/g, 'Giữ Safari mở ở tab muasamcong này'],
+  [/Chrome\/máy/g, 'Safari/máy'],
+  [/\bChrome\b/g, 'Safari']
+];
+const SAFARI_WORD_HINT = /Chrome|trên máy/;
+function safariWording(text) {
+  if (!SAFARI_WORD_HINT.test(text)) return text;
+  let out = text;
+  for (const [pattern, to] of SAFARI_WORDS) out = out.replace(pattern, to);
+  return out;
+}
+/** Đổi chữ trong một nhánh DOM (nút chữ + ba thuộc tính người dùng đọc được). */
+function adaptWording(doc, root) {
+  const win = doc.defaultView;
+  const fix = (node) => { const next = safariWording(node.nodeValue); if (next !== node.nodeValue) node.nodeValue = next; };
+  if (root.nodeType === 3) { fix(root); return; }
+  if (root.nodeType !== 1 || /^(SCRIPT|STYLE)$/.test(root.tagName)) return;
+  const walker = doc.createTreeWalker(root, win.NodeFilter.SHOW_TEXT);
+  for (let node = walker.nextNode(); node; node = walker.nextNode()) { if (!/^(SCRIPT|STYLE)$/.test(node.parentNode.tagName)) fix(node); }
+  for (const el of [root, ...root.querySelectorAll('[title],[placeholder],[aria-label]')]) {
+    for (const name of ['title', 'placeholder', 'aria-label']) { const value = el.getAttribute && el.getAttribute(name); if (value) { const next = safariWording(value); if (next !== value) el.setAttribute(name, next); } }
+  }
+}
+function watchWording(doc) {
+  const Observer = doc.defaultView.MutationObserver;
+  new Observer((records) => {
+    for (const record of records) {
+      if (record.type === 'characterData') adaptWording(doc, record.target);
+      else for (const node of record.addedNodes) adaptWording(doc, node);
+    }
+  }).observe(doc, { childList: true, subtree: true, characterData: true });
+}
+
+/** Ảnh chèn sau (innerHTML): `gscb-asset:icons/x.svg` hoặc đường dẫn tương đối → blob. */
+function fixAssetAttribute(el, pageDir) {
+  const raw = el.getAttribute('src');
+  if (!raw || raw.startsWith('blob:') || raw.startsWith('data:')) return;
+  let file = '';
+  if (raw.startsWith('gscb-asset:')) file = raw.slice(11);
+  else if (!isAbsoluteRef(raw)) file = resolvePath(`${pageDir}x`, raw.split(/[?#]/)[0]);
+  if (file && FILES[file]) el.setAttribute('src', assetUrl(file));
+}
+function watchAssets(doc, page) {
+  const pageDir = page.includes('/') ? page.slice(0, page.lastIndexOf('/') + 1) : '';
+  const scan = (root) => {
+    if (root.nodeType !== 1) return;
+    if (root.tagName === 'IMG') fixAssetAttribute(root, pageDir);
+    for (const img of root.querySelectorAll ? root.querySelectorAll('img[src]') : []) fixAssetAttribute(img, pageDir);
+  };
+  const Observer = doc.defaultView.MutationObserver;
+  new Observer((records) => {
+    for (const record of records) {
+      if (record.type === 'attributes') scan(record.target);
+      else for (const node of record.addedNodes) scan(node);
+    }
+  }).observe(doc, { childList: true, subtree: true, attributes: true, attributeFilter: ['src'] });
+}
