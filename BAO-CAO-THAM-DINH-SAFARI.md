@@ -6,6 +6,10 @@ Ngày 10/11/2026 · dựng từ tiện ích 4.21.0 · mã nguồn `safari/` · h
 > chiếu. Phần làm theo bản thẩm định đó, số đo trước/sau, lỗi tự tìm ra ở vòng hai và điểm chấm lại nằm ở
 > **mục 9**.
 
+> **Cập nhật 21/11/2026 — bản 4.23.0.** Anh đã dùng 4.22.0 trên iPad thật và chụp lại hai lỗi mà phòng thử của em
+> không bắt được. Nguyên nhân, cách sửa, vì sao lọt lưới, đánh giá ưu nhược sau khi chạy thử lại và điểm chấm lại
+> nằm ở **mục 10**.
+
 > **Về "tổ thẩm định".** Anh yêu cầu em đóng vai một tổ chuyên gia xét duyệt lại phần mềm. Em đã làm đúng việc
 > của một tổ như vậy — soát lại kiến trúc, đọc lại từng tệp, dựng thêm tình huống xấu, đo bằng nhân Safari —
 > và tìm ra 14 lỗi của chính bản em viết; máy kiểm thử tự động (CI) bắt thêm lỗi thứ 15 (mục 5). Nhưng nói cho đúng: đây vẫn là **người viết tự soát bài của
@@ -316,3 +320,148 @@ ba thứ quyết định điểm 10 nằm ngoài tầm của bản này:
 4. Nếu muốn các phần còn thiếu: quyết định về token Cloudflare (đồng bộ, app màn hình chính), khoá API AI, và
    tài khoản Apple Developer.
 
+## 10. Thẩm định sau 4.23.0 (21/11/2026) — hai lỗi anh thấy trên iPad thật
+
+### 10.1 Chuyện gì đã xảy ra
+
+Hai ảnh anh gửi ngày 21/11/2026 là **lần đầu tiên bản Safari được thấy trên iPad thật với dữ liệu e-GP thật**
+(bản 4.22.0, trạng thái "Đã nối e-GP"). Tin tốt: phần khó nhất — chạy cả phần mềm trong một tab muasamcong —
+hoạt động đúng trên máy thật. Tin xấu: hai lỗi trình bày nhìn là thấy, mà 80 phép kiểm của 4.22.0 đều "đạt".
+
+| Lỗi anh báo | Nguyên nhân gốc | Lỗi của ai |
+|---|---|---|
+| Cột tên nhà thầu rộng 59 px, tên 39 ký tự thành 13 dòng; "16 / 0" chiếm 157 px | Bản 4.22.0 cho ô bảng bẻ chữ ở bất kỳ ký tự nào (`overflow-wrap:anywhere`) trên máy cảm ứng; bảng không vừa màn hình thì Safari ép đúng cột tên | **Em** — thêm ở 4.22.0 |
+| Gõ "thành phố đồng" không ra Đồng Nai | Các ô tỉnh/thành dùng danh sách gợi ý có sẵn của trình duyệt (`<datalist>`): iPad chỉ hiện 3 gợi ý trên thanh bàn phím, không hiểu gõ không dấu. Danh mục thì **không cũ** — lấy từ e-GP, đã có Thành phố Đồng Nai | **Em** — có từ trước, chưa bao giờ thử bằng bàn phím iPad |
+
+**Vì sao phòng thử không bắt được — ba lỗ hổng của chính cách em kiểm thử:**
+
+1. **Dữ liệu thử quá sạch.** Tên nhà thầu giả lập dài 15–20 ký tự, danh mục chỉ có 7 tỉnh. Bảng nào cũng vừa
+   màn hình nên không bao giờ bị ép cột.
+2. **Chỉ kiểm "không tràn ngang", không kiểm "đọc được".** Một bảng bị bóp cột vẫn không tràn — nó "đạt".
+3. **Bài thử điền ô tỉnh bằng lệnh**, không gõ từng chữ như người dùng, nên không đi qua danh sách gợi ý.
+
+Cả ba đã được vá ở bản này (mục 10.3). Nhưng bài học lớn hơn: **một tấm ảnh từ máy thật của anh có giá trị hơn
+80 phép kiểm trong phòng thử.**
+
+### 10.2 Đã sửa thế nào
+
+**Bảng — một bộ dàn cột dùng chung** (`lib/table-fit.js`), không vá từng bảng. Nó đo bề rộng thật của nội dung
+từng cột rồi chia: cột số rộng đúng bằng con số, tiêu đề dài xuống hai dòng, cột tên được khoảng 40% khung. Bảng
+không vừa thì cuộn ngang **trong khung của chính nó** với cột tên ghim lại. Mọi bảng của mọi màn hình đi qua
+bộ này — kể cả bảng sẽ viết sau này.
+
+**Ô tỉnh/thành — một ô gợi ý dùng chung** (`lib/suggest.js`, `lib/province-names.js`) thay danh sách của trình
+duyệt ở cả 11 màn hình có ô đó, và cả ô Xã/phường / Ban QLDA. Tìm không dấu, viết tắt, tên tỉnh cũ đã sáp nhập
+(29 tỉnh theo Nghị quyết 202/2025/QH15) đều ra đơn vị hiện hành kèm ghi chú.
+
+**Một phát hiện kỹ thuật đáng ghi lại.** Khi trang phóng 110% (mặc định trên iPad), nhân Safari **không nhân mức
+phóng cho bề rộng đặt trên thẻ `<col>`**: cột đặt 120 px hiện ra 127 px thay vì 132 px, cột tên bên cạnh mất 16 px.
+Em tìm ra bằng một thí nghiệm tối giản sau khi số đo thực tế cứ lệch 6% so với số tính. Bề rộng đặt thẳng trên ô
+thì đúng tuyệt đối, nên bộ dàn cột dùng cách đó.
+
+### 10.3 Phòng thử mới, và những gì nó tìm thêm
+
+`tools/test/bang-doc-duoc.mjs` nạp dữ liệu **giống thật** (tên công ty 40–70 ký tự, số tiền 13 chữ số, 34 tỉnh
+thành và 34 tên cũ theo đúng danh mục, 168 gói, 150 kết quả trúng thầu, 72 kế hoạch) rồi **đo từng bảng trên
+từng màn hình** bằng nhân Safari. Năm loại vi phạm: trang tràn ngang; bảng tràn khung; **ô chữ dưới 10 ký tự
+mỗi dòng** (đúng lỗi trong ảnh); **cột một dòng thừa hơn 80 px** (vế còn lại của lỗi đó); cột ghim không đứng yên.
+Ô tỉnh/thành được **gõ thử** và kiểm cả việc dòng gợi ý có chạm được không.
+
+Kết quả lần đo cuối: **46 phép kiểm, 150 lượt đo bảng, 0 vi phạm** ở ba cỡ máy — iPad Pro 13" trong Safari cầm dọc (1032×1244, đúng máy của anh), xoay ngang (1376×900) và iPhone (390×844); mỗi cỡ 35 màn hình, 50 bảng.
+
+| Cỡ máy | Bảng vừa màn hình | Bảng cuộn ngang (ghim cột tên) | Bảng thành thẻ | Vi phạm |
+|---|---|---|---|---|
+| iPad Pro 13" dọc trong Safari, 1032×1244 (máy của anh) | 34 | 16 | 0 | 0 |
+| iPad Pro 13" ngang trong Safari, 1376×900 | 44 | 6 | 0 | 0 |
+| iPhone 390×844 | 2 | 1 | 47 | 0 |
+
+**Mốc trước khi sửa.** Chạy đúng bài đo này trên **tệp 4.22.0 đã phát hành** (tệp đang nằm trên iPad của anh), ở cỡ
+iPad của anh: **61 vi phạm** trên 49 bảng — cột "Nhà thầu" rộng 61 px, tên 67 ký tự thành 25 dòng, một tên gói 325
+ký tự thành 105 dòng, trang tràn ngang tới 294 px; và 9 trong 16 phép kiểm hỏng. Tức là bài đo bắt được đúng lỗi anh
+thấy (ảnh của anh: 59 điểm), còn bản 4.23.0 qua cùng bài đó với 0 vi phạm. Trong lúc sửa, vòng đầu ở cỡ iPhone còn 27
+vi phạm, đã xử lý hết ở các vòng sau. Cỡ iPad em lấy từ chính hai ảnh của anh: 2064×2752 điểm ảnh, tức 1032×1376 điểm, trong đó Safari chiếm 132 điểm
+phía trên. Ảnh thứ hai còn cho số đo của **bàn phím ảo** (bắt đầu ở điểm 973, chỉ còn 113 điểm dưới ô Tỉnh/thành
+phố); em thêm một phép kiểm mô phỏng đúng vùng nhìn đó: danh sách gợi ý phải nằm trọn phía trên bàn phím.
+
+Ngoài hai lỗi anh báo, vòng rà này tìm ra và đã sửa:
+
+| # | Thấy ở đâu | Lỗi | Sửa |
+|---|---|---|---|
+| 1 | iPad 12,9" dọc: Mở thầu, Kế hoạch, Hồ sơ chủ đầu tư, Địa bàn | Biểu mẫu 4 cột bị chật: ô nhập cắt chữ, nút xuống 3 dòng, chú thích 13 dòng | Biểu mẫu xếp theo **chỗ thật** của phần nội dung (`data-room`), không theo bề rộng cửa sổ |
+| 2 | Bảng "Gói đã trúng" | Cột "Mã TBMT" rộng 487 px (mã + hai nút nằm ngang) | Xếp dọc trong ô: còn khoảng 180 px |
+| 3 | Cùng bảng, bản Safari | Nút "Tải hồ sơ" cần cầu nối Windows vẫn hiện trên iPad | Ẩn trên bản Safari |
+| 4 | Mọi bảng | Bề rộng tác giả ghi cứng (`width:34%`) thắng phần chia, ép cột chữ | Bộ dàn cột tính lại |
+| 5 | Mọi bảng | Dấu sắp xếp là ký tự ↕ của phông chữ, làm tiêu đề cao thêm một dòng | Vẽ bằng CSS, không chiếm bề rộng |
+| 6 | iPhone | 27 vi phạm: cột chữ phụ 130 px, trang tràn ngang 18–61 px ở 4 màn hình vì ô số liệu mang số 13 chữ số, cột ghim nằm quá xa không bao giờ dính | Bảng thành **thẻ** trên điện thoại; ô số liệu tự xuống hàng; ghim cột tên chỉ khi nó trong ba cột đầu |
+| 7 | iPad xoay ngang | Danh sách gợi ý chỉ rộng bằng ô nhập (218 px), ghi chú sáp nhập xuống 3 dòng | Danh sách rộng tối thiểu 300 px khi còn chỗ |
+| 8 | Nền | Danh mục tỉnh/thành nhớ 30 ngày: tên mới về máy chậm cả tháng | Còn 7 ngày |
+| 9 | Tìm gói thầu (máy tính) | Danh sách gợi ý nán lại 0,16 giây sau khi rời ô, **che nút "Tìm gói thầu"**: bài đo "kết quả tức thì" tụt từ 0,20 xuống 1,06 giây | Đóng ngay khi con trỏ sang ô khác; đo lại 0,21 giây |
+| 10 | Mọi bảng | Cột chia sát tới từng phần mười px: tiêu đề "Số gói" rớt hai dòng; bảng "vừa khung" rộng hơn khung 2 px vì chưa tính viền | Cộng 0,75 px dự phòng; tính cả viền của bảng |
+| 11 | Mọi trang | Trang cuộn kiểu "mượt" làm phép tính chỗ trống chạy sớm: danh sách gợi ý nằm ngoài màn hình | Cuộn tức thì khi cần nhường chỗ cho danh sách |
+
+### 10.4 Học từ phần mềm tương tự
+
+Em tra lại các phần mềm tra thầu trong nước và các hướng dẫn thiết kế bảng số liệu. Thứ đã áp dụng ở bản này:
+
+| Học từ đâu | Điều học được | Đã áp dụng |
+|---|---|---|
+| [Morningstar Design System — bảng số liệu trên màn hẹp](https://designsystem.morningstar.com/legacy/v/2.34.0/ux-patterns/responsive-data-tables.html) | Ghim cột định danh, cho phần còn lại cuộn; phần cuộn phải được hơn nửa khung; ô ghim nền đặc | Cột tên ghim khi không quá 50% khung, nền đặc, có bóng khi đã cuộn |
+| [Chrome for Developers — bảng trên mọi cỡ màn hình](https://developer.chrome.com/docs/modern-web-guidance/guides/ui-atoms/responsive-table) | Cuộn khung của bảng, không cuộn cả trang; thử ở bề rộng thật | Khung cuộn riêng từng bảng; bài đo ở cỡ iPad/iPhone thật |
+| [DauThau.info — tìm nhà thầu có sắp xếp và lọc nâng cao (6/10/2025)](https://dauthau.asia/news/dau-thau/dauthau-info-nang-cap-cong-cu-tim-kiem-nha-thau-voi-tinh-nang-sap-xep-va-loc-nang-cao-1711.html) | Người dùng muốn tự xếp bảng theo cột mình quan tâm | Chạm tiêu đề cột để sắp xếp, ở mọi bảng danh sách |
+| Thông lệ chung của ứng dụng điện thoại | Bảng nhiều cột trên điện thoại nên thành thẻ | Chế độ thẻ khi khung hẹp hơn 430 px |
+
+Thứ **chưa** làm, ghi lại để anh cân nhắc (đều cần máy chủ hoặc dữ liệu ngoài e-GP):
+[theo dõi hoạt động bên mời thầu / chủ đầu tư](https://dauthau.asia/news/tin-tuc/dauthau-info-bo-sung-tinh-nang-theo-doi-hoat-dong-cua-ben-moi-thau-chu-dau-tu-1852.html)
+ở quy mô toàn quốc, cảnh báo giá bất thường, xếp hạng doanh nghiệp, bộ lọc AI — các tính năng DauThau.info công
+bố trong năm 2025–2026 ([danh sách cập nhật](https://dauthau.asia/news/tag/dauthau-info-cap-nhat-tinh-nang)).
+Em **không tìm được** nguồn nào mô tả ô chọn tỉnh của họ xử lý tên tỉnh sau sáp nhập ra sao, nên phần đó em tự
+thiết kế, không dám nói là "học theo".
+
+### 10.5 Đánh giá sau khi chạy thử lại
+
+**Ưu điểm**
+
+1. **Sửa ở gốc, cho mọi màn hình.** Hai lỗi được chữa bằng hai bộ dùng chung; bảng và ô tỉnh viết sau này tự
+   được hưởng. Không còn chuyện sửa màn hình này quên màn hình kia.
+2. **Đo được.** "Bảng đọc được" từ nay là một con số (ký tự mỗi dòng, px thừa) và nằm trong CI — lỗi quay lại là
+   CI đỏ.
+3. **Ô tỉnh/thành hiểu người Việt gõ thế nào**: không dấu, viết tắt, tên cũ. Và nói rõ khi tên anh gõ đã sáp nhập.
+4. **Danh mục tự theo e-GP**, không phụ thuộc em cập nhật tay — tỉnh nào lên thành phố thì trong tuần là có.
+5. **An toàn khi cập nhật**: vẫn hỏi trước, vẫn quay về 4.22.0 được; bài nâng cấp chạy từ đúng tệp 4.22.0 đang
+   nằm trên iPad của anh.
+6. **Bảng sắp xếp được** — việc trước đây phải xuất Excel.
+
+**Nhược điểm — nói thẳng**
+
+1. **Vẫn chưa có ngón tay thật và bàn phím thật.** Danh sách gợi ý được tính để tránh bàn phím ảo, nhưng phòng
+   thử không có bàn phím ảo. Đây là chỗ em ít chắc nhất của bản này.
+2. **Bảng 9 cột trên iPad dọc vẫn phải vuốt ngang.** Đọc được, cột tên đứng yên, nhưng không thấy hết một lúc.
+   Muốn hết hẳn phải bỏ bớt cột hoặc cho anh chọn cột — chưa làm.
+3. **Dữ liệu thử vẫn là giả lập**, dù đã giống thật hơn. Tên gói ngoài đời có thể dài 200 ký tự.
+4. **Sắp xếp chỉ trên phần đang hiển thị** (trang hiện tại của bảng), không phải toàn bộ kết quả trong kho.
+5. **Chế độ thẻ trên iPhone mới chỉ là trình bày lại**: chưa có lọc nhanh trong chồng thẻ.
+6. **Thanh bên trái** vẫn xuống dòng vài mục trên iPad dọc; các trang phân tích đời cũ chưa làm lại bố cục.
+7. **Em đã chấm 4.22.0 quá tay.** "Giao diện 9", "màn cảm ứng 9,5", "kiểm thử 9,5" — trong khi trên máy thật có
+   bảng không đọc nổi. Điểm dưới đây hạ cả cột 4.22.0 cho đúng.
+
+### 10.6 Chấm lại (thang 10)
+
+| Tiêu chí | 4.22.0 đã chấm | 4.22.0 **thực tế** | 4.23.0 | Vì sao chưa phải 10 |
+|---|---|---|---|---|
+| Tính năng | 9,5 | 9,5 | **9,5** | Thêm sắp xếp cột; vẫn thiếu các phần cần máy chủ |
+| Giao diện | 9 | 7 | **9** | Trong phòng thử đạt mọi số đo; bảng rộng vẫn phải vuốt; trang đời cũ chưa làm lại |
+| Hợp với màn cảm ứng | 9,5 | 8 | **9** | Ô tỉnh đã chạm được; **chưa thử với bàn phím ảo thật** |
+| Vận hành trên iPad | 7 | 7 | **7** | Không đổi: không chạy nền, phải chạm dấu trang |
+| Bảo mật và an toàn dữ liệu | 7,5 | 7,5 | **7,5** | Không đổi |
+| Kiểm thử trong phòng thí nghiệm | 9,5 | 8 | **9** | Có dữ liệu giống thật và phép đo "đọc được"; vẫn không có bàn phím ảo, không có Safari thật |
+| **Kiểm chứng trên thiết bị thật** | 3 | 3 | **5** | 4.22.0 đã chạy trên iPad thật với e-GP thật (ảnh của anh); **4.23.0 chưa** |
+
+**Em không chấm 10/10**, và sẽ không chấm cho tới khi chính bản này được anh mở trên iPad.
+
+### 10.7 Việc tiếp theo, xếp theo lợi ích cho anh
+
+1. **Anh cập nhật và chụp lại đúng hai màn hình cũ** — đó là phép kiểm duy nhất em không tự làm được.
+2. **Chọn cột hiển thị** cho các bảng 9 cột (ẩn bớt "Năm", "Ít cạnh tranh"…) để vừa iPad dọc không cần vuốt.
+3. **Sắp xếp và lọc trên toàn bộ kết quả**, không chỉ trang đang hiện.
+4. **Làm lại bố cục các trang phân tích đời cũ** theo cùng hệ thống với Tìm gói thầu.
+5. Các phần cần quyết định của anh vẫn như mục 9.5: token Cloudflare, khoá API AI, tài khoản Apple Developer.

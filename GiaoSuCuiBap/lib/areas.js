@@ -184,6 +184,28 @@ export function currentProvinceNames(areas) {
 }
 
 /**
+ * Tên các tỉnh/thành CŨ còn trong danh mục e-GP (status 0) mà tên riêng KHÔNG trùng với đơn vị
+ * hiện hành nào — tức các tỉnh đã nhập vào tỉnh khác từ 1/7/2025 (Bình Phước, Bình Thuận…).
+ * Ô gợi ý (4.23.0) dùng danh sách này để người cần tra hồ sơ trước sáp nhập chọn đúng tên cũ;
+ * tên cũ trùng tên đơn vị hiện hành (Lâm Đồng 703, Đồng Nai 713) thì `provinceCodesByName` đã gộp sẵn.
+ */
+export function legacyProvinceNames(areas) {
+  const core = (value) => foldText(value).replace(/[^a-z0-9]+/g, ' ').trim()
+    .replace(/^(?:tinh|thanh pho|tp)\s+/, '').replace(/\s+ma cu$/, '');
+  const list = (areas && areas.provinces) || [];
+  const current = new Set(list.filter((p) => p.current).map((p) => core(p.name || p.fold)));
+  const seen = new Set();
+  const out = [];
+  for (const p of list) {
+    const key = core(p.name || p.fold);
+    if (p.current || !key || current.has(key) || seen.has(key)) continue;
+    seen.add(key);
+    out.push(p.name);
+  }
+  return out.sort((a, b) => a.localeCompare(b, 'vi'));
+}
+
+/**
  * Quy TÊN xã/phường ra MÃ, trong phạm vi một tỉnh (hoặc toàn quốc nếu bỏ trống).
  *
  * Gom mã của MỌI tỉnh cùng tên (Lâm Đồng = 68 + 703) nên bắt được cả địa danh

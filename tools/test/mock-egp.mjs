@@ -13,6 +13,11 @@ const SEARCH = '/o/egp-portal-contractor-selection-v2/services/smart/search';
 const LOT_OPEN = '/services/expose/ldtkqmt/bid-notification-p/lotOpenDetail';
 const AREA_LIST = '/o/egp-portal-contractor-selection-v2/services/get/area-api-list';
 
+/* MOCK_CHAOS=real — dữ liệu có HÌNH DẠNG như e-GP thật (tên pháp nhân dài, danh mục 34 tỉnh/thành kèm
+   tên cũ, máy chủ lọc thật theo mã tỉnh). Xem mock-real.mjs. Chế độ mặc định không đổi. */
+import { realAreaList, realDataset, realBidders, REAL_TENDERS } from './mock-real.mjs';
+const REAL = /(?:^|,)real(?:,|$)/.test(String(process.env.MOCK_CHAOS || ''));
+
 /* --------------------------------------------------------------------------
  *  DANH MỤC ĐỊA BÀN
  *
@@ -58,6 +63,7 @@ const AREA_WARDS = {
 /** Trả đúng nhóm địa bàn mà tiện ích hỏi: areaType 1 = tỉnh, 2 = xã/phường. */
 function areaListFor(body) {
   const spec = (body && body.areas && body.areas[0]) || {};
+  if (REAL) return realAreaList(spec);
   if (String(spec.areaType) === '1') return AREA_PROVINCES;
   if (String(spec.areaType) === '2') {
     const parent = String(spec.parentCode || '').trim();
@@ -164,6 +170,7 @@ const PLANS = Array.from({ length: 60 }, (_, i) => plan(i));
  *  thời gian. Nhờ vậy phép thử chứng minh được rằng thứ bảo đảm kết quả là
  *  lớp lọc lại TẠI CHỖ, chứ không phải bộ lọc gửi lên máy chủ. */
 function datasetFor(env) {
+  if (REAL) return realDataset(env);
   const filters = env?.query?.[0]?.filters || [];
   const type = filters.find((f) => f.fieldName === 'type');
   const values = [].concat(type?.fieldValues || []).join(',');
@@ -228,11 +235,12 @@ function datasetFor(env) {
  *   csp         : mọi TRANG kèm Content-Security-Policy cấm eval / new Function
  *                 (vẫn cho script nội tuyến và blob:).
  *   nobranch    : raw.githubusercontent.com giả báo 404 cho mọi nhánh trừ `main`
- *                 (nhánh phát triển đã bị xoá sau khi gộp). */
+ *                 (nhánh phát triển đã bị xoá sau khi gộp).
+ *   real        : dữ liệu giống thật (mock-real.mjs): tên dài, 34 tỉnh/thành kèm tên cũ, lọc thật theo mã tỉnh. */
 const SHAPE = (String(process.env.MOCK_CHAOS || '').match(/shape=([a-z]+)/) || [])[1] || '';
 const CHAOS = Object.fromEntries(String(process.env.MOCK_CHAOS || '').split(',').filter(Boolean)
   .map((part) => { const [k, v] = part.split('='); return [k.trim(), v === undefined ? true : Number(v)]; }));
-let chaosSeed = Number(CHAOS.seed || 1), searchCount = 0, cutCount = 0, mutateCount = 0;
+let chaosSeed = Number(CHAOS.seed || 1), searchCount = 0, cutCount = 0, mutateCount = 0, lotOpenCount = 0;
 let lastTelegramFile = null;
 const chaosRandom = () => { chaosSeed = (chaosSeed * 1103515245 + 12345) % 2147483648; return chaosSeed / 2147483648; };
 if (Object.keys(CHAOS).length) console.log('[mock] CHẾ ĐỘ KHÓ TÍNH:', JSON.stringify(CHAOS));
@@ -424,7 +432,7 @@ const server = https.createServer(
 
     if (url.pathname === LOT_OPEN) {
       res.writeHead(200, { 'content-type': 'application/json;charset=UTF-8' });
-      res.end(JSON.stringify([
+      res.end(JSON.stringify(REAL ? realBidders(lotOpenCount++) : [
         { contractorName: 'CÔNG TY TNHH XÂY DỰNG A', taxCode: '3401122219', bidValue: 4683763268 },
         { contractorName: 'CÔNG TY TNHH XÂY DỰNG B', taxCode: '3401080939', bidValue: 4701963066 }
       ]));
@@ -436,7 +444,8 @@ const server = https.createServer(
       // — đúng tình huống thật, và là chỗ trước đây vòng lặp nằm chết 20 giây.
       if (url.searchParams.get('step') === 'bbmt' || url.searchParams.get('notifyNo')) {
         const no = url.searchParams.get('notifyNo') || '';
-        const coDuLieu = (Number(no.replace(/\D/g, '').slice(-1)) % 2) === 0;
+        // real: gần như gói nào cũng có biên bản (cứ 6 gói thì 1 gói chưa có), để các bảng nhà thầu dự có dữ liệu mà đo.
+        const coDuLieu = REAL ? (Number(no.replace(/\D/g, '')) % 6) !== 1 : (Number(no.replace(/\D/g, '').slice(-1)) % 2) === 0;
         console.log(`[mock] chi tiết ${no} — ${coDuLieu ? 'CÓ' : 'KHÔNG'} trả nhà thầu`);
         res.writeHead(200, pageHeaders());
         res.end(`<!doctype html><meta charset=utf-8><title>Biên bản ${no}</title>
@@ -460,4 +469,4 @@ const server = https.createServer(
   }
 );
 
-server.listen(PORT, '127.0.0.1', () => console.log(`[mock] e-GP giả lập chạy ở https://127.0.0.1:${PORT} (${ALL.length} gói thầu)`));
+server.listen(PORT, '127.0.0.1', () => console.log(`[mock] e-GP giả lập chạy ở https://127.0.0.1:${PORT} (${REAL ? REAL_TENDERS.length : ALL.length} gói thầu${REAL ? ', dữ liệu giống thật' : ''})`));

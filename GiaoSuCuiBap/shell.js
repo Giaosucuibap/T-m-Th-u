@@ -1,6 +1,8 @@
 import { icon, hydrateIcons } from './lib/icons.js';
 hydrateIcons();
 import { TOUCH, markDocument } from './lib/device.js';
+import { watchTables } from './lib/table-fit.js';
+import { enhanceSuggest } from './lib/suggest.js';
 /* Máy cảm ứng và bản Safari: gắn data-touch / data-platform lên <html> để theme.css chỉnh
    nút, thẻ, danh sách cho ngón tay (xem lib/device.js). Máy tính dùng chuột: không gắn gì. */
 markDocument();
@@ -134,6 +136,21 @@ async function openQuickFind() {
 
 if (!IS_POPUP) {
   adoptLegacyHeader();
+  /* 4.23.0 — hai việc dùng chung cho MỌI màn hình (sửa hai lỗi thấy trên iPad thật):
+     bảng nào cũng được đo và chia cột lại cho đọc được (lib/table-fit.js); ô tỉnh/thành, xã/phường nào
+     cũng dùng danh sách gợi ý riêng của phần mềm thay cho danh sách có sẵn của trình duyệt (lib/suggest.js). */
+  try { watchTables(); } catch (error) { console.warn('Chưa dàn được cột cho bảng', error); }
+  try { enhanceSuggest(); } catch (error) { console.warn('Chưa gắn được ô gợi ý', error); }
+  /* CHỖ THẬT CỦA PHẦN NỘI DUNG (4.23.0). Các trang chia biểu mẫu 4 cột theo bề rộng CỬA SỔ (mốc 900 px),
+     không tính thanh trái. iPad 12,9" đặt dọc rơi đúng vào kẽ hở: cửa sổ 931 px nên vẫn bố cục máy tính,
+     nhưng phần nội dung chỉ còn khoảng 650 px — ô nhập bị cắt chữ, nút xuống ba dòng. Ghi bề rộng thật
+     của <main> lên <html data-room="xs|s|m|l"> để theme.css chia lại lưới theo chỗ đang có. */
+  const roomOf = document.querySelector('main');
+  if (roomOf && typeof ResizeObserver === 'function') {
+    let pending = 0, last = -1;
+    const mark = () => { pending = 0; const room = last < 560 ? 'xs' : last < 780 ? 's' : last < 1000 ? 'm' : 'l'; if (document.documentElement.dataset.room !== room) document.documentElement.dataset.room = room; };
+    new ResizeObserver((entries) => { last = entries[0].contentRect.width; if (!pending) pending = requestAnimationFrame(mark); }).observe(roomOf);
+  }
   const shell = document.getElementById('workspace-nav');
   if (shell) renderSidebar(shell);
   document.addEventListener('keydown', (event) => {

@@ -527,13 +527,11 @@ html[data-touch] .result-card:not(.open) .result-side,html[data-touch] .result-c
 /* Màn cảm ứng: liên kết tên gói trong các danh sách mới đủ cao cho ngón tay. */
 html[data-touch] .watch-event-title a,html[data-touch] .forecast-history li a{display:inline-block;padding:12px 0}
 html[data-touch] .forecast-history summary,html[data-touch] .brief-prompt>summary,html[data-touch] .brief-redo>summary{min-height:44px;display:flex;align-items:center;cursor:pointer}
-/* Điện thoại: bảng số liệu rộng hơn màn hình thì cuộn ngang NGAY TRONG bảng, không đẩy cả trang rộng ra
-   (đo ở cỡ hiển thị 130%: trang Kiểm tra dữ liệu tràn 4 px vì bảng 702 px). */
-@media (max-width:700px){
-  html[data-touch] main table:not(.brief-table){display:block;max-width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch}
-}
-/* Chuỗi dài không có khoảng trắng (mã tiện ích, đường dẫn, mã băm) được phép xuống dòng thay vì đẩy trang rộng ra. */
-html[data-touch] main p,html[data-touch] main li,html[data-touch] main dd,html[data-touch] main td{overflow-wrap:anywhere}
+/* Chuỗi dài không có khoảng trắng (mã tiện ích, đường dẫn, mã băm) được phép xuống dòng thay vì đẩy trang rộng ra.
+   KHÔNG áp cho ô bảng: `anywhere` làm bề rộng tối thiểu của ô thành một ký tự, và trình duyệt ép cột tên về
+   đúng mức đó (lỗi 4.22.0 thấy trên iPad thật: tên nhà thầu 39 ký tự thành 13 dòng). Bảng có bộ dàn cột riêng
+   ở cuối tệp này ("BẢNG ĐỌC ĐƯỢC"), bảng rộng thì cuộn ngang trong khung của nó. */
+html[data-touch] main p,html[data-touch] main li,html[data-touch] main dd{overflow-wrap:anywhere}
 /* Hồ sơ quyết định gói thầu */
 .brief-card{margin:0 0 14px}
 .brief-card h2{margin:0 0 10px;font-size:var(--fs-lg);color:var(--ink)}
@@ -589,3 +587,156 @@ html[data-touch] main p,html[data-touch] main li,html[data-touch] main dd,html[d
   .brief-table td[data-label]::before{content:attr(data-label);display:block;font-size:var(--fs-xs);color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
 }
 @media print{.brief-title{font-size:18px}.brief-tile b{font-size:20px}.brief-table{font-size:12px}.print-only-note{display:block}}
+
+/* ====================================================================================
+ *  BẢNG ĐỌC ĐƯỢC TRÊN MỌI CỠ MÀN HÌNH — 4.23.0 (lib/table-fit.js đo và chia cột)
+ * ==================================================================================== */
+/* Ô bảng chỉ bẻ giữa chữ khi MỘT TỪ dài hơn cả ô. `break-word` không làm cột co về một ký tự. */
+main td,main th,dialog td,dialog th{overflow-wrap:break-word}
+main td code,main td .code-long,main td.path{overflow-wrap:anywhere}
+/* Tiêu đề được xuống dòng (kể cả cột số); dòng phụ trong ô số cũng vậy — con số chính vẫn liền một dòng. */
+table.fit-on th{white-space:normal;vertical-align:bottom}
+table td .sub{display:block;white-space:normal}
+/* Khung cuộn ngang riêng của một bảng không vừa màn hình: trang không bị đẩy rộng ra. */
+.table-scroll{position:relative;max-width:100%;overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch;overscroll-behavior-x:contain}
+.table-scroll>table{margin:0!important;overflow:visible!important}
+/* Bề rộng tác giả ghi thẳng lên ô (width:34%, width:90px) do bộ dàn cột tính lại: để nguyên thì trình duyệt ưu
+   tiên phần trăm đó và ép cột chữ bên cạnh. */
+table.fit-on>*>tr>td[style*="width"],table.fit-on>*>tr>th[style*="width"]{width:auto!important}
+/* Bề rộng bộ dàn cột đặt cho từng cột, ghi trên các ô của một hàng (--fit-w). Lớp lặp hai lần để thắng quy tắc ngay trên. */
+table.fit-on>*>tr>.fit-w.fit-w{box-sizing:border-box!important;width:var(--fit-w)!important}
+/* Bảng chỉ rộng hơn khung một chút: thu lề ô và cỡ chữ một nấc để vừa màn hình, khỏi phải cuộn. */
+table.fit-tight{font-size:13.5px}
+table.fit-tight th{font-size:12.5px}
+table.fit-tight td,table.fit-tight th{padding-left:8px;padding-right:8px}
+table.fit-tight td .sub{font-size:12.5px}
+/* Các nút và liên kết xếp dọc trong một ô (mã TBMT + "Tải hồ sơ" + "Xem KHLCNT"): cột chỉ rộng bằng nút dài nhất. */
+td .cell-stack{display:flex;flex-direction:column;align-items:flex-start;gap:6px}
+td .cell-stack>.btn{margin:0!important}
+/* Mã TBMT trong ô xếp dọc là một chỗ bấm riêng: trên máy cảm ứng cao đủ 44 px như mọi chỗ bấm khác. */
+html[data-touch] td .cell-stack>a{display:flex;align-items:center;min-height:44px}
+/* Bản chạy trên Safari không có cầu nối Windows để tải tệp hồ sơ: ẩn nút "Tải hồ sơ" thay vì để bấm vào rồi báo lỗi. */
+html[data-platform="safari"] [data-dl]{display:none!important}
+.table-scroll.can-scroll:not(.at-end){-webkit-mask-image:linear-gradient(to right,#000 calc(100% - 36px),rgba(0,0,0,.22));mask-image:linear-gradient(to right,#000 calc(100% - 36px),rgba(0,0,0,.22))}
+.table-scroll:focus-visible{outline:3px solid var(--brand-600);outline-offset:2px}
+.table-scroll-hint{position:sticky;left:0;display:inline-block;box-sizing:border-box;max-width:100%;margin:0 0 6px;padding:3px 10px;border-radius:12px;background:var(--surface-3);color:var(--muted);font-size:var(--fs-xs);font-weight:500;line-height:1.5;white-space:normal}
+/* Cột đầu ghim lại khi cuộn ngang. Ô ghim cần nền đặc; :where() giữ độ ưu tiên thấp để màu hàng chẵn,
+   hàng đang rê chuột và hàng có trạng thái vẫn thắng. */
+.table-scroll.can-scroll>table[data-fit-pin="1"]>*>tr:not(.fit-x)>:nth-child(1),.table-scroll.can-scroll>table[data-fit-pin="2"]>*>tr:not(.fit-x)>:nth-child(2),.table-scroll.can-scroll>table[data-fit-pin="3"]>*>tr:not(.fit-x)>:nth-child(3),.table-scroll.can-scroll>table[data-fit-pin="4"]>*>tr:not(.fit-x)>:nth-child(4){position:sticky;left:0;z-index:1;box-shadow:1px 0 0 var(--line-strong)}
+:where(.table-scroll.can-scroll>table[data-fit-pin="1"]>tbody>tr:not(.fit-x))>td:nth-child(1),:where(.table-scroll.can-scroll>table[data-fit-pin="2"]>tbody>tr:not(.fit-x))>td:nth-child(2),:where(.table-scroll.can-scroll>table[data-fit-pin="3"]>tbody>tr:not(.fit-x))>td:nth-child(3),:where(.table-scroll.can-scroll>table[data-fit-pin="4"]>tbody>tr:not(.fit-x))>td:nth-child(4){background:var(--surface)}
+.table-scroll.can-scroll.scrolled>table[data-fit-pin="1"]>*>tr:not(.fit-x)>:nth-child(1),.table-scroll.can-scroll.scrolled>table[data-fit-pin="2"]>*>tr:not(.fit-x)>:nth-child(2),.table-scroll.can-scroll.scrolled>table[data-fit-pin="3"]>*>tr:not(.fit-x)>:nth-child(3),.table-scroll.can-scroll.scrolled>table[data-fit-pin="4"]>*>tr:not(.fit-x)>:nth-child(4){box-shadow:1px 0 0 var(--line-strong),7px 0 9px -7px rgba(15,23,42,.34)}
+/* Chạm tiêu đề cột để sắp xếp (lib/table-sort.js). Dấu mũi tên VẼ BẰNG CSS (không dùng ký tự ↑↓ — mỗi máy một phông,
+   một bề rộng) và KHÔNG CHIẾM CHỖ: nó được đặt `position:absolute` mà không ghi toạ độ, nên nằm đúng chỗ nó sẽ đứng
+   trong dòng chữ (ngay sau từ cuối của tiêu đề) nhưng không tính vào bề rộng cột và không bao giờ đẩy tiêu đề xuống
+   thêm một dòng. Cột chưa sắp xếp: hai mũi tên mờ; cột đang sắp xếp: một mũi tên đậm.
+   (Cách "lề phải âm" thử trước đó làm nhân Safari ngắt "Số gói" thành hai dòng.) Ô tiêu đề phải là khối định vị để
+   mũi tên cuộn theo bảng; cột ghim đã là `sticky` nên quy tắc ghim (ưu tiên cao hơn) vẫn thắng. */
+table th.fit-sort{position:relative;cursor:pointer;-webkit-user-select:none;user-select:none}
+table th.fit-sort::after{content:"";position:absolute;display:inline-block;width:8px;height:11px;margin:.34em 0 0 3px;background:currentColor;opacity:.42;pointer-events:none;-webkit-clip-path:polygon(50% 0,100% 38%,50% 38%,50% 62%,100% 62%,50% 100%,0 62%,50% 62%,50% 38%,0 38%);clip-path:polygon(50% 0,100% 38%,50% 38%,50% 62%,100% 62%,50% 100%,0 62%,50% 62%,50% 38%,0 38%)}
+table th.fit-sort[aria-sort="ascending"]::after{background:var(--brand-700);opacity:1;-webkit-clip-path:polygon(50% 0,100% 46%,66% 46%,66% 100%,34% 100%,34% 46%,0 46%);clip-path:polygon(50% 0,100% 46%,66% 46%,66% 100%,34% 100%,34% 46%,0 46%)}
+table th.fit-sort[aria-sort="descending"]::after{background:var(--brand-700);opacity:1;-webkit-clip-path:polygon(34% 0,66% 0,66% 54%,100% 54%,50% 100%,0 54%,34% 54%);clip-path:polygon(34% 0,66% 0,66% 54%,100% 54%,50% 100%,0 54%,34% 54%)}
+table th.fit-sort[aria-sort="ascending"],table th.fit-sort[aria-sort="descending"]{color:var(--brand-700)}
+table th.fit-sort:focus-visible{outline:3px solid var(--brand-600);outline-offset:-3px}
+/* ĐIỆN THOẠI — bảng danh sách thành THẺ (table-fit.js đặt lớp fit-cards khi khung hẹp hơn 430 px và bảng không vừa):
+   mỗi dòng một thẻ hai cột nhỏ, nhãn cột nằm ngay trên giá trị, cột tên lên đầu thẻ. Không còn vuốt ngang.
+   Chỉ áp dụng trên màn hình; khi in, bảng trở lại dạng bảng. `:not(.fit-m)`: lúc đo thì vẫn là bảng. */
+@media screen{
+  table.fit-cards:not(.fit-m){display:block;width:auto!important;min-width:0!important;border:0;border-radius:0;background:transparent;overflow:visible}
+  table.fit-cards:not(.fit-m)>thead,table.fit-cards:not(.fit-m) tr.fit-h{display:none}
+  table.fit-cards:not(.fit-m)>tbody{display:block}
+  table.fit-cards:not(.fit-m)>tbody>tr{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);grid-auto-flow:row dense;gap:9px 12px;margin:0 0 10px;padding:12px;border:1px solid var(--line-strong);border-radius:12px;background:var(--surface)}
+  table.fit-cards:not(.fit-m)>tbody>tr>td{display:block;box-sizing:border-box;min-width:0;width:auto!important;padding:0;border:0;background:transparent;text-align:left}
+  table.fit-cards:not(.fit-m)>tbody>tr>td.fit-hide{display:none}
+  table.fit-cards:not(.fit-m)>tbody>tr>td[data-fit-label]:not([data-fit-label=""])::before{content:attr(data-fit-label);display:block;margin-bottom:2px;color:var(--muted);font-size:12px;font-weight:600;line-height:1.35;letter-spacing:.04em;text-transform:uppercase;white-space:normal}
+  table.fit-cards:not(.fit-m)>tbody>tr>td.fit-wide{grid-column:1/-1;white-space:normal}
+  table.fit-cards:not(.fit-m)>tbody>tr>td.fit-main{order:-1;padding-bottom:9px;border-bottom:1px solid var(--line);font-weight:600}
+  table.fit-cards:not(.fit-m)>tbody>tr>td.fit-main::before{display:none!important}
+}
+.fit-sortbar{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:0 0 10px;font-size:var(--fs-sm);color:var(--muted)}
+.fit-sortbar label{display:flex;align-items:center;gap:8px;min-width:0;margin:0;font-weight:500}
+.fit-sortbar select{min-width:0;max-width:190px;min-height:40px;margin:0}
+.fit-sortbar .fit-flip{flex:none;min-height:40px;padding:0 12px;border:1px solid var(--line-strong);border-radius:10px;background:var(--surface);color:var(--ink);font:inherit;font-weight:600}
+.fit-sortbar .fit-flip:disabled{opacity:.45}
+html[data-touch] .fit-sortbar select,html[data-touch] .fit-sortbar .fit-flip{min-height:44px}
+@media print{.fit-sortbar{display:none!important}}
+/* Trong lúc đo (không bao giờ kịp vẽ ra màn hình): mb = thân bảng, mỗi ô một dòng, không tính dòng phụ;
+   mh = riêng hàng tiêu đề, rộng hết mức (fit-max) rồi hẹp hết mức (fit-min). */
+table.fit-m{table-layout:auto!important;min-width:0!important;max-width:none!important}
+table.fit-m tr.fit-x{display:none!important}
+/* Dòng phụ ("+ 28.914.200.000 đ liên danh", "n=16") được xuống dòng, nên chỉ tính bằng từ dài nhất của nó. */
+table.fit-mb{width:max-content!important}
+table.fit-mb>thead,table.fit-mb tr.fit-h{display:none!important}
+table.fit-mb td,table.fit-mb th{white-space:nowrap!important;min-width:0!important;max-width:none!important;width:auto!important}
+/* Nhãn, liên kết, chữ đậm nằm trong ô cũng phải đo trên một dòng (có phần tử tự đặt white-space riêng). */
+table.fit-mb td *,table.fit-mb th *{white-space:nowrap!important}
+table.fit-mb td .sub{display:block!important;white-space:normal!important;width:-webkit-min-content!important;width:min-content!important}
+table.fit-mb td .sub *{white-space:normal!important}
+table.fit-mh>tbody>tr:not(.fit-h),table.fit-mh>tfoot{display:none!important}
+table.fit-mh td,table.fit-mh th{min-width:0!important;max-width:none!important;width:auto!important}
+table.fit-mh.fit-max{width:max-content!important}
+table.fit-mh.fit-max th{white-space:nowrap!important}
+table.fit-mh.fit-min{width:1px!important}
+table.fit-mh.fit-min th{white-space:normal!important}
+/* Trên giấy và trong bản in mở ở tab mới: không cuộn, không ghim, để trình duyệt tự chia cột theo khổ giấy. */
+@media print{
+  .table-scroll{overflow:visible!important;-webkit-mask-image:none!important;mask-image:none!important}
+  .table-scroll>table{min-width:0!important}
+  .table-scroll-hint{display:none!important}
+  table.fit-on>*>tr>.fit-w.fit-w{width:auto!important}
+  .table-scroll>table.fit-sticky>*>tr>*{position:static!important;box-shadow:none!important}
+  th.fit-sort::after{display:none!important}
+}
+body.print-snapshot .table-scroll{overflow:visible!important;-webkit-mask-image:none!important;mask-image:none!important}
+body.print-snapshot .table-scroll>table{min-width:0!important}
+body.print-snapshot table.fit-on>*>tr>.fit-w.fit-w{width:auto!important}
+body.print-snapshot .table-scroll>table.fit-sticky>*>tr>*{position:static!important;box-shadow:none!important}
+body.print-snapshot th.fit-sort::after{display:none!important}
+
+/* ====================================================================================
+ *  Ô GỢI Ý RIÊNG CỦA PHẦN MỀM — 4.23.0 (lib/suggest.js): tỉnh/thành, xã/phường, Ban QLDA
+ * ==================================================================================== */
+.sg-host{position:relative}
+input.sg-input{padding-right:40px;scroll-margin-top:96px}
+.sg-pop{position:absolute;z-index:70;box-sizing:border-box;max-height:380px;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;background:var(--surface);border:1px solid var(--line-strong);border-radius:12px;box-shadow:var(--shadow-lg);text-align:left;font-size:var(--fs-base);font-weight:400;text-transform:none;letter-spacing:0}
+.sg-pop[hidden],.sg-clear[hidden],.sg-note[hidden]{display:none}
+.sg-head{position:sticky;top:0;z-index:1;padding:8px 14px;background:var(--surface-2);border-bottom:1px solid var(--line);color:var(--muted);font-size:var(--fs-xs);font-weight:500;line-height:1.5}
+.sg-opt{display:flex;flex-direction:column;justify-content:center;gap:1px;min-height:40px;padding:8px 14px;border-bottom:1px solid var(--line);cursor:pointer;line-height:1.4}
+.sg-opt:last-child{border-bottom:0}
+.sg-opt:hover,.sg-opt.is-active{background:var(--brand-50);box-shadow:inset 3px 0 0 var(--brand-700)}
+.sg-title{color:var(--ink);font-weight:500}
+.sg-title mark{background:transparent;color:var(--brand-700);font-weight:700;text-decoration:underline;text-decoration-thickness:2px;text-underline-offset:3px}
+.sg-sub{color:var(--muted);font-size:var(--fs-sm)}
+.sg-badge{display:inline-block;margin-right:2px;padding:0 7px;border-radius:999px;background:var(--info-bg);color:var(--info);font-size:var(--fs-xs);font-weight:600}
+.sg-divider{padding:6px 14px;background:var(--surface-3);border-bottom:1px solid var(--line);color:var(--text-2);font-size:var(--fs-xs);font-weight:600}
+.sg-opt.is-legacy .sg-title{color:var(--text-2);font-weight:400}
+.sg-empty{padding:14px;color:var(--muted);font-size:var(--fs-sm);line-height:1.6}
+.sg-foot{position:sticky;bottom:0;padding:7px 14px;background:var(--surface-2);border-top:1px solid var(--line);color:var(--muted);font-size:var(--fs-xs);line-height:1.5}
+.sg-clear{position:absolute;z-index:2;width:38px;min-height:0;padding:0;border:0;border-radius:8px;background:transparent;color:var(--subtle);font:400 22px/1 var(--font);cursor:pointer}
+.sg-clear:hover{color:var(--ink)}
+.sg-note{margin-top:6px;padding:8px 11px;border-left:3px solid var(--warn-line);border-radius:0 8px 8px 0;background:var(--warn-bg);color:var(--text-2);font-size:var(--fs-sm);font-weight:400;line-height:1.6;text-transform:none;letter-spacing:0}
+.sg-fix{display:inline-block;margin:4px 0 0;padding:5px 12px;min-height:32px;border:1px solid var(--warn);border-radius:8px;background:#fff;color:var(--warn);font:600 var(--fs-sm)/1.3 var(--font);cursor:pointer}
+html[data-touch] .sg-opt{min-height:48px;padding:10px 14px}
+html[data-touch] .sg-clear{width:44px}
+html[data-touch] input.sg-input{padding-right:46px}
+html[data-touch] .sg-fix{min-height:44px;padding:9px 14px}
+@media print{.sg-pop,.sg-clear,.sg-note{display:none!important}}
+
+/* ====================================================================================
+ *  BIỂU MẪU VÀ Ô SỐ LIỆU THEO CHỖ THẬT — 4.23.0 (shell.js ghi <html data-room>)
+ *  xs < 560 px · s < 780 px (iPad dọc có thanh trái) · m < 1000 px (iPad ngang) · l còn lại
+ * ==================================================================================== */
+html[data-room="s"] .metrics{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+/* Điện thoại: ô số liệu xếp kiểu "vừa thì hai ô một hàng": ô mang con số dài (1.026.650.051.350 đ) tự chiếm cả hàng,
+   không còn đẩy trang rộng hơn màn hình như lưới hai cột cứng. */
+html[data-room="xs"] .metrics{display:flex;flex-wrap:wrap}
+html[data-room="xs"] .metrics>*{flex:1 1 138px;max-width:100%;box-sizing:border-box}
+html[data-room="s"] .scope,html[data-room="s"] .askbar,html[data-room="s"] .filters,html[data-room="s"] .pills{grid-template-columns:1fr 1fr}
+html[data-room="s"] .fx,html[data-room="s"] .refbox,html[data-room="xs"] .fx,html[data-room="xs"] .refbox{grid-template-columns:1fr}
+html[data-room="xs"] .scope,html[data-room="xs"] .askbar,html[data-room="xs"] .filters{grid-template-columns:1fr}
+html[data-room="xs"] .pills{grid-template-columns:1fr 1fr}
+html[data-room="m"] .filters{grid-template-columns:repeat(3,1fr)}
+/* Trong lưới 2 cột, ô cuối chỉ chứa nút bấm thì trải cả hàng — nút không bị dồn vào một góc. */
+html[data-room="s"] .scope>div:last-child:not(:has(input,select,textarea)),html[data-room="xs"] .scope>div:last-child:not(:has(input,select,textarea)){grid-column:1/-1}
+html[data-room="s"] .scope .btn,html[data-room="xs"] .scope .btn,html[data-room="m"] .scope .btn{white-space:nowrap}
+/* Lưới 2 cột: canh theo mép trên để hai ô nhập cùng hàng thẳng nhau (canh đáy làm ô có dòng chú thích bị đẩy lên). */
+html[data-room="s"] .scope,html[data-room="xs"] .scope,html[data-room="s"] .askbar,html[data-room="xs"] .askbar{align-items:start}

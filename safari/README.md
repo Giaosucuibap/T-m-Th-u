@@ -88,8 +88,15 @@ thì kiểm tra có/không trước khi gọi rồi ghi vào `DA_KIEM_TRUOC` c�
 `tools/test/safari-app.mjs` chạy **đúng mã dấu trang** trong WebKit (cỡ iPad 1024×1366 và iPhone 390×844), luôn
 dựng từ MÃ NGUỒN chứ không dùng `safari/dist`. Proxy `tools/test/map-proxy.mjs` ánh xạ `muasamcong.*`,
 `raw.githubusercontent.com`, `api.telegram.org` về máy chủ giả lập và **từ chối mọi tên miền khác**. Kịch bản 1
-đối chiếu từng mã TBMT với tiện ích Chrome thật; 15: thao tác lùi; 16: nâng cấp từ bản 4.21.0; 17: tuỳ chọn;
-18: màn cảm ứng; 19: các tính năng 4.22.0.
+đối chiếu từng mã TBMT với tiện ích Chrome thật; 15: thao tác lùi; 16 và 17: nâng cấp từ bản 4.21.0 và từ bản
+4.22.0 (mẫu thử trong `tools/test/fixtures/`); 18: tuỳ chọn; 19: màn cảm ứng; 20: các tính năng 4.22.0.
+
+`tools/test/bang-doc-duoc.mjs` (từ 4.23.0) nạp dữ liệu **giống thật** (`MOCK_CHAOS=real`, `tools/test/mock-real.mjs`:
+tên công ty 40–70 ký tự, số tiền 13 chữ số, 34 tỉnh thành + 34 tên cũ) rồi **đo từng bảng trên từng màn hình** ở cỡ
+iPad Pro 13" trong Safari (1032×1244, 1376×900) và iPhone: ô chữ dưới 10 ký tự mỗi dòng, cột một dòng thừa hơn
+80 px, trang tràn ngang, cột ghim trôi đều là vi phạm; ô tỉnh/thành được gõ thử ở 11 màn hình. Hai lỗi người dùng
+thấy trên iPad thật ngày 21/11/2026 lọt qua `safari-app.mjs` vì dữ liệu thử quá sạch — bài này sinh ra để chặn
+đúng loại lỗi đó.
 
 ## Lớp vỏ cho màn cảm ứng (4.22.0)
 
@@ -127,5 +134,6 @@ dựng từ MÃ NGUỒN chứ không dùng `safari/dist`. Proxy `tools/test/map-
 
 Không chạy nền; phải chạm dấu trang sau mỗi lần tải trang; không có native messaging (Tải E-HSMT, Link điện
 thoại); thông báo là chuông trong trang; dữ liệu nằm cùng nguồn với trang e-GP; Safari có thể dọn dữ liệu của
-trang lâu không mở (đã có sao lưu tự động lên Telegram). Người dùng xác nhận 4.21.0 chạy trên iPad thật
-(11/11/2026) nhưng chưa có bảng Chẩn đoán; các phần của 4.22.0 chưa được kiểm trên thiết bị thật.
+trang lâu không mở (đã có sao lưu tự động lên Telegram). Người dùng đã chạy 4.22.0 trên iPad thật với e-GP thật
+(ảnh ngày 21/11/2026) nhưng chưa có bảng Chẩn đoán; 4.23.0 chưa được kiểm trên thiết bị thật, và phòng thử không
+có bàn phím ảo nên phần "danh sách gợi ý tránh bàn phím" chưa được thấy chạy thật.

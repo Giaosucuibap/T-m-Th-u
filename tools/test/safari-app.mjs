@@ -651,9 +651,12 @@ numbered('Thao tác LÙI của Safari (vuốt từ mép trái, nút ‹) — tr�
   });
 });
 
-numbered('PHÁT HÀNH AN TOÀN: nâng cấp từ đúng bản 4.21.0 người dùng đang chạy — hỏi trước, để sau, cập nhật, quay về, tự cứu', async (index) => {
-  const OLD = zlib.gunzipSync(fs.readFileSync(path.join(ROOT, 'tools/test/fixtures/cuibap-4.21.0-5663e848c26b.js.gz'))).toString('utf8');
+/* Chạy cho TỪNG bản đã phát hành mà người dùng có thể đang dùng: 4.21.0 (chưa có cơ chế chọn bản) và 4.22.0 (bản
+   đang chạy trên iPad của người dùng từ 11/11/2026, đã có cơ chế đó và đã ghi sổ phiên bản trong máy). */
+for (const FIXTURE of ['cuibap-4.21.0-5663e848c26b.js.gz', 'cuibap-4.22.0-081028c6ffac.js.gz']) numbered(`PHÁT HÀNH AN TOÀN: nâng cấp từ đúng bản ${FIXTURE.split('-')[1]} người dùng đang chạy — hỏi trước, để sau, cập nhật, quay về, tự cứu`, async (index) => {
+  const OLD = zlib.gunzipSync(fs.readFileSync(path.join(ROOT, 'tools/test/fixtures', FIXTURE))).toString('utf8');
   const oldInfo = bundleInfo(OLD), newInfo = { version: PACK.version, build: PACK.build };
+  const V = oldInfo.version, VR = V.replace(/\./g, '\\.');
   // Một "bản mới hơn nữa": cùng mã, khác mã bản dựng (đổi ở dòng đầu tệp và trong gói).
   const NEWER_BUILD = 'ffffffffffff';
   const NEWER = BUNDLE.split(`Bản dựng ${PACK.build}`).join(`Bản dựng ${NEWER_BUILD}`).split(`"build":"${PACK.build}"`).join(`"build":"${NEWER_BUILD}"`);
@@ -671,11 +674,11 @@ numbered('PHÁT HÀNH AN TOÀN: nâng cấp từ đúng bản 4.21.0 người d�
     const pick = (which) => s.wk.exec('document.getElementById("gscb-chon-ban").shadowRoot.querySelector(\'[data-pick="\' + arguments[0] + \'"]\').click(); return true;', [which]);
     const again = async (opts) => { await s.wk.goto(START_URL); await s.tap(opts || NO); };
 
-    await step('Người dùng đang chạy bản 4.21.0 (bản thật đã phát hành): khởi động, tìm ra 137 · 115, tự cất bản dự phòng', async () => {
+    await step(`Người dùng đang chạy bản ${V} (bản thật đã phát hành): khởi động, tìm ra 137 · 115, tự cất bản dự phòng`, async () => {
       await s.tap(); await up();
       assert.deepEqual(await running().then((r) => [r.version, r.build]), [oldInfo.version, oldInfo.build]);
       assertFullRun(facts(await s.tbmt()));
-      await s.until(async () => (await slotBuild('js')) === oldInfo.build, 10000, 'bản 4.21.0 cất chính nó vào ngăn js');
+      await s.until(async () => (await slotBuild('js')) === oldInfo.build, 10000, `bản ${V} cất chính nó vào ngăn js`);
     });
 
     await step('Có bản mới trên kho: lần chạm kế tiếp HỎI trước (không tự đổi như trước), nút đủ lớn, có ghi chú phát hành', async () => {
@@ -683,7 +686,7 @@ numbered('PHÁT HÀNH AN TOÀN: nâng cấp từ đúng bản 4.21.0 người d�
       await again();
       const d = await s.until(dialog, 20000, 'hộp "Có bản mới"');
       assert.match(d.title, new RegExp(`Có bản mới ${PACK.version.replace(/\./g, '\\.')}`));
-      assert.match(d.body, /đang dùng bản 4\.21\.0/);
+      assert.match(d.body, new RegExp(`đang dùng bản ${VR}`));
       assert.deepEqual(d.notes, PACK.notes);
       assert.deepEqual([d.primary, d.secondary], ['Cập nhật ngay', 'Để sau']);
       assert.match(d.foot, /Quay về bản trước/);
@@ -693,12 +696,12 @@ numbered('PHÁT HÀNH AN TOÀN: nâng cấp từ đúng bản 4.21.0 người d�
       assert.equal(await s.wk.exec('return document.querySelectorAll("#gscb-chon-ban").length'), 1);
     });
 
-    await step('"Để sau": bản 4.21.0 chạy tiếp như cũ (bản mới trao quyền), có lời nhắc bấm được; 3 ngày không hỏi lại', async () => {
+    await step(`"Để sau": bản ${V} chạy tiếp như cũ (bản mới trao quyền), có lời nhắc bấm được; 3 ngày không hỏi lại`, async () => {
       await pick('secondary'); await up();
       let r = await running();
       assert.deepEqual([r.version, r.build], [oldInfo.version, oldInfo.build]);
       assert.equal(r.hand.to, oldInfo.build); assert.equal(r.hand.from, newInfo.build); assert.equal(r.hand.why, 'hoan');
-      assert.match(r.src, /bản đang dùng 4\.21\.0/);
+      assert.match(r.src, new RegExp(`bản đang dùng ${VR}`));
       assertFullRun(facts(await s.tbmt()));
       await s.until(() => s.shell('return [...R.querySelectorAll(\'.toast[data-id="ban-moi"] b\')].some(b => /Có bản mới/.test(b.textContent))'), 15000, 'lời nhắc có bản mới');
       const st = await meta('phat-hanh');
@@ -711,7 +714,7 @@ numbered('PHÁT HÀNH AN TOÀN: nâng cấp từ đúng bản 4.21.0 người d�
       assert.equal(r.build, oldInfo.build);
     });
 
-    await step('Bấm "Cập nhật" trên lời nhắc → lần chạm sau chạy bản mới; bản 4.21.0 thành "bản trước"; dữ liệu còn nguyên', async () => {
+    await step(`Bấm "Cập nhật" trên lời nhắc → lần chạm sau chạy bản mới; bản ${V} thành "bản trước"; dữ liệu còn nguyên`, async () => {
       await s.until(() => s.shell('return !!R.querySelector(\'.toast[data-id="ban-moi"] .row button\')'), 15000, 'nút Cập nhật');
       await s.shell('R.querySelector(\'.toast[data-id="ban-moi"] .row button\').click(); return true;');
       await s.until(async () => (await meta('phat-hanh'))?.dung?.build === newInfo.build, 10000, 'đã ghi lựa chọn');
@@ -722,14 +725,14 @@ numbered('PHÁT HÀNH AN TOÀN: nâng cấp từ đúng bản 4.21.0 người d�
       assert.equal(st.truoc.build, oldInfo.build);
       assert.deepEqual([await slotBuild('dung'), await slotBuild('truoc')], [newInfo.build, oldInfo.build]);
       const runs = (await s.send('GET_SEARCH_STATE', {}))?.runs || [];
-      assert.ok(runs.some((run) => run.status === 'SUCCESS' && run.matchCount === 115), 'lịch sử lượt tìm của bản 4.21.0 còn nguyên trong bản mới');
-      assert.match(await s.diagnostics(), /Phát hành: chính bản này · bản trước 4\.21\.0 \(5663e848c26b\) · hỏi trước khi cập nhật/);
+      assert.ok(runs.some((run) => run.status === 'SUCCESS' && run.matchCount === 115), `lịch sử lượt tìm của bản ${V} còn nguyên trong bản mới`);
+      assert.match(await s.diagnostics(), new RegExp(`Phát hành: chính bản này · bản trước ${VR} \\(${oldInfo.build}\\) · hỏi trước khi cập nhật`));
       assert.deepEqual((await s.state()).errors, []);
     });
 
-    await step('Tuỳ chọn › Phiên bản › "Quay về bản 4.21.0": lần chạm sau chạy lại bản cũ và GHIM ở đó, có nút quay lại bản mới', async () => {
+    await step(`Tuỳ chọn › Phiên bản › "Quay về bản ${V}": lần chạm sau chạy lại bản cũ và GHIM ở đó, có nút quay lại bản mới`, async () => {
       await s.shell('R.querySelector(\'[data-act="menu"]\').click(); return true;');
-      await s.until(() => s.shell('const b = R.querySelector(\'[data-el="rel-previous"]\'); return !b.hidden && /Quay về bản 4\\.21\\.0/.test(b.textContent)'), 10000, 'nút quay về bản trước');
+      await s.until(() => s.shell('const b = R.querySelector(\'[data-el="rel-previous"]\'); return !b.hidden && b.textContent.includes(arguments[0]);', [`Quay về bản ${V}`]), 10000, 'nút quay về bản trước');
       await s.shell('R.querySelector(\'[data-el="rel-previous"]\').click(); return true;');
       await s.until(async () => (await meta('phat-hanh'))?.ghim === true, 10000, 'đã ghim');
       await again(); await up();
@@ -744,12 +747,12 @@ numbered('PHÁT HÀNH AN TOÀN: nâng cấp từ đúng bản 4.21.0 người d�
       assert.deepEqual([r.build, r.hand], [newInfo.build, null]);
     });
 
-    await step('TỰ CỨU: lần mở trước của bản mới dở dang → lần chạm sau hỏi "thử lại hay quay về bản trước"; chọn quay về thì bản 4.21.0 chạy', async () => {
+    await step(`TỰ CỨU: lần mở trước của bản mới dở dang → lần chạm sau hỏi "thử lại hay quay về bản trước"; chọn quay về thì bản ${V} chạy`, async () => {
       await s.wk.exec('return new Promise((y) => { const q = indexedDB.open("gscb-safari"); q.onsuccess = () => { const tx = q.result.transaction("meta", "readwrite"); tx.objectStore("meta").put({ build: arguments[0], at: Date.now() - 60000 }, "khoi-dong-thu"); tx.objectStore("meta").put({ build: arguments[0], at: Date.now() - 120000 }, "khoi-dong-ok"); tx.oncomplete = () => { q.result.close(); y(true); }; }; })', [newInfo.build]);
       await again();
       const d = await s.until(dialog, 20000, 'hộp "Lần mở trước chưa xong"');
       assert.match(d.title, /Lần mở trước chưa xong/);
-      assert.match(d.secondary, /Quay về bản 4\.21\.0/);
+      assert.match(d.secondary, new RegExp(`Quay về bản ${VR}`));
       await pick('secondary'); await up();
       const r = await running();
       assert.deepEqual([r.build, r.hand.why], [oldInfo.build, 'cuu']);

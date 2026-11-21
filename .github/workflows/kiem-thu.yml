@@ -64,7 +64,7 @@ jobs:
     # Ghim 24.04: ubuntu-latest (26.04) không còn gói webkit2gtk-driver (WebKitWebDriver + MiniBrowser
     # của WebKitGTK 4.1) mà bài nhân Safari cần; mọi bước của job đã kiểm trên Ubuntu 24.04.5.
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    timeout-minutes: 60
     defaults:
       run:
         working-directory: mobile-app
@@ -142,6 +142,17 @@ jobs:
         env:
           GSCB_REQUIRE_WEBKIT: '1'
         run: xvfb-run -a node tools/test/safari-app.mjs
+      # 4.23.0 — hai lỗi người dùng thấy trên iPad thật (ảnh 21/11/2026) mà 80 phép kiểm ở trên không bắt được vì dữ
+      # liệu thử quá "sạch": cột tên nhà thầu bị bóp còn 59 px, và ô Tỉnh/thành phố không gợi ý được "Đồng Nai".
+      # Bài này nạp dữ liệu GIỐNG THẬT (tên công ty 40–70 ký tự, số tiền 13 chữ số, 34 tỉnh thành theo danh mục e-GP)
+      # rồi ĐO từng bảng trên từng màn hình bằng nhân Safari: không ô chữ nào dưới 10 ký tự mỗi dòng, không cột số
+      # nào thừa quá 80 px, trang không tràn ngang, cột ghim đứng yên; và gõ thử ô tỉnh/thành ở cả 11 màn hình.
+      - name: Bảng đọc được + ô chọn tỉnh/thành — đo trong WebKit cỡ iPad Pro 13 inch (1032×1244 trong Safari) và iPhone 390×844 với dữ liệu giống thật
+        working-directory: .
+        timeout-minutes: 20
+        env:
+          GSCB_REQUIRE_WEBKIT: '1'
+        run: xvfb-run -a node tools/test/bang-doc-duoc.mjs --thiet-bi ipad,iphone --chup test-results/bang-doc-duoc/anh
       - name: Lưu ảnh màn hình app
         if: always()
         uses: actions/upload-artifact@v4
@@ -153,6 +164,8 @@ jobs:
             test-results/phone-relay/*.png
             test-results/safari-app/*.png
             test-results/safari-app/*.log
+            test-results/bang-doc-duoc/bao-cao.json
+            test-results/bang-doc-duoc/anh/*-bang.png
           if-no-files-found: ignore
 
   windows:

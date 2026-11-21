@@ -64,7 +64,7 @@ import {EGP_SEARCH_PAGE,PAGE_SIZE,normalizeTaxCodeForEgp,normalizeKqlcntRecord,e
 import {buildBbmtQuery,bbmtDateRange,bbmtInDateRange,bbmtStamp,bbmtReadState,bbmtReadStateOf,READ_STATE,normalizeBbmtPackage,normalizeBidderTable,findBidder,notifyNoFromUrl,summarizeBidOpenings,STEPS_DECIDED,sameBbmtDetailPage} from './lib/bbmt.js';
 import {normalizeKhlcntPlan,restoreLegacyKhlcntView,applyKhlcntPackageDetail,needsKhlcntPackageDetails,dedupeKhlcnt,summarizeKhlcnt,auditPlans,buildKhlcntQuery,filterPlansByArea,filterPlansByCategory,filterPlansByLocalCriteria,khlcntDateRange,khlcntInDateRange,khlcntStamp,classifyPlansByCriteria} from './lib/khlcnt.js';
 import {normalizeCategory,categoryLabel,matchesTenderCategory,isUnknownCategory} from './lib/tender-categories.js';
-import {fetchProvinces,fetchWards,fetchAllAreas,currentProvinceNames,wardNamesForProvince,provinceCodesByName,wardCodesByName} from './lib/areas.js';
+import {fetchProvinces,fetchWards,fetchAllAreas,currentProvinceNames,legacyProvinceNames,wardNamesForProvince,provinceCodesByName,wardCodesByName} from './lib/areas.js';
 import {buildXlsx,xlsxDataUrl,XLSX_MIME} from './lib/xlsx.js';
 import {summarizeArea,AREA_DISCLAIMER,AREA_SCOPE_NOTE} from './lib/localmarket.js';
 import {summarizePricing,priceReference,PRICING_DISCLAIMER,PRICING_METHOD_NOTE} from './lib/pricing.js';
@@ -1702,12 +1702,16 @@ async function exportBidOpenCsv(...args){return exportRuntime.exportBidOpenCsv(.
 
 /** Nhớ lại 30 ngày; quá hạn thì hỏi e-GP lần nữa cho khớp thay đổi địa giới. */
 const AREAS_TTL_MS=30*24*60*60*1000;
+/** Riêng danh mục TỈNH/THÀNH chỉ nhớ 7 ngày (4.23.0): năm 2026 có ba tỉnh thành thành phố trực thuộc trung ương
+ *  (Đồng Nai 30/4, Quảng Ninh 1/9, Bắc Ninh 20/9) — nhớ 30 ngày thì tên mới về máy chậm cả tháng. Một lượt hỏi nhỏ
+ *  mỗi tuần; e-GP không trả lời thì vẫn dùng bản đang nhớ. */
+const PROVINCES_TTL_MS=7*24*60*60*1000;
 
 let provincesInFlight=null;
 async function getProvincesOnly(){
   const store=await chrome.storage.local.get(['areas','provinceCatalog']);
   const cached=store.provinceCatalog||store.areas;
-  if(cached?.provinces?.length&&Date.now()-Date.parse(cached.fetchedAt)<AREAS_TTL_MS)return {ok:true,areas:cached};
+  if(cached?.provinces?.length&&Date.now()-Date.parse(cached.fetchedAt)<PROVINCES_TTL_MS)return {ok:true,areas:cached};
   if(provincesInFlight)return provincesInFlight;
   provincesInFlight=(async()=>{
     try{const areas={provinces:await fetchProvinces(),fetchedAt:new Date().toISOString()};
@@ -1775,7 +1779,7 @@ async function getAreas({refresh=false}={}){
 
 /** Trả về danh sách tên cho ô chọn: tỉnh hiện hành, và xã/phường theo tỉnh. */
 async function getAreaOptions(payload={}){
-  if(payload.provincesOnly||!String(payload.province||'').trim()){const r=await getProvincesOnly();return {...r,provinces:r.areas?directoryRuntime.provinceNames(currentProvinceNames(r.areas)):[]};}
+  if(payload.provincesOnly||!String(payload.province||'').trim()){const r=await getProvincesOnly();return {...r,provinces:r.areas?directoryRuntime.provinceNames(currentProvinceNames(r.areas)):[],legacyProvinces:r.areas?legacyProvinceNames(r.areas):[]};}
   const res=await getWardAreas(payload.province,{refresh:Boolean(payload.refresh)});
   if(!res.ok)return res;
   const organizations=await directoryRuntime.search({province:payload.province,officialOnly:true,limit:500});

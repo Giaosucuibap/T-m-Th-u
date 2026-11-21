@@ -3,7 +3,8 @@
 **Điểm mới.** Toàn bộ phần mềm Giáo Sư Cùi Bắp (đủ 25 màn hình: Tìm gói thầu, Kế hoạch LCNT, Mở thầu, Nhà
 thầu trúng thầu, Kho gói đã lưu, Hồ sơ quyết định, Bộ săn, Phân tích, Cấu hình…) chạy **ngay trong Safari** trên
 iPad và iPhone. Từ **4.22.0** giao diện được làm lại cho ngón tay và có thêm tám tính năng — xem
-`HUONG-DAN-4.22.0.md`.
+`HUONG-DAN-4.22.0.md`. Bản **4.23.0** sửa hai lỗi anh thấy trên iPad (bảng bị bóp cột tên, ô Tỉnh/thành phố không
+gợi ý được Đồng Nai) — xem `HUONG-DAN-4.23.0.md`.
 
 - Không cần máy tính công ty đang bật. Không quét mã QR. Không cài thêm app nào.
 - Dữ liệu vẫn do **chính trang muasamcong** trả về cho máy của anh, đúng cơ chế của tiện ích trên Chrome —
@@ -14,14 +15,15 @@ iPad và iPhone. Từ **4.22.0** giao diện được làm lại cho ngón tay v
 Safari trên iPad ── tab muasamcong.mof.gov.vn ── chạm dấu trang "Cùi Bắp" ──▶ phần mềm hiện ra ngay trong tab đó
 ```
 
-> **Tình trạng kiểm chứng (11/11/2026).** Anh đã xác nhận bản 4.21.0 **chạy được trên iPad của anh** và giao
-> diện dễ dùng. Về phần em: em **chưa chạy thử trên iPad thật** và **chưa thử với trang muasamcong thật** — môi
-> trường làm việc của em không vào được muasamcong (trang chặn địa chỉ nước ngoài) và em không có iPad. Em cũng
-> chưa nhận được bảng Chẩn đoán từ máy anh, nên **chưa có số đo** tốc độ thật và chưa biết máy đang chạy chế độ
-> đầy đủ hay hạn chế. Phần em tự kiểm được là trong **nhân của Safari (WebKit)** ở đúng cỡ màn hình iPad và
-> iPhone với trang muasamcong giả lập: 19 kịch bản, 80 phép kiểm, đạt hết (chi tiết ở
-> `BAO-CAO-THAM-DINH-SAFARI.md`). **Các phần mới của 4.22.0 vì vậy chưa được kiểm trên thiết bị thật** — mục **F**
-> chỉ cách kiểm trong 2 phút và gửi lại cho em nếu có gì không ổn.
+> **Tình trạng kiểm chứng (21/11/2026).** Bản **4.22.0 đã chạy trên iPad thật của anh với dữ liệu e-GP thật**
+> (hai ảnh anh gửi ngày 21/11/2026, trạng thái "Đã nối e-GP") — và chính hai ảnh đó cho thấy hai lỗi trình bày mà
+> phòng thử của em không bắt được. Bản **4.23.0** sửa hai lỗi đó; em mới thử nó trong **nhân của Safari (WebKit)**
+> ở đúng cỡ màn hình iPad của anh (1032×1244 trong Safari) và iPhone, với trang muasamcong **giả lập** và dữ liệu
+> giống thật: 20 kịch bản, 89 phép kiểm đầu-cuối; riêng phần bảng và ô tỉnh/thành: 46 phép kiểm, 150 lượt đo bảng ở ba cỡ máy, 0 vi phạm (chi tiết ở `BAO-CAO-THAM-DINH-SAFARI.md`,
+> mục 10). Về phần em thì vẫn như trước: em **chưa chạy thử trên iPad thật** và **chưa thử với trang muasamcong
+> thật** — em không có iPad và môi trường làm việc của em không vào được muasamcong. Vì vậy **4.23.0 chưa được thử
+> trên thiết bị thật**, và em chưa thử được với **bàn phím ảo** của iPad. Em cũng chưa nhận được bảng Chẩn đoán từ
+> máy anh, nên chưa có số đo tốc độ thật và chưa biết máy đang chạy chế độ đầy đủ hay hạn chế.
 
 ## A. Cài một lần (khoảng 3 phút)
 

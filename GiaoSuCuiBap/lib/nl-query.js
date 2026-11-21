@@ -13,6 +13,8 @@
  *  đánh dấu đoạn đã dùng; phần còn lại, bỏ từ đệm, là từ khoá — lấy từ câu GỐC nên còn dấu.
  * ========================================================================== */
 
+import { mergedInto, provinceCore } from './province-names.js';
+
 /** Gập từng ký tự: bỏ dấu, đ→d, chữ thường. Trả về chuỗi CÙNG ĐỘ DÀI với chuỗi vào (đã NFC). */
 export function foldSameLength(text) {
   let out = '';
@@ -240,17 +242,25 @@ export function parseNaturalQuery(text, { provinces = [], now = Date.now() } = {
     if (key.length >= 3) names.set(key, clean);               // danh mục e-GP (truyền sau) ghi đè cách viết
   }
   for (const [alias, name] of PROVINCE_ALIASES) if (!names.has(alias)) names.set(alias, [...names.values()].find((v) => foldSameLength(v) === foldSameLength(name)) || name);
-  const foundProvinces = [];
+  const foundProvinces = [], mergedNotes = [];
+  const egpNames = Array.isArray(provinces) ? provinces.map((p) => String(p || '').trim()).filter(Boolean) : [];
   for (const key of [...names.keys()].sort((a, b) => b.length - a.length)) {
     const pattern = `(?:\\b(?:o|tai|thuoc|tren dia ban|dia ban|khu vuc|va)\\s+)?(?:\\b(?:tinh|thanh pho|tp\\.?)\\s+)?\\b${key.replace(/ /g, '[\\s-]+')}\\b`;
     const hit = find(pattern);
     if (!hit) continue;
     take(hit.index, hit.index + hit[0].length);
-    if (!foundProvinces.includes(names.get(key))) foundProvinces.push(names.get(key));
+    let name = names.get(key);
+    /* 4.23.0 — tỉnh đã nhập vào tỉnh khác từ 1/7/2025 (Bình Thuận, Bình Phước…): gói ĐANG MỜI THẦU ở đó nay
+       mang tên đơn vị mới. Khi trang có danh mục e-GP thì điền đơn vị mới và nói rõ; giữ tên cũ sẽ chỉ ra hồ sơ
+       đăng trước ngày sáp nhập. Không có danh mục (chưa nối e-GP) thì giữ nguyên tên người dùng gõ. */
+    const merged = mergedInto(name);
+    const target = merged && egpNames.find((p) => provinceCore(p) === merged.intoCore);
+    if (target) { mergedNotes.push(`${merged.old} đã nhập vào ${target} từ 1/7/2025`); name = target; }
+    if (!foundProvinces.includes(name)) foundProvinces.push(name);
   }
   if (foundProvinces.length) {
     criteria.province = foundProvinces.join(', ');
-    understood.push({ kind: 'province', text: `Tỉnh: ${criteria.province}` });
+    understood.push({ kind: 'province', text: `Tỉnh: ${criteria.province}${mergedNotes.length ? ` (${mergedNotes.join('; ')})` : ''}` });
   }
 
   /* 5. LOẠI GÓI ----------------------------------------------------------- */

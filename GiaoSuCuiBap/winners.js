@@ -263,7 +263,7 @@ function renderPackages(lk) {
   $('rows').innerHTML = list.map((p) => `
     <tr>
       <td>${roleBadge(p)}</td>
-      <td class="num">
+      <td class="num"><div class="cell-stack">
         <a class="link tbmt" href="${esc(p.detailUrl)}" target="_blank" rel="noopener"
            title="Mở kết quả lựa chọn nhà thầu trên e-GP">${esc(p.notifyNoStand)} ↗</a>
         <button class="btn light" style="width:auto;margin-top:6px;padding:4px 8px;font-size:14px"
@@ -276,7 +276,7 @@ function renderPackages(lk) {
                 data-plan="${esc(p.planNo)}"
                 title="Mở Kế hoạch lựa chọn nhà thầu ${esc(p.planNo)} — đường chắc ăn khi trang chi tiết KQLCNT của e-GP trắng trơn, hay gặp với gói chỉ định thầu"
         >📋 Xem KHLCNT</button>` : ''}
-      </td>
+      </div></td>
       <td class="wrap">
         <a class="link" href="${esc(p.detailUrl)}" target="_blank" rel="noopener"
            style="font-weight:700;color:inherit">${esc(p.bidName)}</a>

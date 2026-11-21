@@ -2,6 +2,79 @@
 
 Tài liệu này ghi lại các thay đổi quan trọng của Giáo Sư Cùi Bắp. Cấu trúc tham khảo [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) và phiên bản tuân theo cách đánh số ngữ nghĩa ở mức sản phẩm.
 
+## [4.23.0] — 2026-11-21
+
+**Hai lỗi người dùng thấy trên iPad thật, sửa ở mọi màn hình.** Ngày 21/11/2026 chủ phần mềm gửi hai ảnh chụp bản
+4.22.0 trên iPad: cột tên nhà thầu bị bóp còn 2–3 chữ cái mỗi dòng trong khi cột số phình ra, và ô Tỉnh/thành phố
+không gợi ý được "Đồng Nai". Hướng dẫn: `HUONG-DAN-4.23.0.md`. Nguyên nhân, vì sao phòng thử để lọt, đánh giá ưu
+nhược sau khi chạy thử lại: `BAO-CAO-THAM-DINH-SAFARI.md`, mục 10.
+
+**Kênh ổn định của bản Safari:** ở commit này vẫn là 4.22.0 · bản dựng `081028c6ffac`. Bản 4.23.0 chỉ được đưa lên (`node safari/build.mjs --phat-hanh`) sau khi mọi việc trên CI đạt.
+
+### Sửa lỗi
+
+- **Bảng bị bóp cột tên (lỗi do 4.22.0 gây ra).** Bản 4.22.0 thêm `overflow-wrap:anywhere` cho mọi ô bảng trên máy
+  cảm ứng; bề rộng tối thiểu của ô chữ thành một ký tự, nên bảng không vừa màn hình thì trình duyệt ép đúng cột
+  tên (59 px cho tên 39 ký tự → 13 dòng) còn các cột số `nowrap` giữ nguyên ("16 / 0" chiếm 157 px). Nay:
+  - `lib/table-fit.js` — **bộ dàn cột dùng chung cho mọi bảng**: đo bề rộng thật của nội dung và tiêu đề, chia
+    cột (số rộng bằng số; tiêu đề dài xuống hai dòng; cột tên khoảng 40% khung, tối đa 340 px), dồn chỗ thừa cho
+    cột chữ. Bảng không vừa thì cuộn ngang trong khung riêng (`.table-scroll`), **ghim cột tên**, mép phải mờ
+    dần, có dòng nhắc. Tự dàn lại khi bảng đổi nội dung, khung đổi bề rộng, phông chữ nạp xong, đổi Gọn/Thoáng.
+  - Bề rộng đặt trên **ô** của một hàng, không dùng `<col>`: khi trang phóng bằng `zoom` (110% mặc định trên
+    iPad), nhân Safari không nhân mức phóng cho bề rộng của `<col>` (120 px hiện ra 127 px thay vì 132 px).
+  - Ô bảng chỉ còn `overflow-wrap:break-word`; bỏ mẹo `display:block` cho bảng dưới 700 px của 4.22.0.
+- **Ô Tỉnh/thành phố không gợi ý được Đồng Nai.** Danh mục không cũ (lấy từ e-GP, đã có "Thành phố Đồng Nai");
+  lỗi ở `<datalist>` của trình duyệt: iPad chỉ hiện 3 gợi ý trên thanh bàn phím và không hiểu gõ không dấu. Nay:
+  - `lib/suggest.js` + `lib/province-names.js` — **ô gợi ý riêng** cho mọi ô tỉnh/thành (11 màn hình) và ô
+    Xã/phường / Ban QLDA: bỏ dấu, bỏ "tỉnh / thành phố / tp", chữ cái đầu (`hcm`, `brvt`), tên gọi khác, **29 tên
+    tỉnh đã sáp nhập** (Nghị quyết 202/2025/QH15) trỏ về đơn vị hiện hành kèm ghi chú, sửa lỗi gõ nhầm một ký
+    tự. Dòng cao 48 px trên máy cảm ứng; danh sách tự tránh bàn phím ảo và thanh tiêu đề dính.
+  - Tên cũ còn trong danh mục e-GP (trạng thái 0) hiện ở cuối, ghi rõ "chỉ có hồ sơ đăng trước 1/7/2025".
+  - "Tìm bằng câu thường" hiểu tên tỉnh cũ: "ở Bình Thuận" → điền *Tỉnh Lâm Đồng* và nói lý do.
+  - Danh mục tỉnh/thành nhớ **7 ngày** thay vì 30 (năm 2026 có ba tỉnh thành thành phố trực thuộc trung ương).
+
+### Thêm
+
+- **Sắp xếp theo cột** ở mọi bảng danh sách (`lib/table-sort.js`): chạm tiêu đề cột; số kiểu Việt Nam
+  (`12.480.335.000 đ`, `13,8%`, `1,25 tỷ`), ngày, chữ; ô trống luôn ở cuối.
+- **Chế độ thẻ trên điện thoại**: khung hẹp hơn 430 px và bảng danh sách không vừa thì mỗi dòng thành một thẻ
+  (nhãn cột trên giá trị, cột tên làm tiêu đề thẻ), có ô "Sắp xếp theo". Bảng so sánh vẫn là bảng, ghim cột
+  "Tiêu chí".
+- **Biểu mẫu theo chỗ thật** (`<html data-room>` do `shell.js` ghi từ bề rộng của `<main>`): iPad 12,9" cầm dọc
+  rơi vào khe giữa các mốc bố cục cũ nên biểu mẫu bốn cột bị chật; nay hai cột, ô số liệu 2×2.
+
+### Sửa thêm trong vòng rà bằng dữ liệu giống thật
+
+- Bảng "Gói đã trúng": mã TBMT và hai nút xếp dọc trong ô (cột từ 487 px còn khoảng 180 px); nút "Tải hồ sơ"
+  (cần cầu nối Windows) ẩn trên bản Safari.
+- Bề rộng tác giả ghi cứng trên ô (`width:34%`) không còn thắng phần chia cột.
+- iPhone: ô số liệu tổng hợp không còn đẩy trang rộng hơn màn hình khi con số dài (trước: tràn 18–61 px ở 4
+  màn hình); dòng nhắc "vuốt ngang" được xuống dòng.
+- Danh sách gợi ý rộng tối thiểu 300 px khi ô nhập hẹp; cuộn tức thì khi cần chỗ (trang đặt cuộn mượt làm phép
+  tính chỗ trống bị sớm, danh sách nằm ngoài màn hình); **đóng ngay khi con trỏ sang ô khác** (bản đầu nán 160 ms,
+  che nút "Tìm gói thầu" — bài đo "kết quả tức thì" bắt được: thẻ đầu tiên từ 0,20 giây thành 1,06 giây); trên
+  máy cảm ứng, chọn xong thì bàn phím hạ xuống và danh sách tính lại vị trí khi bàn phím ảo trượt lên.
+- Cột chia sát nội dung được cộng 0,75 px dự phòng và bảng tính cả hai viền dọc của chính nó (trước: tiêu đề "Số
+  gói" rớt hai dòng vì hụt chưa tới 1 px; bảng "vừa khung" rộng hơn khung 2 px).
+- Tiêu đề cột rất dài (bảng so sánh: cả tên gói) không còn kéo mỗi cột lên 473–605 px trên điện thoại.
+- Cột chữ chứa một từ không ngắt được (tên tệp, đường dẫn): bề rộng thật thành mức sàn, bảng tự vào khung cuộn.
+
+### Kiểm thử
+
+- **`tools/test/bang-doc-duoc.mjs` (mới, chạy trên CI)** — nạp dữ liệu giống thật (`MOCK_CHAOS=real`,
+  `tools/test/mock-real.mjs`: tên công ty 40–70 ký tự, số tiền 13 chữ số, 34 tỉnh thành + 34 tên cũ, 168 gói, 150
+  kết quả, 72 kế hoạch) rồi đo từng bảng trên từng màn hình bằng nhân Safari. Kết quả: **46 phép kiểm, 150 lượt đo bảng, 0 vi phạm** ở ba cỡ máy — iPad Pro 13" trong Safari cầm dọc (1032×1244, đúng máy của anh), xoay ngang (1376×900) và iPhone (390×844); mỗi cỡ 35 màn hình, 50 bảng. Cỡ iPad
+  lấy từ chính ảnh của người dùng (2064×2752 điểm ảnh, Safari chiếm 132 điểm); phép kiểm bàn phím ảo mô phỏng vùng
+  nhìn còn 841 điểm như trong ảnh.
+  **Đối chứng:** cùng bài đo chạy trên tệp 4.22.0 đã phát hành (`--goi tools/test/fixtures/cuibap-4.22.0-081028c6ffac.js.gz`)
+  ra **61 vi phạm** trên 49 bảng ở cỡ iPad đó (cột "Nhà thầu" 61 px, tên 67 ký tự thành 25 dòng, ô dài nhất 105 dòng).
+- `tools/test/safari-app.mjs`: kịch bản nâng cấp nay chạy cho cả hai bản đã phát hành (4.21.0 và **4.22.0**, mẫu thử
+  `tools/test/fixtures/cuibap-4.22.0-081028c6ffac.js.gz`) — 20 kịch bản, 89 phép kiểm.
+- `npm test`: 994 đạt / 1006 (12 bỏ qua theo nền tảng); thêm `tests/bang-doc-duoc-423.test.mjs` (20),
+  `tests/goi-y-tinh-423.test.mjs` (16), `tests/sap-xep-bang-423.test.mjs` (6).
+- Chromium + e-GP giả lập khó tính: 21/21 kịch bản.
+- **Chưa kiểm được:** iPad thật, bàn phím ảo thật, trang muasamcong thật.
+
 ## [4.22.0] — 2026-11-11
 
 **Bản Safari thành phần mềm của iPad thật sự, và tám tính năng mới không cần máy chủ.** Làm theo bản thẩm định
