@@ -399,6 +399,11 @@ Ngoài hai lỗi anh báo, vòng rà này tìm ra và đã sửa:
 | 10 | Mọi bảng | Cột chia sát tới từng phần mười px: tiêu đề "Số gói" rớt hai dòng; bảng "vừa khung" rộng hơn khung 2 px vì chưa tính viền | Cộng 0,75 px dự phòng; tính cả viền của bảng |
 | 11 | Mọi trang | Trang cuộn kiểu "mượt" làm phép tính chỗ trống chạy sớm: danh sách gợi ý nằm ngoài màn hình | Cuộn tức thì khi cần nhường chỗ cho danh sách |
 
+Và **hai thiếu sót do máy kiểm thử tự động (CI) bắt**, không phải em tự thấy: sau khi đổi số phiên bản em quên
+chạy bước đồng bộ lõi cho app di động; và một bài kiểm thử mới của em so chuỗi hai dòng mà không tính kiểu xuống
+dòng của Windows. Cả hai đỏ ngay phút đầu ở lần đẩy mã đầu tiên, không ảnh hưởng tới phần mềm, đã sửa trước khi
+phát hành; bộ kiểm thử tại chỗ nay tự kiểm chuyện đồng bộ phiên bản để lần sau không lặp lại.
+
 ### 10.4 Học từ phần mềm tương tự
 
 Em tra lại các phần mềm tra thầu trong nước và các hướng dẫn thiết kế bảng số liệu. Thứ đã áp dụng ở bản này:

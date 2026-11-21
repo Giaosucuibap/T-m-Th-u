@@ -70,8 +70,12 @@ nhược sau khi chạy thử lại: `BAO-CAO-THAM-DINH-SAFARI.md`, mục 10.
   ra **61 vi phạm** trên 49 bảng ở cỡ iPad đó (cột "Nhà thầu" 61 px, tên 67 ký tự thành 25 dòng, ô dài nhất 105 dòng).
 - `tools/test/safari-app.mjs`: kịch bản nâng cấp nay chạy cho cả hai bản đã phát hành (4.21.0 và **4.22.0**, mẫu thử
   `tools/test/fixtures/cuibap-4.22.0-081028c6ffac.js.gz`) — 20 kịch bản, 89 phép kiểm.
-- `npm test`: 994 đạt / 1006 (12 bỏ qua theo nền tảng); thêm `tests/bang-doc-duoc-423.test.mjs` (20),
-  `tests/goi-y-tinh-423.test.mjs` (16), `tests/sap-xep-bang-423.test.mjs` (6).
+- `npm test`: 995 đạt / 1007 (12 bỏ qua theo nền tảng); thêm `tests/bang-doc-duoc-423.test.mjs` (20),
+  `tests/goi-y-tinh-423.test.mjs` (17), `tests/sap-xep-bang-423.test.mjs` (6), `tests/dong-bo-phien-ban-423.test.mjs` (1).
+- **CI bắt hai thiếu sót của khâu chuẩn bị** ở lần đẩy đầu (`7bf181b`), đều không phải lỗi phần mềm: lõi app di
+  động chưa được đồng bộ theo số phiên bản mới (`mobile-app/scripts/sync-core.mjs`), và một bài kiểm thử mới so
+  chuỗi hai dòng mà không đưa CRLF về LF nên đỏ trên Windows. Đã sửa ở `4d4dac5`; `npm test` nay tự kiểm chuyện
+  đồng bộ phiên bản.
 - Chromium + e-GP giả lập khó tính: 21/21 kịch bản.
 - **Chưa kiểm được:** iPad thật, bàn phím ảo thật, trang muasamcong thật.
 

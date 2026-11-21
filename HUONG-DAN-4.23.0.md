@@ -141,15 +141,18 @@ phải trên iPad thật.
 | — iPhone | 47 bảng thành thẻ, 2 bảng vừa, 1 bảng cuộn (bảng so sánh gói, ghim cột "Tiêu chí") |
 | — bàn phím ảo (mô phỏng theo số đo trong ảnh của anh: vùng nhìn còn 841 điểm) | danh sách gợi ý nằm trọn phía trên bàn phím, đủ 3 dòng, Đồng Nai đứng đầu |
 | Đầu-cuối bản Safari (`tools/test/safari-app.mjs`) | **20 kịch bản, 89 phép kiểm, đạt hết** — gồm nâng cấp từ đúng tệp 4.22.0 đang nằm trên iPad của anh: hỏi trước, để sau, cập nhật, **quay về 4.22.0**, tự cứu |
-| Bài kiểm thử đơn vị (`npm test`) | 994 đạt / 1006 (12 bài chỉ chạy trên Windows được bỏ qua) |
+| Bài kiểm thử đơn vị (`npm test`) | 995 đạt / 1007 (12 bài chỉ chạy trên Windows được bỏ qua) |
 | Tiện ích Chrome trên máy tính với e-GP giả lập khó tính | 21/21 kịch bản đạt |
 | Cú pháp cho Safari 16.4 | 143 tệp trong gói đều đọc được |
 
-Hai điều cần nói rõ về các con số này:
+Ba điều cần nói rõ về các con số này:
 
 - Lần chạy đầu-cuối đầy đủ ở máy em báo **1 bước hỏng** trong 89: bước "Quay về bản 4.22.0". Nguyên nhân là **bài
   kiểm** còn ghi cứng chữ "4.21.0" khi tìm nút, không phải phần mềm. Em sửa bài kiểm rồi chạy lại hai kịch bản nâng
   cấp: 16/16 đạt. Lần chạy đầy đủ sạch là lần của máy kiểm thử tự động (CI) trước khi phát hành.
+- Lần đẩy mã đầu tiên lên máy kiểm thử tự động (CI) **đỏ hai việc ngay phút đầu**, đều do em chuẩn bị thiếu chứ
+  không phải lỗi phần mềm: quên đồng bộ số phiên bản sang phần app di động, và một bài kiểm thử mới không chịu
+  được kiểu xuống dòng của Windows. Em sửa, chạy lại, rồi mới phát hành.
 - Bài đo "bảng đọc được" được viết **sau** khi anh báo lỗi. Nó bắt đúng loại lỗi anh thấy, nhưng không chứng minh
   được rằng không còn loại lỗi trình bày nào khác.
 
